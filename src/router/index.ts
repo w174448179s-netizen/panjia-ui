@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 /* Layout */
 import Layout from '@/layout/index.vue';
+import panjiaRoutes from './panjia';
 
 /**
  * Note: 路由配置项
@@ -26,6 +27,7 @@ import Layout from '@/layout/index.vue';
 
 // 公共路由
 export const constantRoutes: RouteRecordRaw[] = [
+  ...panjiaRoutes,
   {
     path: '/redirect',
     component: Layout,
@@ -44,7 +46,7 @@ export const constantRoutes: RouteRecordRaw[] = [
   },
   {
     path: '/login',
-    component: () => import('@/views/login.vue'),
+    component: () => import('@/views/panjia/login/index.vue'),
     hidden: true
   },
   {
@@ -65,7 +67,7 @@ export const constantRoutes: RouteRecordRaw[] = [
   {
     path: '',
     component: Layout,
-    redirect: '/index',
+    redirect: '/panjia/employee',
     children: [
       {
         path: '/index',

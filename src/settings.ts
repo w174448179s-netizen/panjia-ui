@@ -5,9 +5,24 @@ const setting: DefaultSettings = {
   /**
    * 网页标题
    */
-  title: import.meta.env.VITE_APP_TITLE,
+  title: import.meta.env.VITE_APP_TITLE || '盘家智管',
 
-  theme: '#409EFF',
+  /**
+   * Logo 路径
+   */
+  logo: new URL('@/assets/panjia/logo.svg', import.meta.url).href,
+
+  /**
+   * 版本号
+   */
+  version: import.meta.env.VITE_APP_VERSION || '1.0.0',
+
+  /**
+   * 版权信息
+   */
+  copyright: `© ${new Date().getFullYear()} 盘家智管`,
+
+  theme: '#ff5a00',
 
   /**
    * 侧边栏主题 深色主题theme-dark，浅色主题theme-light

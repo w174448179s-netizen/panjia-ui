@@ -19,8 +19,8 @@
 
 <script setup lang="ts">
 import animateConfig from '@/animate';
-import logo from '@/assets/logo/logo.png';
 import { NavTypeEnum } from '@/enums/NavTypeEnum';
+import settings from '@/settings';
 import { useSettingsStore } from '@/store/modules/settings';
 
 defineProps({
@@ -31,6 +31,7 @@ defineProps({
 });
 
 const title = import.meta.env.VITE_APP_LOGO_TITLE;
+const logo = settings.logo;
 const settingsStore = useSettingsStore();
 const sideTheme = computed(() => settingsStore.sideTheme);
 const isTopNav = computed(() => settingsStore.navType === NavTypeEnum.TOP);
