@@ -1,0 +1,64 @@
+// 盘家品牌色覆盖
+:root {
+  /* 品牌主色 */
+  --panjia-primary: #ff5a00;
+  --panjia-primary-light: #ff8a3d;
+  --panjia-primary-dark: #e04a00;
+  --panjia-primary-text: #ff9e6b;
+
+  /* 语义色 */
+  --panjia-success: #16a34a;
+  --panjia-warning: #f59e0b;
+  --panjia-danger: #dc2626;
+  --panjia-info: #2563eb;
+
+  /* 界面基础色 */
+  --panjia-bg-page: #f5f6fa;
+  --panjia-bg-card: #ffffff;
+  --panjia-text-primary: #1f2937;
+  --panjia-text-secondary: #6b7280;
+  --panjia-border: #e5e7eb;
+}
+
+// 通过 Element Plus CSS 变量覆盖
+:root {
+  --el-color-primary: var(--panjia-primary);
+  --el-color-primary-light-3: #ff7a2a;
+  --el-color-primary-light-5: #ff9550;
+  --el-color-primary-light-7: #ffb080;
+  --el-color-primary-light-8: #ffc9a3;
+  --el-color-primary-light-9: #ffe3d0;
+  --el-color-primary-dark-2: #e04a00;
+
+  --el-color-success: var(--panjia-success);
+  --el-color-warning: var(--panjia-warning);
+  --el-color-danger: var(--panjia-danger);
+  --el-color-info: var(--panjia-info);
+
+  --el-bg-color: var(--panjia-bg-card);
+  --el-text-color-primary: var(--panjia-text-primary);
+  --el-text-color-regular: var(--panjia-text-secondary);
+  --el-border-color: var(--panjia-border);
+}
+
+// 暗黑模式
+html.dark {
+  --el-color-primary: var(--panjia-primary-light);
+  --el-color-primary-light-3: #ff9550;
+  --el-color-primary-light-5: #ffaa70;
+  --el-color-primary-light-7: #ffc090;
+  --el-color-primary-light-8: #ffd4b0;
+  --el-color-primary-light-9: rgba(255, 138, 61, 0.15);
+  --el-color-primary-dark-2: #e04a00;
+
+  --panjia-bg-page: #0b0f19;
+  --panjia-bg-card: rgba(255, 255, 255, 0.05);
+  --panjia-text-primary: #f3f4f6;
+  --panjia-text-secondary: #9ca3af;
+  --panjia-border: rgba(255, 255, 255, 0.12);
+}
+
+// 页面底色覆盖
+body {
+  background-color: var(--panjia-bg-page);
+}
