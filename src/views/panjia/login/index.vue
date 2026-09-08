@@ -162,7 +162,7 @@ const loginRules: ElFormRules = {
 const codeUrl = ref('');
 const loading = ref(false);
 const captchaEnabled = ref(true);
-const redirect = ref('/panjia/employee');
+const redirect = ref('/index');
 const loginRef = ref<ElFormInstance>();
 
 watch(
@@ -187,7 +187,7 @@ const handleLogin = () => {
       localStorage.removeItem('password');
       const [err] = await to(userStore.login(loginForm.value));
       if (!err) {
-        const redirectUrl = redirect.value || '/panjia/employee';
+        const redirectUrl = redirect.value || '/index';
         await router.push(redirectUrl);
         loading.value = false;
       } else {
