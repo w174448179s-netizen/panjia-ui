@@ -78,25 +78,6 @@ export interface RankRuleQuery extends PageQuery {
   status?: string;
 }
 
-// 师徒关系
-export interface MentorRelation {
-  id: string;
-  mentorId: string;
-  mentorName: string;
-  apprenticeId: string;
-  apprenticeName: string;
-  startDate: string;
-  endDate?: string;
-  status: string;
-  commissionRate: number;
-}
-
-export interface MentorQuery extends PageQuery {
-  mentorId?: string;
-  apprenticeId?: string;
-  status?: string;
-}
-
 // 贝壳导入
 export interface CommissionImport {
   id: string;
