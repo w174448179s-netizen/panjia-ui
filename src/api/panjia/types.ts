@@ -151,7 +151,7 @@ export interface ImportIssue {
   createTime: string;
 }
 
-/** 导入模板配置 */
+/** 导入模板配置（import 域） */
 export interface ImportTemplate {
   id: string;
   templateCode: string;
@@ -175,6 +175,52 @@ export interface ImportTemplate {
   createdAt?: string;
   updatedBy?: string;
   updatedAt?: string;
+}
+
+/** 导入列映射（import 域） */
+export interface ColumnMapping {
+  source_column?: string;
+  source_header?: string;
+  target_field?: string;
+  transform?: string;
+  default_value?: string;
+  data_type?: string;
+  required?: boolean;
+}
+
+/** 员工导入模板（people 域） */
+export interface PeopleImportTemplate {
+  id: string;
+  templateCode: string;
+  templateVersion: string;
+  columnJson: string;
+  enabled: number; // 1启用 0停用
+  createTime: string;
+}
+
+/** 列定义（people 域 ColumnDef / 通用列结构） */
+export interface ColumnDef {
+  colName: string;
+  field: string;
+  type: string;
+  required?: boolean;
+  maxLength?: number;
+  enumValues?: string[];
+  dateFormat?: string;
+  deptLevel?: number;
+}
+
+/** 版本对比差异条目 */
+export interface TemplateColumnDiff {
+  field: string;
+  changeType: 'ADDED' | 'REMOVED' | 'MODIFIED' | 'UNCHANGED';
+  sourceHeader?: string;
+  targetHeader?: string;
+  sourceType?: string;
+  targetType?: string;
+  sourceRequired?: boolean;
+  targetRequired?: boolean;
+  diffDetail: string;
 }
 
 // ==================== 员工域 V6.0 员工导入 ====================

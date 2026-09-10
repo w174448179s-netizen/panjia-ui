@@ -347,6 +347,7 @@
           </el-col>
         </el-row>
       </el-form>
+
       <template #footer>
         <div class="dialog-footer">
           <el-button type="primary" :loading="submitLoading" @click="submitForm">确 定</el-button>
@@ -459,6 +460,7 @@
 
     <!-- 员工导入 -->
     <el-dialog v-model="importDialog.visible" title="员工导入" width="680px" append-to-body @closed="resetImport">
+      <div v-loading="importDialog.loading" element-loading-text="正在导入，请稍候..." class="import-dialog-body">
       <!-- 上传区 -->
       <el-upload
         v-if="!importDialog.batchId"
@@ -468,6 +470,7 @@
         accept=".xlsx,.xls,.csv"
         :on-exceed="() => modal.msgWarning('一次只能上传一个文件')"
         :on-change="handleImportFileChange"
+        :disabled="importDialog.loading"
         drag
         class="import-upload"
       >
@@ -519,6 +522,7 @@
             <el-table-column label="说明" prop="message" min-width="200" show-overflow-tooltip />
           </el-table>
         </div>
+      </div>
       </div>
 
       <template #footer>

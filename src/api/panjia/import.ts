@@ -1,5 +1,5 @@
 import panjiaRequest from './index';
-import type { ImportBatch, ImportIssue, ImportTemplate } from './types';
+import type { ImportBatch, ImportIssue, ImportTemplate, PeopleImportTemplate, ColumnMapping, ColumnDef, TemplateColumnDiff } from './types';
 import { getToken } from '@/utils/auth';
 
 /**
@@ -102,5 +102,71 @@ export const templateApi = {
     link.download = fileName;
     link.click();
     window.URL.revokeObjectURL(url);
+  },
+  /** 获取列映射列表 */
+  getColumns(id: string | number) {
+    return panjiaRequest.get<ColumnMapping[]>(`/template/${id}/columns`);
+  },
+  /** 保存列映射 */
+  saveColumns(id: string | number, columns: ColumnMapping[]) {
+    return panjiaRequest.put<void>(`/template/${id}/columns`, columns);
+  },
+  /** 版本对比 */
+  compare(sourceId: string | number, targetId: string | number) {
+    return panjiaRequest.get<TemplateColumnDiff[]>('/template/compare', { sourceId, targetId });
+  }
+};
+
+/** 员工导入模板管理接口（people 域） */
+export const peopleTemplateApi = {
+  /** 模板列表 */
+  list() {
+    return panjiaRequest.get<PeopleImportTemplate[]>('/people/template/list');
+  },
+  /** 模板详情 */
+  get(id: string | number) {
+    return panjiaRequest.get<PeopleImportTemplate>(`/people/template/${id}`);
+  },
+  /** 获取列定义列表 */
+  getColumns(id: string | number) {
+    return panjiaRequest.get<ColumnDef[]>(`/people/template/${id}/columns`);
+  },
+  /** 保存列定义 */
+  saveColumns(id: string | number, columns: ColumnDef[]) {
+    return panjiaRequest.put<void>(`/people/template/${id}/columns`, columns);
+  },
+  /** 新增模板 */
+  add(data: Partial<PeopleImportTemplate>) {
+    return panjiaRequest.post<string>('/people/template', data);
+  },
+  /** 复制模板为新版本 */
+  copy(sourceId: string | number, newVersion: string, newName?: string) {
+    const params = new URLSearchParams();
+    params.append('newVersion', newVersion);
+    if (newName) params.append('newName', newName);
+    return panjiaRequest.post<string>(`/people/template/copy/${sourceId}?${params.toString()}`);
+  },
+  /** 启用模板 */
+  activate(id: string | number) {
+    return panjiaRequest.post<void>(`/people/template/${id}/activate`);
+  },
+  /** 下载模板 Excel */
+  async download(id: string | number, fileName: string) {
+    const baseApi = import.meta.env.VITE_APP_BASE_API;
+    const res = await fetch(`${baseApi}/api/panjia/people/template/${id}/download?_t=${Date.now()}`, {
+      headers: { Authorization: `Bearer ${getToken()}`, clientid: 'e5cd7e4891bf95d1d19206ce24a7b32e' }
+    });
+    if (!res.ok) throw new Error('模板下载失败');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  },
+  /** 版本对比 */
+  compare(sourceId: string | number, targetId: string | number) {
+    return panjiaRequest.get<TemplateColumnDiff[]>('/people/template/compare', { sourceId, targetId });
   }
 };
