@@ -25,7 +25,8 @@
           <el-tree-select
             v-model="queryParams.deptId"
             :data="deptTreeData"
-            :props="{ value: 'deptId', label: 'deptName', children: 'children' } as any"
+            :props="{ label: 'deptName', children: 'children' } as any"
+            value-key="deptId"
             node-key="deptId"
             placeholder="请选择门店/组别"
             clearable
@@ -147,7 +148,7 @@
         <el-table-column label="操作" align="center" width="160" class-name="small-padding fixed-width">
           <template #default="scope">
             <el-tooltip content="详情/变更记录" placement="top">
-              <el-button link type="primary" icon="View" @click="handleDetail(scope.row)"></el-button>
+              <el-button link type="primary" icon="View" @click="handleDetail(scope.row as Employee)"></el-button>
             </el-tooltip>
             <el-tooltip content="修改" placement="top">
               <el-button
@@ -155,7 +156,7 @@
                 link
                 type="primary"
                 icon="Edit"
-                @click="handleUpdate(scope.row)"
+                @click="handleUpdate(scope.row as Employee)"
               ></el-button>
             </el-tooltip>
           </template>
@@ -195,7 +196,8 @@
               <el-tree-select
                 v-model="form.deptId"
                 :data="deptTreeData"
-                :props="{ value: 'deptId', label: 'deptName', children: 'children' } as any"
+                :props="{ label: 'deptName', children: 'children' } as any"
+                value-key="deptId"
                 node-key="deptId"
                 placeholder="请选择门店/组别"
                 check-strictly
@@ -509,9 +511,18 @@ const postOptionsData = ref<PostOption[]>([]);
 const deptTreeData = ref<DeptNode[]>([]);
 
 const loadOptions = async () => {
-  const [posts, tree] = await Promise.all([employeeApi.postOptions(), employeeApi.deptTree()]);
-  postOptionsData.value = posts.data ?? [];
-  deptTreeData.value = tree.data ?? [];
+  try {
+    const posts = await employeeApi.postOptions();
+    postOptionsData.value = posts.data ?? [];
+  } catch (e) {
+    console.error('[people] postOptions 加载失败', e);
+  }
+  try {
+    const tree = await employeeApi.deptTree();
+    deptTreeData.value = tree.data ?? [];
+  } catch (e) {
+    console.error('[people] deptTree 加载失败', e);
+  }
 };
 
 // ==================== 新增 / 修改 ====================
@@ -658,8 +669,8 @@ const handleReconcile = async () => {
 const fieldLabel = (field: string) =>
   ({ dept: '归属部门', posts: '岗位/角色', status: '账户状态' })[field] ?? field;
 
-const fieldTagType = (field: string) =>
-  ({ dept: 'primary', posts: 'warning', status: 'danger' })[field] ?? 'info';
+const fieldTagType = (field: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' =>
+  ({ dept: 'primary', posts: 'warning', status: 'danger' } as Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'>)[field] ?? 'info';
 
 onMounted(() => {
   loadOptions();

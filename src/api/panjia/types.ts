@@ -14,51 +14,109 @@ export interface PageResult<T = any> {
   rows: T[];
 }
 
-// 员工档案
+// ==================== 员工域 V5.2 ====================
+
+/** 员工档案（含当前态算薪事实，后端 enrich 后返回） */
 export interface Employee {
-  id: string;
-  employeeNo: string;
-  name: string;
-  phone: string;
-  idCard: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
   deptId: string;
   deptName: string;
-  storeId: string;
-  storeName: string;
-  rankId: string;
-  rankName: string;
-  position: string;
-  entryDate: string;
+  postNames: string[];
+  levelCode: string;
+  phone: string;
+  idCard: string;
+  reportDate: string;
+  hireDate: string;
+  leaveDate?: string;
   status: string;
-  remark: string;
-  createTime: string;
+  socialInsured: boolean;
+  housingInsured: boolean;
+  commercialInsured: boolean;
+  dormitory: boolean;
+  isPartTime: boolean;
+  mentorCode?: string;
+  mentorName?: string;
+  remark?: string;
 }
 
-// 员工查询参数
+/** 员工分页查询参数 */
 export interface EmployeeQuery extends PageQuery {
-  name?: string;
-  phone?: string;
+  employeeCode?: string;
+  employeeName?: string;
   deptId?: string;
-  storeId?: string;
-  rankId?: string;
+  postName?: string;
   status?: string;
 }
 
-// 员工表单
-export interface EmployeeForm {
-  id?: string;
-  employeeNo: string;
-  name: string;
+/** 新增员工表单 */
+export interface EmployeeCreateForm {
+  employeeCode: string;
+  employeeName: string;
+  deptId: string;
+  postNames: string[];
+  levelCode: string;
   phone: string;
   idCard: string;
-  deptId: string;
-  storeId: string;
-  rankId: string;
-  position: string;
-  entryDate: string;
+  reportDate: string;
+  hireDate: string;
   status: string;
+  socialInsured: boolean;
+  housingInsured: boolean;
+  commercialInsured: boolean;
+  dormitory: boolean;
+  parttime: boolean;
+  mentorCode?: string;
   remark?: string;
 }
+
+/** 修改员工表单（在新增基础上支持生效日与离职日） */
+export interface EmployeeUpdateForm extends EmployeeCreateForm {
+  effectiveDate?: string;
+  leaveDate?: string;
+}
+
+/** 部门树节点（门店 → 组别，不含客户根节点） */
+export interface DeptNode {
+  deptId: string;
+  deptName: string;
+  parentId: string;
+  children: DeptNode[];
+}
+
+/** 岗位选项 */
+export interface PostOption {
+  postId: string;
+  postName: string;
+}
+
+/** 员工变更记录 */
+export interface EmployeeChangeLog {
+  effectiveDate: string;
+  changeFieldName: string;
+  beforeValue?: string;
+  afterValue?: string;
+  operatorName?: string;
+}
+
+/** 对账差异项 */
+export interface ReconcileItem {
+  employeeCode: string;
+  employeeName: string;
+  field: string;
+  beforeValue: string;
+  afterValue: string;
+}
+
+/** 对账结果 */
+export interface ReconcileResult {
+  totalEmployees: number;
+  fixedCount: number;
+  items: ReconcileItem[];
+}
+
+// ==================== 其它业务域（保留原有定义） ====================
 
 // 职级规则
 export interface RankRule {
