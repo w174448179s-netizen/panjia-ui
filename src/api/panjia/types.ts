@@ -116,6 +116,102 @@ export interface ReconcileResult {
   items: ReconcileItem[];
 }
 
+// ==================== 导入域 V2.0（单据导入：业绩/考勤/积分/费用） ====================
+
+/** 单据导入批次 */
+export interface ImportBatch {
+  id: string;
+  batchNo: string;
+  sourceType: string;
+  templateVersion: string;
+  fileName: string;
+  originalFileName?: string;
+  storagePath: string;
+  period?: string;
+  totalRows: number;
+  successRows: number;
+  failedRows: number;
+  status: string;
+  operatorId?: string;
+  deptId?: string;
+  createTime: string;
+  updateTime: string;
+}
+
+/** 单据导入问题 */
+export interface ImportIssue {
+  id: string;
+  batchId: string;
+  rowNo?: number;
+  issueType: string;
+  fieldName?: string;
+  rawValue?: string;
+  message: string;
+  status: string;
+  createTime: string;
+}
+
+/** 导入模板配置 */
+export interface ImportTemplate {
+  id: string;
+  templateCode: string;
+  templateVersion: string;
+  optLockVersion?: number;
+  templateName: string;
+  sourceType: string;
+  fileType: string;
+  sheetName?: string;
+  headerRow: number;
+  dataStartRow: number;
+  columnMapping: string;
+  validationRules?: string;
+  isActive: boolean;
+  description?: string;
+  sourceFileVersion?: string;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+  remark?: string;
+  createdBy?: string;
+  createdAt?: string;
+  updatedBy?: string;
+  updatedAt?: string;
+}
+
+// ==================== 员工域 V6.0 员工导入 ====================
+
+/** 员工导入批次（people 域独立状态机） */
+export interface PeopleImportBatch {
+  id: string;
+  batchNo: string;
+  templateCode: string;
+  templateVersion: string;
+  fileName: string;
+  storagePath: string;
+  fileHash: string;
+  totalRows: number;
+  successRows: number;
+  failedRows: number;
+  status: string;
+  operatorId?: string;
+  remark?: string;
+  supersededByBatchId?: string;
+  createTime: string;
+  updateTime: string;
+}
+
+/** 员工导入问题 */
+export interface PeopleImportIssue {
+  id: string;
+  batchId: string;
+  rowNo?: number;
+  issueType: string;
+  fieldName?: string;
+  rawValue?: string;
+  message: string;
+  status: string;
+  createTime: string;
+}
+
 // ==================== 其它业务域（保留原有定义） ====================
 
 // 职级规则

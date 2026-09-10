@@ -70,6 +70,15 @@
               新增员工
             </el-button>
             <el-button
+              v-hasPermi="['people:employee:import']"
+              type="success"
+              plain
+              icon="Upload"
+              @click="handleImport"
+            >
+              导入员工
+            </el-button>
+            <el-button
               v-hasPermi="['people:employee:reconcile']"
               type="warning"
               plain
@@ -447,6 +456,75 @@
         <el-button type="primary" @click="reconcileDialog.visible = false">知道了</el-button>
       </template>
     </el-dialog>
+
+    <!-- 员工导入 -->
+    <el-dialog v-model="importDialog.visible" title="员工导入" width="680px" append-to-body @closed="resetImport">
+      <!-- 上传区 -->
+      <el-upload
+        v-if="!importDialog.batchId"
+        ref="importUploadRef"
+        :auto-upload="false"
+        :limit="1"
+        accept=".xlsx,.xls,.csv"
+        :on-exceed="() => modal.msgWarning('一次只能上传一个文件')"
+        :on-change="handleImportFileChange"
+        drag
+        class="import-upload"
+      >
+        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+        <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
+        <template #tip>
+          <div class="el-upload__tip">
+            支持 .xlsx / .xls / .csv 格式；模板字段：大区/门店/小组（按层级拆分）、工号、姓名、职位、职级、入职时间、社保/公积金/商保/宿舍/兼职、师傅工号
+          </div>
+        </template>
+      </el-upload>
+      <div v-if="importDialog.file" class="import-file-info">
+        <el-icon><Document /></el-icon>
+        <span>{{ importDialog.file.name }}</span>
+        <el-button link type="danger" icon="Delete" @click="importDialog.file = null">移除</el-button>
+      </div>
+      <div v-if="!importDialog.batchId" class="import-actions">
+        <el-button
+          type="primary"
+          icon="Upload"
+          :loading="importDialog.loading"
+          :disabled="!importDialog.file"
+          @click="doImportUpload"
+        >
+          开始导入
+        </el-button>
+        <el-button icon="Download" @click="downloadTemplate">
+          下载模板
+        </el-button>
+      </div>
+
+      <!-- 导入结果 -->
+      <div v-if="importDialog.batchId" class="import-result">
+        <el-result
+          :icon="importDialog.batchStatus === 'SUCCESS' ? 'success' : importDialog.batchStatus === 'FAILED' ? 'error' : 'info'"
+          :title="importDialog.batchStatus === 'SUCCESS' ? '导入成功' : importDialog.batchStatus === 'FAILED' ? '导入失败' : '导入完成'"
+          :sub-title="`批次号: ${importDialog.batchNo} | 总行数: ${importDialog.totalRows} | 成功: ${importDialog.successRows} | 失败: ${importDialog.failedRows}`"
+        />
+        <div v-if="importDialog.batchStatus === 'FAILED' && importDialog.issues.length" class="issue-list">
+          <el-table border :data="importDialog.issues" size="small" max-height="280">
+            <el-table-column label="行号" prop="rowNo" width="60" align="center" />
+            <el-table-column label="问题类型" prop="issueType" width="160" align="center">
+              <template #default="scope">
+                <el-tag size="small" :type="issueTagType(scope.row.issueType)">{{ issueLabel(scope.row.issueType) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="字段" prop="fieldName" width="120" show-overflow-tooltip />
+            <el-table-column label="原始值" prop="rawValue" width="120" show-overflow-tooltip />
+            <el-table-column label="说明" prop="message" min-width="200" show-overflow-tooltip />
+          </el-table>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="importDialog.visible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -457,12 +535,18 @@ import type {
   Employee,
   EmployeeChangeLog,
   EmployeeCreateForm,
+  EmployeeQuery,
   EmployeeUpdateForm,
+  PageResult,
+  PeopleImportBatch,
+  PeopleImportIssue,
   PostOption,
   ReconcileResult
 } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
 import { useDict } from '@/utils/dict';
+import { UploadFilled, Document } from '@element-plus/icons-vue';
+import type { UploadFile } from 'element-plus';
 
 const { panjia_employee_level, panjia_employee_status } = toRefs<any>(
   useDict('panjia_employee_level', 'panjia_employee_status')
@@ -672,6 +756,106 @@ const fieldLabel = (field: string) =>
 const fieldTagType = (field: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' =>
   ({ dept: 'primary', posts: 'warning', status: 'danger' } as Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'>)[field] ?? 'info';
 
+// ==================== 员工导入 ====================
+const importUploadRef = ref();
+const importDialog = reactive({
+  visible: false,
+  loading: false,
+  file: null as File | null,
+  batchId: '' as string,
+  batchNo: '',
+  batchStatus: '',
+  totalRows: 0,
+  successRows: 0,
+  failedRows: 0,
+  issues: [] as PeopleImportIssue[]
+});
+
+const resetImport = () => {
+  importDialog.loading = false;
+  importDialog.file = null;
+  importDialog.batchId = '';
+  importDialog.batchNo = '';
+  importDialog.batchStatus = '';
+  importDialog.totalRows = 0;
+  importDialog.successRows = 0;
+  importDialog.failedRows = 0;
+  importDialog.issues = [];
+  importUploadRef.value?.clearFiles();
+};
+
+const handleImport = () => {
+  resetImport();
+  importDialog.visible = true;
+};
+
+const handleImportFileChange = (file: UploadFile) => {
+  importDialog.file = file.raw || null;
+};
+
+const doImportUpload = async () => {
+  if (!importDialog.file) {
+    modal.msgWarning('请先选择文件');
+    return;
+  }
+  importDialog.loading = true;
+  try {
+    const res = await employeeApi.importEmployees(importDialog.file);
+    const batchId = res.data;
+    importDialog.batchId = batchId;
+    // 查批次详情
+    const batchRes = await employeeApi.importBatches();
+    const batch = (batchRes.data ?? []).find((b: PeopleImportBatch) => b.id === batchId);
+    if (batch) {
+      importDialog.batchNo = batch.batchNo;
+      importDialog.batchStatus = batch.status;
+      importDialog.totalRows = batch.totalRows;
+      importDialog.successRows = batch.successRows;
+      importDialog.failedRows = batch.failedRows;
+      // 失败时自动加载问题清单
+      if (batch.status === 'FAILED') {
+        await showIssues();
+      } else if (batch.status === 'SUCCESS') {
+        modal.msgSuccess(`导入成功，共 ${batch.successRows} 名员工已落地`);
+        await getList();
+      }
+    }
+  } catch (e: any) {
+    modal.msgError('导入失败: ' + (e?.message || '未知错误'));
+  } finally {
+    importDialog.loading = false;
+  }
+};
+
+const showIssues = async () => {
+  if (!importDialog.batchId) return;
+  const res = await employeeApi.importIssues(importDialog.batchId);
+  importDialog.issues = res.data ?? [];
+};
+
+const downloadTemplate = async () => {
+  try {
+    await employeeApi.downloadImportTemplate();
+    modal.msgSuccess('模板下载成功');
+  } catch (e: any) {
+    modal.msgError('模板下载失败: ' + (e?.message || ''));
+  }
+};
+
+/** 问题类型中文映射 */
+const issueLabel = (type: string): string =>
+  ({
+    REQUIRED_MISSING: '必填缺失',
+    COLUMN_TYPE_ERR: '格式错误',
+    DUPLICATE_CODE: '工号重复',
+    DEPT_PATH_INVALID: '部门路径非法',
+    LEVEL_INVALID: '职级非法',
+    MENTOR_NOT_FOUND: '师傅不存在'
+  })[type] ?? type;
+
+const issueTagType = (type: string): 'danger' | 'warning' | 'info' =>
+  ({ DUPLICATE_CODE: 'danger', DEPT_PATH_INVALID: 'warning', MENTOR_NOT_FOUND: 'warning' } as Record<string, 'danger' | 'warning' | 'info'>)[type] ?? 'info';
+
 onMounted(() => {
   loadOptions();
   getList();
@@ -726,6 +910,40 @@ onMounted(() => {
 
   .reconcile-alert {
     margin-bottom: 14px;
+  }
+
+  .import-upload {
+    width: 100%;
+
+    :deep(.el-upload-dragger) {
+      width: 100%;
+    }
+  }
+
+  .import-file-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: var(--el-fill-color-light);
+    border-radius: 8px;
+    font-size: 13px;
+
+    .el-icon {
+      color: var(--el-color-primary);
+    }
+  }
+
+  .import-actions {
+    margin-top: 16px;
+    text-align: center;
+  }
+
+  .import-result {
+    .issue-list {
+      margin-top: 16px;
+    }
   }
 }
 </style>

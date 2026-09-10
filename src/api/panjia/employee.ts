@@ -7,6 +7,8 @@ import type {
   EmployeeQuery,
   EmployeeUpdateForm,
   PageResult,
+  PeopleImportBatch,
+  PeopleImportIssue,
   PostOption,
   ReconcileResult
 } from './types';
@@ -47,5 +49,36 @@ export const employeeApi = {
   /** 员工-系统账户对账（自动修复 dept/岗位角色/离职禁用差异） */
   reconcile() {
     return panjiaRequest.post<ReconcileResult>('/people/reconcile/run');
+  },
+  // ==================== V6.0 员工导入 ====================
+  /** 上传文件导入员工（两阶段：诊断 + 单一大事务落地） */
+  importEmployees(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return panjiaRequest.post<string>('/people/employee/import', formData);
+  },
+  /** 员工导入批次列表 */
+  importBatches() {
+    return panjiaRequest.get<PeopleImportBatch[]>('/people/employee/import/batches');
+  },
+  /** 员工导入批次问题清单 */
+  importIssues(batchId: string | number) {
+    return panjiaRequest.get<PeopleImportIssue[]>(`/people/employee/import/${batchId}/issues`);
+  },
+  /** 下载员工导入模板（Excel，含表头+示例行） */
+  async downloadImportTemplate() {
+    const { getToken } = await import('@/utils/auth');
+    const baseApi = import.meta.env.VITE_APP_BASE_API;
+    const res = await fetch(`${baseApi}/api/panjia/people/employee/import/template?_t=${Date.now()}`, {
+      headers: { Authorization: `Bearer ${getToken()}`, clientid: 'e5cd7e4891bf95d1d19206ce24a7b32e' }
+    });
+    if (!res.ok) throw new Error('模板下载失败');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = '员工导入模板.xlsx';
+    link.click();
+    window.URL.revokeObjectURL(url);
   }
 };
