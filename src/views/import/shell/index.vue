@@ -96,48 +96,78 @@
             </template>
           </el-table-column>
           <el-table-column label="创建时间" prop="createTime" align="center" width="170" />
-          <el-table-column label="操作" width="380" align="center" fixed="right">
+          <el-table-column label="操作" min-width="140" align="center" fixed="right">
             <template #default="scope">
               <div class="action-row">
-                <el-tooltip content="查看问题清单" placement="top">
-                  <a class="action-btn" @click="openIssues(scope.row.id)">
-                    <el-icon><Warning /></el-icon>
-                    <span>问题</span>
-                  </a>
-                </el-tooltip>
-                <el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
-                  <a
-                    class="action-btn"
-                    :class="{ 'is-loading': rowDownloadingId === scope.row.id }"
-                    @click="handleDownloadFile(scope.row as ImportBatch)"
-                  >
-                    <el-icon v-if="rowDownloadingId !== scope.row.id"><Download /></el-icon>
-                    <el-icon v-else class="is-loading"><Loading /></el-icon>
-                    <span>下载</span>
-                  </a>
-                </el-tooltip>
-                <el-tooltip content="重新解析与归一化" placement="top">
-                  <a
-                    class="action-btn"
-                    :class="{ 'is-loading': rowLoadingId === scope.row.id && rowAction === 'renormalize' }"
-                    @click="handleRenormalize(scope.row as ImportBatch)"
-                  >
-                    <el-icon v-if="!(rowLoadingId === scope.row.id && rowAction === 'renormalize')"><Refresh /></el-icon>
-                    <el-icon v-else class="is-loading"><Loading /></el-icon>
-                    <span>重归一化</span>
-                  </a>
-                </el-tooltip>
-                <el-tooltip content="归档批次" placement="top">
-                  <a
-                    class="action-btn"
-                    :class="{ 'is-loading': rowLoadingId === scope.row.id && rowAction === 'archive' }"
-                    @click="handleArchive(scope.row as ImportBatch)"
-                  >
-                    <el-icon v-if="!(rowLoadingId === scope.row.id && rowAction === 'archive')"><Box /></el-icon>
-                    <el-icon v-else class="is-loading"><Loading /></el-icon>
-                    <span>归档</span>
-                  </a>
-                </el-tooltip>
+                <!-- 终态（ARCHIVED）：仅保留"下载"做合规留档 -->
+                <template v-if="scope.row.status === 'ARCHIVED'">
+                  <el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
+                    <a
+                      class="action-btn"
+                      :class="{ 'is-loading': rowDownloadingId === scope.row.id }"
+                      @click="handleDownloadFile(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="rowDownloadingId !== scope.row.id"><Download /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
+                </template>
+                <!-- 终态（FAILED）：保留"问题" + "下载" -->
+                <template v-else-if="scope.row.status === 'FAILED'">
+                  <el-tooltip v-if="hasIssues(scope.row)" content="查看失败问题清单" placement="top">
+                    <a class="action-btn" @click="openIssues(scope.row.id)">
+                      <el-icon><Warning /></el-icon>
+                    </a>
+                  </el-tooltip>
+                  <el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
+                    <a
+                      class="action-btn"
+                      :class="{ 'is-loading': rowDownloadingId === scope.row.id }"
+                      @click="handleDownloadFile(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="rowDownloadingId !== scope.row.id"><Download /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
+                </template>
+                <!-- 中间态：按状态机判定 -->
+                <template v-else>
+                  <el-tooltip v-if="hasIssues(scope.row)" content="查看问题清单" placement="top">
+                    <a class="action-btn" @click="openIssues(scope.row.id)">
+                      <el-icon><Warning /></el-icon>
+                    </a>
+                  </el-tooltip>
+                  <el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
+                    <a
+                      class="action-btn"
+                      :class="{ 'is-loading': rowDownloadingId === scope.row.id }"
+                      @click="handleDownloadFile(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="rowDownloadingId !== scope.row.id"><Download /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
+                  <el-tooltip v-if="canRenormalize(scope.row.status)" content="重新解析与归一化" placement="top">
+                    <a
+                      class="action-btn"
+                      :class="{ 'is-loading': rowLoadingId === scope.row.id && rowAction === 'renormalize' }"
+                      @click="handleRenormalize(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="!(rowLoadingId === scope.row.id && rowAction === 'renormalize')"><Refresh /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
+                  <el-tooltip v-if="canArchive(scope.row.status)" content="归档批次" placement="top">
+                    <a
+                      class="action-btn"
+                      :class="{ 'is-loading': rowLoadingId === scope.row.id && rowAction === 'archive' }"
+                      @click="handleArchive(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="!(rowLoadingId === scope.row.id && rowAction === 'archive')"><Box /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
+                </template>
               </div>
             </template>
           </el-table-column>
@@ -329,6 +359,16 @@ const openIssues = async (batchId: string) => {
 const rowLoadingId = ref<string>('');
 const rowAction = ref<'renormalize' | 'archive'>('renormalize');
 
+// 状态机硬约束：仅 PENDING_CONFIRM 允许重归一化/归档
+const canRenormalize = (status: string): boolean => status === 'PENDING_CONFIRM';
+const canArchive = (status: string): boolean => status === 'PENDING_CONFIRM';
+
+/**
+ * 批次是否存在需要展示的问题（failedRows > 0）。
+ * - 中间态/终态都用此判定是否显示"问题"按钮。
+ */
+const hasIssues = (row: ImportBatch): boolean => Number(row.failedRows ?? 0) > 0;
+
 const handleRenormalize = async (row: ImportBatch) => {
   try {
     await modal.confirm(`确认对批次「${row.batchNo}」重新执行归一化处理？`);
@@ -455,38 +495,32 @@ onMounted(() => {
 .action-row {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 8px;
   flex-wrap: nowrap;
   white-space: nowrap;
-
-  .el-button.is-link {
-    padding: 0 6px;
-    font-size: 12px;
-    margin-left: 0;
-  }
-}
-
-.action-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: nowrap;
-  white-space: nowrap;
-  font-size: 13px;
 
   .action-btn {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    padding: 0 4px;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
     color: var(--el-color-primary);
+    background-color: #f5f7fa;
+    border-radius: 6px;
     cursor: pointer;
     text-decoration: none;
     user-select: none;
-    line-height: 1.5;
+    line-height: 1;
+    transition: background-color 0.15s ease, color 0.15s ease;
 
     &:hover {
-      text-decoration: underline;
+      background-color: var(--el-color-primary-light-9);
+    }
+
+    &:active {
+      background-color: var(--el-color-primary-light-8);
     }
 
     &.is-loading {
@@ -495,7 +529,7 @@ onMounted(() => {
     }
 
     .el-icon {
-      font-size: 13px;
+      font-size: 16px;
 
       &.is-loading {
         animation: rotating 1.4s linear infinite;

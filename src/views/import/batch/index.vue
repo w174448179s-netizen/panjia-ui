@@ -421,7 +421,8 @@ const handleDownloadFile = async (row: ImportBatch) => {
 .action-row {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
+  gap: 8px;
   flex-wrap: nowrap;
   white-space: nowrap;
 
@@ -429,17 +430,24 @@ const handleDownloadFile = async (row: ImportBatch) => {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 4px 6px;
+    width: 32px;
+    height: 32px;
     color: var(--el-color-primary);
+    background-color: #f5f7fa;
+    border-radius: 6px;
     cursor: pointer;
     text-decoration: none;
     user-select: none;
     line-height: 1;
-    border-radius: 4px;
-    transition: background-color 0.15s ease;
+    transition: background-color 0.15s ease, color 0.15s ease;
 
     &:hover {
       background-color: var(--el-color-primary-light-9);
+      color: var(--el-color-primary);
+    }
+
+    &:active {
+      background-color: var(--el-color-primary-light-8);
     }
 
     &.is-loading {

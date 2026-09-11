@@ -90,31 +90,79 @@
             </template>
           </el-table-column>
           <el-table-column label="创建时间" prop="createTime" width="160" align="center" />
-          <el-table-column label="操作" width="230" align="center" fixed="right">
+          <el-table-column label="操作" min-width="140" align="center" fixed="right">
             <template #default="scope">
-              <el-button link type="primary" icon="Warning" @click="openIssues(scope.row.id, scope.row.batchNo)">
-                问题
-              </el-button>
-              <el-button
-                link
-                type="warning"
-                icon="Refresh"
-                :loading="actingId === scope.row.id"
-                :disabled="!canRenormalize(scope.row.status)"
-                @click="handleRenormalize(scope.row as ImportBatch)"
-              >
-                重归一化
-              </el-button>
-              <el-button
-                link
-                type="success"
-                icon="Box"
-                :loading="actingId === scope.row.id"
-                :disabled="!canArchive(scope.row.status)"
-                @click="handleArchive(scope.row as ImportBatch)"
-              >
-                归档
-              </el-button>
+              <div class="action-row">
+                <!-- 终态（ARCHIVED）：仅保留"下载"做合规留档 -->
+                <template v-if="scope.row.status === 'ARCHIVED'">
+<el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
+                    <a
+                      class="action-btn"
+                      :class="{ 'is-loading': rowDownloadingId === scope.row.id }"
+                      @click="handleDownloadFile(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="rowDownloadingId !== scope.row.id"><Download /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
+                </template>
+                <!-- 终态（FAILED）：保留"问题"排查失败原因 + "下载"留档 -->
+                <template v-else-if="scope.row.status === 'FAILED'">
+                  <el-tooltip v-if="hasIssues(scope.row)" content="查看失败问题清单" placement="top">
+                    <a class="action-btn" @click="openIssues(scope.row.id, scope.row.batchNo)">
+                      <el-icon><Warning /></el-icon>
+                    </a>
+                  </el-tooltip>
+                  <el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
+                    <a
+                      class="action-btn"
+                      :class="{ 'is-loading': rowDownloadingId === scope.row.id }"
+                      @click="handleDownloadFile(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="rowDownloadingId !== scope.row.id"><Download /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
+                </template>
+                <!-- 中间态：按状态机判定 -->
+                <template v-else>
+                  <el-tooltip v-if="hasIssues(scope.row)" content="查看问题清单" placement="top">
+                    <a class="action-btn" @click="openIssues(scope.row.id, scope.row.batchNo)">
+                      <el-icon><Warning /></el-icon>
+                    </a>
+                  </el-tooltip>
+                  <el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
+                    <a
+                      class="action-btn"
+                      :class="{ 'is-loading': rowDownloadingId === scope.row.id }"
+                      @click="handleDownloadFile(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="rowDownloadingId !== scope.row.id"><Download /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
+                  <el-tooltip v-if="canRenormalize(scope.row.status)" content="重新解析与归一化" placement="top">
+                    <a
+                      class="action-btn"
+                      :class="{ 'is-loading': actingId === scope.row.id }"
+                      @click="handleRenormalize(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="actingId !== scope.row.id"><Refresh /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
+                  <el-tooltip v-if="canArchive(scope.row.status)" content="归档批次" placement="top">
+                    <a
+                      class="action-btn"
+                      :class="{ 'is-loading': actingId === scope.row.id }"
+                      @click="handleArchive(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="actingId !== scope.row.id"><Box /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
+                </template>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -159,6 +207,7 @@
 import { importApi } from '@/api/panjia/import';
 import type { ImportBatch, ImportIssue } from '@/api/panjia/types';
 import type { UploadRequestOptions } from 'element-plus';
+import { Warning, Download, Refresh, Loading, Box } from '@element-plus/icons-vue';
 import modal from '@/plugins/modal';
 
 /** 单据类型：考勤 */
@@ -249,13 +298,15 @@ const statusTagType = (status: string): ElTagType => {
   }
 };
 
-const canRenormalize = (status: string): boolean => {
-  return status !== 'ARCHIVED';
-};
+// 状态机硬约束：仅 PENDING_CONFIRM 允许重归一化/归档（与 batch 列表一致）
+const canRenormalize = (status: string): boolean => status === 'PENDING_CONFIRM';
+const canArchive = (status: string): boolean => status === 'PENDING_CONFIRM';
 
-const canArchive = (status: string): boolean => {
-  return status !== 'ARCHIVED';
-};
+/**
+ * 批次是否存在需要展示的问题（failedRows > 0）。
+ * - 中间态/终态都用此判定是否显示"问题"按钮。
+ */
+const hasIssues = (row: ImportBatch): boolean => Number(row.failedRows ?? 0) > 0;
 
 // ==================== 问题清单 ====================
 const issueLoading = ref(false);
@@ -361,5 +412,56 @@ onMounted(() => {
 
 .upload-result {
   margin-bottom: 12px;
+}
+
+.action-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    color: var(--el-color-primary);
+    background-color: #f5f7fa;
+    border-radius: 6px;
+    cursor: pointer;
+    text-decoration: none;
+    user-select: none;
+    line-height: 1;
+    transition: background-color 0.15s ease, color 0.15s ease;
+
+    &:hover {
+      background-color: var(--el-color-primary-light-9);
+    }
+
+    &:active {
+      background-color: var(--el-color-primary-light-8);
+    }
+
+    &.is-loading {
+      cursor: wait;
+      opacity: 0.7;
+    }
+
+    .el-icon {
+      font-size: 16px;
+
+      &.is-loading {
+        animation: rotating 1.4s linear infinite;
+      }
+    }
+  }
+}
+
+@keyframes rotating {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 </style>
