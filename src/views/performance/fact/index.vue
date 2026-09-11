@@ -311,14 +311,18 @@ const resetQuery = () => {
 };
 
 // ==================== 工具方法 ====================
-const formatAmount = (val: number | undefined): string => {
-  if (val === undefined || val === null) return '—';
-  return val.toFixed(2);
+// 注意：后端 JacksonConfig 把 BigDecimal/Long 全局序列化成字符串（防精度丢失），
+// 这里必须 Number() 归一后再调 toFixed，直接 val.toFixed 对字符串会 TypeError 导致整表渲染中断
+const formatAmount = (val: number | string | undefined | null): string => {
+  if (val === undefined || val === null || val === '') return '—';
+  const num = Number(val);
+  return Number.isNaN(num) ? String(val) : num.toFixed(2);
 };
 
-const formatPercent = (val: number | undefined): string => {
-  if (val === undefined || val === null) return '—';
-  return (val * 100).toFixed(2) + '%';
+const formatPercent = (val: number | string | undefined | null): string => {
+  if (val === undefined || val === null || val === '') return '—';
+  const num = Number(val);
+  return Number.isNaN(num) ? String(val) : (num * 100).toFixed(2) + '%';
 };
 
 // ==================== 操作：手工触发消费 ====================

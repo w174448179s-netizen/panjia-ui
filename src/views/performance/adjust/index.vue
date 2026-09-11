@@ -334,10 +334,13 @@ const resetQuery = () => {
 };
 
 // ==================== 工具方法 ====================
-const formatAmount = (val: number | undefined): string => {
-  if (val === undefined || val === null) return '—';
-  const prefix = val > 0 ? '+' : '';
-  return prefix + val.toFixed(2);
+// 后端 Jackson 把 BigDecimal 序列化成字符串，Number() 归一后再格式化（字符串直接 toFixed 会 TypeError 炸整表）
+const formatAmount = (val: number | string | undefined | null): string => {
+  if (val === undefined || val === null || val === '') return '—';
+  const num = Number(val);
+  if (Number.isNaN(num)) return String(val);
+  const prefix = num > 0 ? '+' : '';
+  return prefix + num.toFixed(2);
 };
 
 const getAmountClass = (val: number | undefined): string => {
