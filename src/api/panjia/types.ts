@@ -14,6 +14,22 @@ export interface PageResult<T = any> {
   rows: T[];
 }
 
+/**
+ * 导入批次原始行（V2.0 §3.2 RawData）。
+ *
+ * 后端在 {@code RawData} 接口上反序列化具体分表实体
+ * （RawSigned/RawNewSign/RawAttendance/RawPoints/RawManual），
+ * 前端只关心通用字段：id / batchId / rowNo / rawJson + createTime。
+ * 其它类型字段（如 orderNo / roleSysNo 等）通过展开 rawJson 查看。
+ */
+export interface ImportRawRow {
+  id: string;
+  batchId: string;
+  rowNo: number;
+  rawJson: string;
+  createTime: string;
+}
+
 // ==================== 员工域 V5.2 ====================
 
 /** 员工档案（含当前态算薪事实，后端 enrich 后返回） */

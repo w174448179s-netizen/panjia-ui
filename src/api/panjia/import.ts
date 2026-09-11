@@ -1,5 +1,5 @@
 import panjiaRequest from './index';
-import type { ImportBatch, ImportIssue, ImportTemplate, PeopleImportTemplate, ColumnMapping, ColumnDef, TemplateColumnDiff } from './types';
+import type { ImportBatch, ImportIssue, ImportRawRow, ImportTemplate, PageResult, PeopleImportTemplate, ColumnMapping, ColumnDef, TemplateColumnDiff } from './types';
 import { getToken } from '@/utils/auth';
 
 /**
@@ -18,9 +18,19 @@ export const importApi = {
     }
     return panjiaRequest.post<string>(`/import/upload?${params.toString()}`, formData);
   },
-  /** 批次列表（可按 sourceType / period 筛选） */
-  listBatches(sourceType?: string, period?: string) {
-    return panjiaRequest.get<ImportBatch[]>('/import/batches', { sourceType, period });
+  /** 批次列表（按 sourceTypes 数组 / period 筛选）
+   * <p>
+   * - {@code sourceTypes} 传 {@code string[]} → 后端按 {@code IN (...)} 过滤；
+   * - 传 {@code ''} / {@code undefined} → 不过滤；
+   * - 单值场景下可传 {@code ['ATTENDANCE']}，等价于旧版单 {@code sourceType} 参数。
+   */
+  listBatches(sourceTypes?: string[] | string, period?: string) {
+    const types: string[] | undefined = Array.isArray(sourceTypes)
+      ? sourceTypes
+      : sourceTypes
+        ? [sourceTypes]
+        : undefined;
+    return panjiaRequest.get<ImportBatch[]>('/import/batches', { sourceTypes: types, period });
   },
   /** 批次详情 */
   getBatch(id: string | number) {
@@ -29,6 +39,17 @@ export const importApi = {
   /** 批次问题清单 */
   listIssues(id: string | number) {
     return panjiaRequest.get<ImportIssue[]>(`/import/batches/${id}/issues`);
+  },
+  /**
+   * 批次原始数据列表（审计/追溯入口，按 batchId 查询对应 raw 分表，分页）。
+   * - KE_SIGNED  → pj_import_raw_signed
+   * - KE_NEW_SIGN → pj_import_raw_new_sign
+   * - ATTENDANCE → pj_import_raw_attendance
+   * - POINTS     → pj_import_raw_points
+   * - OTHERS     → pj_import_raw_manual
+   */
+  listRaw(id: string | number, pageNum = 1, pageSize = 50) {
+    return panjiaRequest.get<PageResult<ImportRawRow>>(`/import/batches/${id}/raw`, { pageNum, pageSize });
   },
   /** 重归一化 */
   renormalize(id: string | number) {
@@ -54,6 +75,31 @@ export const importApi = {
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  },
+  /**
+   * 下载批次上传时的原文件（审计/追溯入口）。
+   * 用户下载后可用 Excel / WPS / Numbers 直接打开看上传内容，
+   * 适合核实解析前后是否一致、沟通问题排查等场景。
+   */
+  async downloadOriginalFile(id: string | number, fileName?: string) {
+    const baseApi = import.meta.env.VITE_APP_BASE_API;
+    const res = await fetch(`${baseApi}/api/panjia/import/batches/${id}/file?_t=${Date.now()}`, {
+      headers: { Authorization: `Bearer ${getToken()}`, clientid: 'e5cd7e4891bf95d1d19206ce24a7b32e' }
+    });
+    if (!res.ok) throw new Error('原文件下载失败');
+    // 优先用响应头里的 filename* 解析服务端返回的中文文件名
+    const dispo = res.headers.get('Content-Disposition') ?? '';
+    const starMatch = /filename\*=UTF-8''([^;]+)/.exec(dispo);
+    const quotedMatch = /filename="?([^";]+)"?/.exec(dispo);
+    const serverName = starMatch ? decodeURIComponent(starMatch[1]) : quotedMatch ? quotedMatch[1] : null;
+    const downloadName = fileName || serverName || `import_batch_${id}.xlsx`;
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = downloadName;
     link.click();
     window.URL.revokeObjectURL(url);
   }

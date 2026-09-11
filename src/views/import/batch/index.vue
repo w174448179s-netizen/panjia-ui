@@ -9,12 +9,14 @@
       <div class="page-content">
         <!-- 筛选条件 -->
         <el-form class="filter-form" :inline="true" :model="queryParams">
-          <el-form-item label="单据类型" prop="sourceType">
+          <el-form-item label="单据类型" prop="sourceTypes">
             <el-select
-              v-model="queryParams.sourceType"
+              v-model="queryParams.sourceTypes"
               placeholder="全部单据类型"
+              multiple
+              collapse-tags
               clearable
-              style="width: 180px"
+              style="width: 240px"
             >
               <el-option
                 v-for="opt in sourceTypeOptions"
@@ -77,35 +79,80 @@
             </template>
           </el-table-column>
           <el-table-column label="创建时间" align="center" prop="createTime" width="170" sortable />
-          <el-table-column label="操作" align="center" width="230" class-name="small-padding fixed-width">
+          <el-table-column label="操作" align="center" min-width="140" class-name="small-padding fixed-width">
             <template #default="scope">
-              <el-tooltip content="查看问题清单" placement="top">
-                <el-button link type="primary" icon="Warning" @click="handleIssues(scope.row as ImportBatch)">
-                  问题
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="重新解析与归一化" placement="top">
-                <el-button
-                  link
-                  type="primary"
-                  icon="Refresh"
-                  :loading="renormalizingId === scope.row.id"
-                  @click="handleRenormalize(scope.row as ImportBatch)"
-                >
-                  重归一化
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="归档批次" placement="top">
-                <el-button
-                  link
-                  type="primary"
-                  icon="Box"
-                  :loading="archivingId === scope.row.id"
-                  @click="handleArchive(scope.row as ImportBatch)"
-                >
-                  归档
-                </el-button>
-              </el-tooltip>
+              <div class="action-row">
+                <!-- 终态（ARCHIVED）：仅保留"下载"做合规留档入口，"问题/重归一化/归档"全部收起 -->
+                <template v-if="scope.row.status === 'ARCHIVED'">
+                  <el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
+                    <a
+                      class="action-btn"
+                      :class="{ 'is-loading': downloadingId === scope.row.id }"
+                      @click="handleDownloadFile(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="downloadingId !== scope.row.id"><Download /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
+                </template>
+                <!-- 终态（FAILED）：保留"问题"排查失败原因 + "下载"留档；不可再重归一化/归档 -->
+                <template v-else-if="scope.row.status === 'FAILED'">
+                  <el-tooltip v-if="hasIssues(scope.row)" content="查看失败问题清单" placement="top">
+                    <a class="action-btn" @click="handleIssues(scope.row as ImportBatch)">
+                      <el-icon><Warning /></el-icon>
+                    </a>
+                  </el-tooltip>
+                  <el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
+                    <a
+                      class="action-btn"
+                      :class="{ 'is-loading': downloadingId === scope.row.id }"
+                      @click="handleDownloadFile(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="downloadingId !== scope.row.id"><Download /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
+                </template>
+                <!-- 中间态（PARSING / NORMALIZING / PENDING_CONFIRM）：按状态机判定 -->
+                <template v-else>
+                  <!-- "问题"仅在有失败行时展示，避免无 issue 的批次显示无效入口 -->
+                  <el-tooltip v-if="hasIssues(scope.row)" content="查看问题清单" placement="top">
+                    <a class="action-btn" @click="handleIssues(scope.row as ImportBatch)">
+                      <el-icon><Warning /></el-icon>
+                    </a>
+                  </el-tooltip>
+                  <el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
+                    <a
+                      class="action-btn"
+                      :class="{ 'is-loading': downloadingId === scope.row.id }"
+                      @click="handleDownloadFile(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="downloadingId !== scope.row.id"><Download /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
+                  <el-tooltip v-if="canRenormalize(scope.row.status)" content="重新解析与归一化" placement="top">
+                    <a
+                      class="action-btn"
+                      :class="{ 'is-loading': renormalizingId === scope.row.id }"
+                      @click="handleRenormalize(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="renormalizingId !== scope.row.id"><Refresh /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
+                  <el-tooltip v-if="canArchive(scope.row.status)" content="归档批次" placement="top">
+                    <a
+                      class="action-btn"
+                      :class="{ 'is-loading': archivingId === scope.row.id }"
+                      @click="handleArchive(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="archivingId !== scope.row.id"><Box /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
+                </template>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -150,6 +197,7 @@
 import { importApi } from '@/api/panjia/import';
 import type { ImportBatch, ImportIssue } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
+import { Warning, Download, Refresh, Loading, Box } from '@element-plus/icons-vue';
 
 // 单据类型映射（跨所有单据类型）
 const sourceTypeMap: Record<string, string> = {
@@ -170,6 +218,25 @@ const statusMap: Record<string, string> = {
   FAILED: '失败'
 };
 type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger';
+
+/**
+ * 重归一化仅在 PENDING_CONFIRM 状态可用（V2.0 §3.5 状态机硬约束）。
+ * 已归档/已失败为终态；解析中/归一化中由系统自动流转，不接受用户重入。
+ */
+const canRenormalize = (status: string): boolean => status === 'PENDING_CONFIRM';
+
+/**
+ * 归档仅在 PENDING_CONFIRM 状态可用。
+ * NORMALIZING/PARSING 状态归档会让归一化结果与状态不一致；终态本就不支持归档。
+ */
+const canArchive = (status: string): boolean => status === 'PENDING_CONFIRM';
+
+/**
+ * 批次是否存在需要展示的问题（failedRows > 0）。
+ * - 中间态/终态都用此判定是否显示"问题"按钮，避免无 issue 时多一个无效入口。
+ */
+const hasIssues = (row: ImportBatch): boolean => Number(row.failedRows ?? 0) > 0;
+
 const statusTagType = (status: string): TagType => {
   const map: Record<string, TagType> = {
     PARSING: 'info',
@@ -198,7 +265,7 @@ const issueStatusTagType = (status: string): TagType => {
 
 // ==================== 筛选 ====================
 const queryParams = reactive({
-  sourceType: '',
+  sourceTypes: [] as string[],
   period: ''
 });
 
@@ -210,7 +277,7 @@ const getList = async () => {
   loading.value = true;
   try {
     const res = await importApi.listBatches(
-      queryParams.sourceType || undefined,
+      queryParams.sourceTypes.length > 0 ? queryParams.sourceTypes : undefined,
       queryParams.period || undefined
     );
     const list: ImportBatch[] = res.data ?? [];
@@ -227,7 +294,7 @@ const handleQuery = () => {
 };
 
 const resetQuery = () => {
-  queryParams.sourceType = '';
+  queryParams.sourceTypes = [];
   queryParams.period = '';
   getList();
 };
@@ -293,6 +360,23 @@ const handleIssues = async (row: ImportBatch) => {
 onMounted(() => {
   getList();
 });
+
+// ==================== 下载原文件 ====================
+const downloadingId = ref<string | number | undefined>();
+
+const handleDownloadFile = async (row: ImportBatch) => {
+  downloadingId.value = row.id;
+  try {
+    // 用 batchNo + 原文件名命名，让用户下载后能直接关联批次
+    const fileName = `${row.batchNo}_${row.fileName ?? '原始文件'}`;
+    await importApi.downloadOriginalFile(row.id, fileName);
+    modal.msgSuccess('已开始下载原文件');
+  } catch (e: any) {
+    modal.msgError(e?.message || '原文件下载失败');
+  } finally {
+    downloadingId.value = undefined;
+  }
+};
 </script>
 
 <style lang="scss" scoped>
@@ -332,5 +416,49 @@ onMounted(() => {
     color: var(--el-color-danger);
     font-weight: 600;
   }
+}
+
+.action-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 6px;
+    color: var(--el-color-primary);
+    cursor: pointer;
+    text-decoration: none;
+    user-select: none;
+    line-height: 1;
+    border-radius: 4px;
+    transition: background-color 0.15s ease;
+
+    &:hover {
+      background-color: var(--el-color-primary-light-9);
+    }
+
+    &.is-loading {
+      cursor: wait;
+      opacity: 0.7;
+    }
+
+    .el-icon {
+      font-size: 16px;
+
+      &.is-loading {
+        animation: rotating 1.4s linear infinite;
+      }
+    }
+  }
+}
+
+@keyframes rotating {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 </style>

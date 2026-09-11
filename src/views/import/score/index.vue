@@ -224,7 +224,7 @@ const batchList = ref<ImportBatch[]>([]);
 const getList = async () => {
   loading.value = true;
   try {
-    const res = await importApi.listBatches(SOURCE_TYPE, period.value || undefined);
+    const res = await importApi.listBatches([SOURCE_TYPE], period.value || undefined);
     const list: ImportBatch[] = res.data ?? [];
     list.sort((a, b) => (a.createTime < b.createTime ? 1 : a.createTime > b.createTime ? -1 : 0));
     batchList.value = list;

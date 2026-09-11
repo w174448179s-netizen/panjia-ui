@@ -69,6 +69,13 @@
           <el-table-column label="归属月" prop="period" align="center" width="100">
             <template #default="scope">{{ scope.row.period || '—' }}</template>
           </el-table-column>
+          <el-table-column label="类型" align="center" width="80">
+            <template #default="scope">
+              <el-tag size="small" :type="scope.row.sourceType === 'KE_NEW_SIGN' ? 'warning' : 'primary'">
+                {{ sourceTypeLabel[scope.row.sourceType] ?? scope.row.sourceType }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="文件名" prop="fileName" align="center" min-width="180" show-overflow-tooltip />
           <el-table-column label="总行数" prop="totalRows" align="center" width="80" />
           <el-table-column label="成功" prop="successRows" align="center" width="70">
@@ -89,27 +96,49 @@
             </template>
           </el-table-column>
           <el-table-column label="创建时间" prop="createTime" align="center" width="170" />
-          <el-table-column label="操作" align="center" width="200" class-name="small-padding fixed-width">
+          <el-table-column label="操作" width="380" align="center" fixed="right">
             <template #default="scope">
-              <el-button link type="primary" icon="Warning" @click="openIssues(scope.row.id)">问题</el-button>
-              <el-button
-                link
-                type="warning"
-                icon="Refresh"
-                :loading="rowLoadingId === scope.row.id && rowAction === 'renormalize'"
-                @click="handleRenormalize(scope.row as ImportBatch)"
-              >
-                重归一化
-              </el-button>
-              <el-button
-                link
-                type="success"
-                icon="Box"
-                :loading="rowLoadingId === scope.row.id && rowAction === 'archive'"
-                @click="handleArchive(scope.row as ImportBatch)"
-              >
-                归档
-              </el-button>
+              <div class="action-row">
+                <el-tooltip content="查看问题清单" placement="top">
+                  <a class="action-btn" @click="openIssues(scope.row.id)">
+                    <el-icon><Warning /></el-icon>
+                    <span>问题</span>
+                  </a>
+                </el-tooltip>
+                <el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
+                  <a
+                    class="action-btn"
+                    :class="{ 'is-loading': rowDownloadingId === scope.row.id }"
+                    @click="handleDownloadFile(scope.row as ImportBatch)"
+                  >
+                    <el-icon v-if="rowDownloadingId !== scope.row.id"><Download /></el-icon>
+                    <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    <span>下载</span>
+                  </a>
+                </el-tooltip>
+                <el-tooltip content="重新解析与归一化" placement="top">
+                  <a
+                    class="action-btn"
+                    :class="{ 'is-loading': rowLoadingId === scope.row.id && rowAction === 'renormalize' }"
+                    @click="handleRenormalize(scope.row as ImportBatch)"
+                  >
+                    <el-icon v-if="!(rowLoadingId === scope.row.id && rowAction === 'renormalize')"><Refresh /></el-icon>
+                    <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    <span>重归一化</span>
+                  </a>
+                </el-tooltip>
+                <el-tooltip content="归档批次" placement="top">
+                  <a
+                    class="action-btn"
+                    :class="{ 'is-loading': rowLoadingId === scope.row.id && rowAction === 'archive' }"
+                    @click="handleArchive(scope.row as ImportBatch)"
+                  >
+                    <el-icon v-if="!(rowLoadingId === scope.row.id && rowAction === 'archive')"><Box /></el-icon>
+                    <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    <span>归档</span>
+                  </a>
+                </el-tooltip>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -153,9 +182,17 @@
 import { importApi } from '@/api/panjia/import';
 import type { ImportBatch, ImportIssue } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
-import { InfoFilled } from '@element-plus/icons-vue';
+import { InfoFilled, Warning, Download, Refresh, Loading, Box } from '@element-plus/icons-vue';
 
 const SOURCE_TYPE = 'KE_SIGNED';
+/** 贝壳业绩菜单 = 结佣(KE_SIGNED) + 新签(KE_NEW_SIGN) 两类批次列表 */
+const SOURCE_TYPES = ['KE_SIGNED', 'KE_NEW_SIGN'] as const;
+
+/** 单据子类型映射（贝壳业绩菜单专用） */
+const sourceTypeLabel: Record<string, string> = {
+  KE_SIGNED: '结佣',
+  KE_NEW_SIGN: '新签'
+};
 
 // ==================== 工具栏 / 上传 ====================
 const period = ref<string>('');
@@ -211,7 +248,7 @@ const batches = ref<ImportBatch[]>([]);
 const loadBatches = async () => {
   listLoading.value = true;
   try {
-    const res = await importApi.listBatches(SOURCE_TYPE, period.value || undefined);
+    const res = await importApi.listBatches([...SOURCE_TYPES], period.value || undefined);
     const list = res.data ?? [];
     list.sort((a, b) => new Date(b.createTime).getTime() - new Date(a.createTime).getTime());
     batches.value = list;
@@ -326,6 +363,22 @@ const handleArchive = async (row: ImportBatch) => {
   }
 };
 
+// ==================== 下载原文件 ====================
+const rowDownloadingId = ref<string>('');
+
+const handleDownloadFile = async (row: ImportBatch) => {
+  rowDownloadingId.value = row.id;
+  try {
+    const fileName = `${row.batchNo}_${row.fileName ?? '原始文件'}`;
+    await importApi.downloadOriginalFile(row.id, fileName);
+    modal.msgSuccess('已开始下载原文件');
+  } catch (e: any) {
+    modal.msgError(e?.message || '原文件下载失败');
+  } finally {
+    rowDownloadingId.value = '';
+  }
+};
+
 onMounted(() => {
   loadBatches();
 });
@@ -397,5 +450,62 @@ onMounted(() => {
     color: var(--el-color-danger);
     font-weight: 600;
   }
+}
+
+.action-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+
+  .el-button.is-link {
+    padding: 0 6px;
+    font-size: 12px;
+    margin-left: 0;
+  }
+}
+
+.action-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  font-size: 13px;
+
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 4px;
+    color: var(--el-color-primary);
+    cursor: pointer;
+    text-decoration: none;
+    user-select: none;
+    line-height: 1.5;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &.is-loading {
+      cursor: wait;
+      opacity: 0.7;
+    }
+
+    .el-icon {
+      font-size: 13px;
+
+      &.is-loading {
+        animation: rotating 1.4s linear infinite;
+      }
+    }
+  }
+}
+
+@keyframes rotating {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 </style>
