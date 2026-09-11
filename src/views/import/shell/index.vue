@@ -29,7 +29,9 @@
                 上传文件
               </el-button>
             </el-upload>
-            <el-button icon="Download" @click="handleDownloadTemplate">下载模板</el-button>
+            <el-tooltip content="请直接上传贝壳·经纪人业绩明细表原始文件（.xlsx），无需下载模板" placement="bottom">
+              <el-icon class="upload-hint-icon"><InfoFilled /></el-icon>
+            </el-tooltip>
           </div>
         </div>
       </template>
@@ -151,6 +153,7 @@
 import { importApi } from '@/api/panjia/import';
 import type { ImportBatch, ImportIssue } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
+import { InfoFilled } from '@element-plus/icons-vue';
 
 const SOURCE_TYPE = 'KE_SIGNED';
 
@@ -161,10 +164,6 @@ const uploadResult = ref<{ success: boolean; batchId: string; message?: string }
 
 const handlePeriodChange = () => {
   loadBatches();
-};
-
-const handleDownloadTemplate = () => {
-  importApi.downloadTemplate('KE_SIGNED', '贝壳业绩导入模板.xlsx');
 };
 
 const beforeUpload = (file: File) => {
@@ -365,6 +364,12 @@ onMounted(() => {
 
   .upload-btn {
     display: inline-flex;
+  }
+
+  .upload-hint-icon {
+    color: var(--el-text-color-secondary);
+    font-size: 16px;
+    cursor: help;
   }
 }
 
