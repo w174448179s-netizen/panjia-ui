@@ -110,9 +110,10 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column :label="amountLabel" align="right" width="130" fixed="left">
+        <el-table-column :label="amountLabel" align="right" width="150" fixed="left">
           <template #default="scope">
-            <span class="amount" :class="`amount-${scope.row.level}`">{{ formatAmount(scope.row.amount) }}</span>
+            <span class="amount" :class="[`amount-${scope.row.level}`, { 'amount-redink': scope.row.level === 'detail' && scope.row.amount < 0 }]">{{ formatAmount(scope.row.amount) }}</span>
+            <el-tag v-if="scope.row.level === 'detail' && scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="类型" align="center" width="100">
@@ -165,6 +166,18 @@
             <span v-if="scope.row.level === 'detail'">{{ formatDate(scope.row.settleDate) }}</span>
           </template>
         </el-table-column>
+        <!-- 操作列：合同级/明细级业绩调整（经纪人无权限，不显示） -->
+        <el-table-column v-if="!isBroker" label="操作" align="center" width="100" fixed="right">
+          <template #default="scope">
+            <el-button
+              v-if="scope.row.level === 'contract' || scope.row.level === 'detail'"
+              type="primary"
+              link
+              size="small"
+              @click.stop="openAdjustDialog(scope.row)"
+            >调整</el-button>
+          </template>
+        </el-table-column>
         <template #empty>
           <el-empty :description="queryParams.period ? '该期间暂无业绩数据' : '请选择期间查询业绩'" />
         </template>
@@ -184,6 +197,73 @@
         />
       </div>
     </el-card>
+
+    <!-- 业绩调整弹窗 -->
+    <el-dialog
+      v-model="adjustDialog.visible"
+      :title="adjustDialog.scope === 'CONTRACT' ? '合同业绩调整' : '明细业绩调整'"
+      width="480px"
+      destroy-on-close
+    >
+      <el-form
+        ref="adjustFormRef"
+        :model="adjustForm"
+        :rules="adjustRules"
+        label-width="90px"
+      >
+        <el-form-item label="调整范围">
+          <el-tag :type="adjustDialog.scope === 'CONTRACT' ? 'warning' : 'info'">
+            {{ adjustDialog.scope === 'CONTRACT' ? '合同级（按比例分摊到各明细）' : '明细级（单条调整）' }}
+          </el-tag>
+        </el-form-item>
+        <el-form-item v-if="adjustDialog.scope === 'CONTRACT'" label="合同号">
+          <span>{{ adjustDialog.contractNo }}</span>
+        </el-form-item>
+        <el-form-item label="调整类型">
+          <el-select v-model="adjustForm.adjustType" style="width: 100%">
+            <el-option label="金额调整" value="AMOUNT" />
+            <el-option label="业绩冲销" value="VOID" />
+            <el-option label="部门划转" value="TRANSFER" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整金额" prop="deltaAmount">
+          <el-input-number
+            v-model="adjustForm.deltaAmount"
+            :precision="2"
+            :step="100"
+            style="width: 100%"
+            placeholder="正数调增，负数调减"
+          />
+          <div class="form-tip">正数调增业绩，负数调减业绩</div>
+        </el-form-item>
+        <el-form-item v-if="adjustForm.adjustType === 'TRANSFER'" label="目标部门">
+          <el-tree-select
+            v-model="adjustForm.targetDeptId"
+            :data="deptTreeData"
+            :props="{ label: 'deptName', children: 'children' } as any"
+            value-key="deptId"
+            node-key="deptId"
+            placeholder="选择目标部门"
+            check-strictly
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="调整原因" prop="reason">
+          <el-input
+            v-model="adjustForm.reason"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入调整原因（审批必填）"
+            maxlength="500"
+            show-word-limit
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="adjustDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="adjustSubmitting" @click="submitAdjust">提交审批</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -481,6 +561,92 @@ const resetQuery = () => {
 
 const rowClassName = ({ row }: { row: TreeNode }) => `row-${row.level}`;
 
+// ==================== 业绩调整弹窗 ====================
+const adjustFormRef = ref();
+const adjustSubmitting = ref(false);
+const adjustDialog = reactive({
+  visible: false,
+  scope: 'DETAIL' as 'CONTRACT' | 'DETAIL',
+  contractNo: '',
+  factId: '',
+  employeeId: '',
+  deptId: '',
+});
+const adjustForm = reactive({
+  adjustType: 'AMOUNT',
+  deltaAmount: undefined as number | undefined,
+  targetDeptId: undefined as string | undefined,
+  reason: '',
+});
+const adjustRules = {
+  reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
+  deltaAmount: [
+    {
+      validator: (_rule: unknown, value: number | undefined, callback: (err?: Error) => void) => {
+        if (adjustForm.adjustType === 'AMOUNT' && (value === undefined || value === null)) {
+          callback(new Error('请输入调整金额'));
+        } else {
+          callback();
+        }
+      },
+      trigger: 'blur',
+    },
+  ],
+  targetDeptId: [
+    {
+      validator: (_rule: unknown, value: string | undefined, callback: (err?: Error) => void) => {
+        if (adjustForm.adjustType === 'TRANSFER' && !value) {
+          callback(new Error('请选择目标部门'));
+        } else {
+          callback();
+        }
+      },
+      trigger: 'change',
+    },
+  ],
+};
+
+const openAdjustDialog = (row: TreeNode) => {
+  adjustDialog.scope = row.level === 'contract' ? 'CONTRACT' : 'DETAIL';
+  adjustDialog.contractNo = row.contractNo || '';
+  // 明细行 id 格式为 d_${factId}
+  adjustDialog.factId = row.level === 'detail' ? String(row.id).replace(/^d_/, '') : '';
+  adjustDialog.employeeId = row.employeeId || '';
+  adjustDialog.deptId = '';
+  adjustForm.adjustType = 'AMOUNT';
+  adjustForm.deltaAmount = undefined;
+  adjustForm.targetDeptId = undefined;
+  adjustForm.reason = '';
+  adjustDialog.visible = true;
+};
+
+const submitAdjust = async () => {
+  await adjustFormRef.value?.validate();
+  adjustSubmitting.value = true;
+  try {
+    await performanceApi.createAdjust({
+      factId: adjustDialog.scope === 'DETAIL' ? adjustDialog.factId : undefined,
+      period: queryParams.period,
+      employeeId: adjustDialog.employeeId,
+      deptId: adjustDialog.deptId || '0',
+      adjustType: adjustForm.adjustType,
+      adjustScope: adjustDialog.scope,
+      contractNo: adjustDialog.scope === 'CONTRACT' ? adjustDialog.contractNo : undefined,
+      factType: activeTab.value,
+      deltaAmount: adjustForm.deltaAmount,
+      targetDeptId: adjustForm.targetDeptId,
+      reason: adjustForm.reason.trim(),
+    });
+    ElMessage.success('调整单已提交审批');
+    adjustDialog.visible = false;
+    getList();
+  } catch (e) {
+    // 错误已由拦截器提示
+  } finally {
+    adjustSubmitting.value = false;
+  }
+};
+
 onMounted(async () => {
   await loadDeptTree();
   try {
@@ -504,6 +670,12 @@ onMounted(async () => {
 
 .page-card {
   border-radius: 12px;
+}
+
+.form-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
 }
 
 .filter-form {
@@ -598,6 +770,15 @@ onMounted(async () => {
   .amount-detail {
     color: #909399;
     font-weight: 400;
+  }
+  .amount-redink {
+    color: #f56c6c;
+    font-weight: 600;
+  }
+  .redink-tag {
+    margin-left: 4px;
+    transform: scale(0.85);
+    transform-origin: left center;
   }
 
   .person-name {

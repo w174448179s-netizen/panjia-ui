@@ -78,7 +78,10 @@ export interface AdjustCreateForm {
   period: string;
   employeeId: string;
   deptId: string;
-  adjustType: string;
+  adjustType: string;        // AMOUNT / VOID / TRANSFER
+  adjustScope?: string;      // CONTRACT / DETAIL
+  contractNo?: string;       // 合同级调整时填
+  factType?: string;         // PERF_REAL / PERF_EXPECT
   deltaAmount?: number;
   targetDeptId?: string;
   reason: string;
