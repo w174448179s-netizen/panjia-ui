@@ -246,10 +246,6 @@ export const performanceApi = {
     panjiaRequest.get<PerformanceAdjust>(`/perf/adjust/${id}`),
   createAdjust: (data: AdjustCreateForm) =>
     panjiaRequest.post<string>('/perf/adjust', data),
-  approveAdjust: (id: string | number) =>
-    panjiaRequest.put<void>(`/perf/adjust/approve/${id}`),
-  rejectAdjust: (id: string | number, reason: string) =>
-    panjiaRequest.put<void>(`/perf/adjust/reject/${id}?reason=${encodeURIComponent(reason)}`),
   cancelAdjust: (id: string | number) =>
     panjiaRequest.put<void>(`/perf/adjust/cancel/${id}`),
   executeAdjust: (id: string | number) =>

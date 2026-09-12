@@ -136,18 +136,11 @@
             </template>
           </el-table-column>
           <el-table-column label="申请时间" align="center" prop="createTime" width="170" sortable />
-          <el-table-column label="操作" align="center" width="260" class-name="small-padding fixed-width">
+          <el-table-column label="操作" align="center" width="180" class-name="small-padding fixed-width">
             <template #default="scope">
               <el-button link type="primary" @click="handleDetail(scope.row)">详情</el-button>
-              <template v-if="scope.row.status === 'SUBMITTED'">
-                <el-button link type="success" @click="handleApprove(scope.row)">通过</el-button>
-                <el-button link type="danger" @click="handleReject(scope.row)">拒绝</el-button>
-                <el-button link type="info" @click="handleCancel(scope.row)">取消</el-button>
-              </template>
-              <template v-else-if="scope.row.status === 'APPROVED'">
-                <el-button link type="warning" @click="handleExecute(scope.row)">执行</el-button>
-                <el-button link type="info" @click="handleCancel(scope.row)">取消</el-button>
-              </template>
+              <!-- 审批走 RuoYi 工作流（perf_adjust），不在本页直接通过/拒绝；提交后仅可取消 -->
+              <el-button v-if="scope.row.status === 'SUBMITTED'" link type="info" @click="handleCancel(scope.row)">取消</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -468,52 +461,7 @@ const getAmountClass = (val: number | undefined): string => {
   return '';
 };
 
-// ==================== 操作：审批 / 拒绝 / 执行 / 取消 ====================
-const handleApprove = async (row: any) => {
-  try {
-    await modal.confirm(`确认通过调整单「${row.adjustNo}」？`);
-  } catch {
-    return;
-  }
-  try {
-    await performanceApi.approveAdjust(row.id);
-    modal.msgSuccess('审批通过');
-    getList();
-  } catch {
-    /* 拦截器已处理 */
-  }
-};
-
-const handleReject = async (row: any) => {
-  try {
-    const { value } = await modal.prompt('请输入拒绝原因');
-    if (!value?.trim()) {
-      modal.msgWarning('请输入拒绝原因');
-      return;
-    }
-    await performanceApi.rejectAdjust(row.id, value.trim());
-    modal.msgSuccess('已拒绝');
-    getList();
-  } catch {
-    /* 用户取消或已处理 */
-  }
-};
-
-const handleExecute = async (row: any) => {
-  try {
-    await modal.confirm(`确认执行调整单「${row.adjustNo}」？执行后将生成实际业绩变动。`);
-  } catch {
-    return;
-  }
-  try {
-    await performanceApi.executeAdjust(row.id);
-    modal.msgSuccess('执行成功');
-    getList();
-  } catch {
-    /* 拦截器已处理 */
-  }
-};
-
+// ==================== 操作：取消（审批/执行由 RuoYi 工作流驱动） ====================
 const handleCancel = async (row: any) => {
   try {
     await modal.confirm(`确认取消调整单「${row.adjustNo}」？`);
