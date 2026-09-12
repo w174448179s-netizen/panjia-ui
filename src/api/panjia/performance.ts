@@ -112,21 +112,58 @@ export interface ManualFactForm {
   reason?: string;
 }
 
+/** 业绩管理明细行（人→合同→明细 树表的明细层，后端 /perf/fact/manage 返回） */
+export interface PerformanceManageRow {
+  id: string;
+  factType: string;          // PERF_REAL / PERF_EXPECT
+  period: string;
+  businessDate: string;      // 签约/认购日期
+  orderNo?: string;          // 订单号
+  contractNo?: string;       // 合同号
+  bizType?: string;          // 类型
+  propertyAddress?: string;  // 房源地址
+  employeeId: string;
+  employeeName?: string;     // 签约人
+  employeeCode?: string;
+  storeName?: string;        // 门店
+  groupName?: string;        // 店组
+  roleType?: string;         // 所属角色
+  roleName?: string;         // 角色名
+  shareRatio?: number;       // 角色占比
+  amount: number;            // 业绩金额（PERF_EXPECT=应收 / PERF_REAL=实收）
+  settled: boolean;          // 是否已结算
+  settleDate?: string;       // 结算日期
+  sourceKey: string;
+}
+
+/** 业绩管理查询参数 */
+export interface ManageQuery {
+  period: string;
+  factType: string;          // PERF_REAL / PERF_EXPECT
+  deptId?: string;
+  bizType?: string;
+  settled?: boolean;
+}
+
 // ========== API ==========
 export const performanceApi = {
   // 业绩事实
   listFacts: (params: FactQuery) =>
-    panjiaRequest.get<PageResult<PerformanceFact>>('/perf/fact/list', { params }),
+    panjiaRequest.get<PageResult<PerformanceFact>>('/perf/fact/list', params),
   getFact: (id: string | number) =>
     panjiaRequest.get<PerformanceFact>(`/perf/fact/${id}`),
   buildBatch: (batchId: string | number) =>
     panjiaRequest.post<void>(`/perf/fact/build/${batchId}`),
   getSummary: (params: { period?: string; factType?: string; employeeId?: string; deptId?: string }) =>
-    panjiaRequest.get<number>('/perf/fact/summary', { params }),
+    panjiaRequest.get<number>('/perf/fact/summary', params),
+
+  // 业绩管理（人→合同→明细 树表）
+  listManage: (params: ManageQuery) =>
+    panjiaRequest.get<PerformanceManageRow[]>('/perf/fact/manage', params),
 
   // 调整单
   listAdjusts: (params: AdjustQuery) =>
-    panjiaRequest.get<PageResult<PerformanceAdjust>>('/perf/adjust/list', { params }),
+    panjiaRequest.get<PageResult<PerformanceAdjust>>('/perf/adjust/list', params),
   getAdjust: (id: string | number) =>
     panjiaRequest.get<PerformanceAdjust>(`/perf/adjust/${id}`),
   createAdjust: (data: AdjustCreateForm) =>
