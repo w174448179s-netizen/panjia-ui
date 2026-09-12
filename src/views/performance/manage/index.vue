@@ -142,7 +142,7 @@
         </el-table-column>
         <el-table-column label="门店/组别" align="center" width="200" show-overflow-tooltip>
           <template #default="scope">
-            <span v-if="scope.row.level !== 'person'">{{ storeGroupText(scope.row) }}</span>
+            <span v-if="scope.row.level !== 'person'">{{ scope.row.deptPath || '—' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="所属角色" align="center" width="130" show-overflow-tooltip>
@@ -264,15 +264,6 @@ const formatDate = (val?: string | null): string => {
   return val.length >= 10 ? val.substring(0, 10) : val;
 };
 
-// 门店/组别合并一列：门店与店组同名时只显示一个
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const storeGroupText = (row: any): string => {
-  const parts = [row?.storeName, row?.groupName]
-    .filter((v): v is string => !!v)
-    .filter((v: string, i: number, arr: string[]) => arr.indexOf(v) === i);
-  return parts.length ? parts.join(' / ') : '—';
-};
-
 // ==================== 关键字搜索（防抖，下推后端） ====================
 // 类型下拉项（后端按当前期间/口径返回的业务类型集合）
 const bizTypeOptions = ref<string[]>([]);
@@ -300,8 +291,7 @@ interface TreeNode {
   businessDate?: string;
   bizType?: string;
   propertyAddress?: string;
-  groupName?: string;
-  storeName?: string;
+  deptPath?: string;
   roleType?: string;
   shareRatio?: number | string;
   amount: number;
@@ -318,7 +308,7 @@ interface TreeNode {
 /**
  * 把单个员工的扁平明细组装成「合同 → 明细」两级节点（人节点懒加载时调用）。
  * - contract：同一人同一合同汇总（合同号/订单号/类型/地址/门店组别取该组首行），
- *   明细节点挂在 _details，展开合同行时由 el-table lazy resolve
+ *   明细节点挂在 detailNodes，展开合同行时由 el-table lazy resolve
  * - detail：角色明细行
  */
 const buildContractNodes = (empKey: string, rows: PerformanceManageRow[]): TreeNode[] => {
@@ -337,8 +327,7 @@ const buildContractNodes = (empKey: string, rows: PerformanceManageRow[]): TreeN
         businessDate: row.businessDate,
         bizType: row.bizType,
         propertyAddress: row.propertyAddress,
-        groupName: row.groupName,
-        storeName: row.storeName,
+        deptPath: row.deptPath,
         amount: 0,
         detailCount: 0,
         hasChildren: true,

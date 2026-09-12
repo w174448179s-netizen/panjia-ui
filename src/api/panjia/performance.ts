@@ -125,8 +125,7 @@ export interface PerformanceManageRow {
   employeeId: string;
   employeeName?: string;     // 签约人
   employeeCode?: string;
-  storeName?: string;        // 门店
-  groupName?: string;        // 店组
+  deptPath?: string;         // 门店/组别全路径：大区-门店-组（组与门店同名时只到两级）
   roleType?: string;         // 所属角色
   roleName?: string;         // 角色名
   shareRatio?: number;       // 角色占比
