@@ -154,7 +154,7 @@
           </template>
         </el-table-column>
         <el-table-column label="入职日期" align="center" prop="hireDate" width="110" />
-        <el-table-column label="操作" align="center" width="160" class-name="small-padding fixed-width">
+        <el-table-column label="操作" align="center" width="160" fixed="right" class-name="small-padding fixed-width">
           <template #default="scope">
             <el-tooltip content="详情/变更记录" placement="top">
               <el-button link type="primary" icon="View" @click="handleDetail(scope.row as Employee)"></el-button>
