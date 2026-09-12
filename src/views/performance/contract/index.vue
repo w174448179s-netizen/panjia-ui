@@ -1,8 +1,8 @@
 <template>
-  <div class="performance-manage-page">
+  <div class="performance-contract-page">
     <el-card class="page-card" v-loading="loading">
-      <!-- 筛选条件 -->
-      <el-form class="filter-form" :inline="true" :model="queryParams">
+      <!-- 筛选条件（经纪人无任何查询项，后端强制限定本人业绩） -->
+      <el-form v-if="!isBroker" class="filter-form" :inline="true" :model="queryParams">
         <el-form-item label="期间">
           <el-date-picker
             v-model="queryParams.period"
@@ -57,25 +57,26 @@
         </el-form-item>
       </el-form>
 
-      <!-- 双 Tab：新签业绩（当月应收） / 结佣业绩（当月实收） -->
+      <!-- 双 Tab：新签业绩 / 结佣业绩 -->
       <el-tabs v-model="activeTab" class="fact-tabs" @tab-change="onTabChange">
         <el-tab-pane label="新签业绩（当月应收）" name="PERF_EXPECT" />
         <el-tab-pane label="结佣业绩（当月实收）" name="PERF_REAL" />
       </el-tabs>
 
-      <!-- 汇总条 + 树操作 -->
+      <!-- 汇总条（经纪人隐藏搜索框，只看统计） -->
       <div class="summary-bar">
         <div class="summary-left">
           <el-input
+            v-if="!isBroker"
             v-model="keyword"
-            placeholder="搜索员工号 / 姓名 / 合同号 / 订单号 / 房源地址 / 角色"
+            placeholder="搜索合同号 / 订单号 / 房源地址 / 员工号 / 姓名 / 角色"
             clearable
             :prefix-icon="Search"
             class="keyword-input"
           />
           <span class="summary-text">
-            共 <b>{{ summary.employeeCount }}</b> 人 ·
-            <b>{{ summary.contractCount }}</b> 个合同 ·
+            共 <b>{{ summary.contractCount }}</b> 个合同 ·
+            涉及 <b>{{ summary.employeeCount }}</b> 人 ·
             <b>{{ summary.detailCount }}</b> 条明细 ·
             未结算 <b class="unsettled">{{ summary.unsettledCount }}</b> 条
           </span>
@@ -86,79 +87,70 @@
         </div>
       </div>
 
-      <!-- 树表：人 → 合同 → 明细（后端按签约人分页，单击行懒加载展开） -->
+      <!-- 树表：合同 → 人 → 明细（后端按合同分页，单击行懒加载展开） -->
       <el-table
         ref="tableRef"
         border
         lazy
         class="data-table"
-        :data="personData"
+        :data="contractData"
         row-key="id"
         :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
         :load="handleLoad"
         :row-class-name="rowClassName"
         @row-click="onRowClick"
       >
-        <!-- 以人为维度：员工号 → 姓名 → 金额 → 合同号 → 订单号 → 其余信息 -->
-        <el-table-column label="员工号" align="center" width="110">
+        <el-table-column label="合同号/订单号" align="center" min-width="170" show-overflow-tooltip fixed="left">
           <template #default="scope">
-            <span v-if="scope.row.level === 'person'" class="person-code">{{ scope.row.employeeCode || '—' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="姓名" align="center" width="150">
-          <template #default="scope">
-            <span v-if="scope.row.level === 'person'" class="person-name">
-              {{ scope.row.employeeName }}
-              <em class="person-meta">{{ scope.row.contractCount }}合同/{{ scope.row.detailCount }}条</em>
+            <span v-if="scope.row.level === 'contract'" class="contract-no">
+              {{ contractOrOrderNo(scope.row) }}
+            </span>
+            <span v-else-if="scope.row.level === 'person' || scope.row.level === 'detail'">
+              {{ contractOrOrderNo(scope.row) || '—' }}
             </span>
           </template>
         </el-table-column>
-        <el-table-column :label="amountLabel" align="right" width="130">
+        <el-table-column :label="amountLabel" align="right" width="130" fixed="left">
           <template #default="scope">
             <span class="amount" :class="`amount-${scope.row.level}`">{{ formatAmount(scope.row.amount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="合同号" align="center" width="160" show-overflow-tooltip>
-          <template #default="scope">
-            <span v-if="scope.row.level === 'contract'" class="contract-no">{{ scope.row.contractNo }}</span>
-            <span v-else-if="scope.row.level === 'detail'">{{ scope.row.contractNo || '—' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="订单号" align="center" width="160" show-overflow-tooltip>
-          <template #default="scope">
-            <span v-if="scope.row.level !== 'person'">{{ scope.row.orderNo || '—' }}</span>
-          </template>
-        </el-table-column>
         <el-table-column label="类型" align="center" width="100">
           <template #default="scope">
-            <el-tag v-if="scope.row.level !== 'person' && scope.row.bizType" size="small" type="info" effect="plain">
-              {{ scope.row.bizType }}
-            </el-tag>
+            <span v-if="scope.row.level !== 'person'">{{ scope.row.bizType || '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="房源地址" prop="propertyAddress" min-width="200" show-overflow-tooltip>
+        <el-table-column label="房源地址" align="left" min-width="180" show-overflow-tooltip>
           <template #default="scope">
             <span v-if="scope.row.level !== 'person'">{{ scope.row.propertyAddress || '—' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="门店/组别" align="center" width="200" show-overflow-tooltip>
-          <template #default="scope">
-            <span>{{ scope.row.deptPath || '—' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="所属角色" align="center" width="130" show-overflow-tooltip>
-          <template #default="scope">
-            <span v-if="scope.row.level === 'detail'">{{ scope.row.roleType || '—' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="角色占比" align="center" width="90">
-          <template #default="scope">
-            <span v-if="scope.row.level === 'detail'">{{ formatRatio(scope.row.shareRatio) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="签约/认购日期" align="center" width="120">
           <template #default="scope">
             <span v-if="scope.row.level !== 'person'">{{ scope.row.businessDate || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="姓名" align="center" width="120">
+          <template #default="scope">
+            <span v-if="scope.row.level === 'person'" class="person-name">
+              {{ scope.row.employeeName }}
+              <em class="person-meta">{{ scope.row.detailCount }}条</em>
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="门店/组别" align="center" min-width="160" show-overflow-tooltip>
+          <template #default="scope">
+            <span v-if="scope.row.level === 'person' || scope.row.level === 'detail'">{{ scope.row.deptPath || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="所属角色" align="center" width="110">
+          <template #default="scope">
+            <span v-if="scope.row.level === 'detail'">{{ scope.row.roleType || scope.row.roleName || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="角色占比" align="center" width="90">
+          <template #default="scope">
+            <span v-if="scope.row.level === 'detail'">{{ formatRatio(scope.row.shareRatio) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="是否结算" align="center" width="90">
@@ -178,12 +170,12 @@
         </template>
       </el-table>
 
-      <!-- 按签约人维度分页 -->
+      <!-- 按合同维度分页 -->
       <div class="pager-bar">
         <el-pagination
           background
           layout="total, sizes, prev, pager, next, jumper"
-          :total="totalEmployees"
+          :total="totalContracts"
           :page-sizes="[10, 20, 50]"
           v-model:current-page="pageNum"
           v-model:page-size="pageSize"
@@ -198,9 +190,14 @@
 <script setup lang="ts">
 import { Search } from '@element-plus/icons-vue';
 import { performanceApi } from '@/api/panjia/performance';
-import type { PerformanceManageEmployee, PerformanceManageRow } from '@/api/panjia/performance';
+import type { PerformanceManageContract, PerformanceManageRow } from '@/api/panjia/performance';
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
+import { useUserStore } from '@/store/modules/user';
+
+// 经纪人角色无查询项，后端强制限定本人业绩
+const userStore = useUserStore();
+const isBroker = computed(() => userStore.roles.includes('agent'));
 
 // ==================== Tab & 筛选 ====================
 const activeTab = ref<'PERF_EXPECT' | 'PERF_REAL'>('PERF_EXPECT');
@@ -220,21 +217,19 @@ const queryParams = reactive<{
 
 const deptTreeData = ref<DeptNode[]>([]);
 
-// ==================== 数据（后端按签约人分页，明细懒加载） ====================
+// ==================== 数据（后端按合同分页，明细懒加载） ====================
 const loading = ref(false);
-const personData = ref<TreeNode[]>([]);         // 当前页签约人聚合行（树表只渲染人层）
-const totalEmployees = ref(0);                    // 符合条件的签约人总数
+const contractData = ref<TreeNode[]>([]);      // 当前页合同聚合行
+const totalContracts = ref(0);                  // 符合条件的合同总数
 const keyword = ref('');
 const tableRef = ref<ElTableInstance>();
 
-// 已懒加载过的员工业绩明细缓存：employeeId → 明细行（翻页/切条件时清空）
+// 已懒加载过的合同明细缓存：contractNo → 明细行
 const detailCache = ref(new Map<string, PerformanceManageRow[]>());
 
-// 人维度分页参数
 const pageNum = ref(1);
 const pageSize = ref(20);
 
-// 跨页全局汇总（后端返回，不随分页变化）
 const emptySummary = () => ({ employeeCount: 0, contractCount: 0, detailCount: 0, unsettledCount: 0, totalAmount: 0 });
 const summary = ref(emptySummary());
 
@@ -251,7 +246,6 @@ const formatAmount = (val: number | string | undefined | null): string => {
   return Number.isNaN(n) ? String(val) : n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-// 角色占比：角色人信息中的业绩比例，库内 0.0500 → 5%
 const formatRatio = (val: number | string | undefined | null): string => {
   if (val === undefined || val === null || val === '') return '—';
   const n = Number(val);
@@ -265,12 +259,17 @@ const formatDate = (val?: string | null): string => {
   return val.length >= 10 ? val.substring(0, 10) : val;
 };
 
-// ==================== 关键字搜索（防抖，下推后端） ====================
-// 类型下拉项（后端按当前期间/口径返回的业务类型集合）
-const bizTypeOptions = ref<string[]>([]);
+// 合同号/订单号合并展示：业务类型为「一手房」时展示订单号，其它展示合同号
+const contractOrOrderNo = (row: any): string => {
+  if (row.bizType === '一手房') {
+    return row.orderNo || row.contractNo || '—';
+  }
+  return row.contractNo || row.orderNo || '—';
+};
 
+// ==================== 关键字搜索（防抖） ====================
+const bizTypeOptions = ref<string[]>([]);
 let keywordTimer: ReturnType<typeof setTimeout> | undefined;
-// 重置按钮主动清空关键字时抑制防抖回调，避免重复请求
 let suppressKeywordWatch = false;
 watch(keyword, () => {
   if (suppressKeywordWatch) return;
@@ -283,81 +282,69 @@ watch(keyword, () => {
 
 interface TreeNode {
   id: string;
-  level: 'person' | 'contract' | 'detail';
-  employeeId?: string;
-  employeeCode?: string;
-  employeeName?: string;
+  level: 'contract' | 'person' | 'detail';
   contractNo?: string;
   orderNo?: string;
-  businessDate?: string;
   bizType?: string;
   propertyAddress?: string;
+  businessDate?: string;
+  employeeId?: string;
+  employeeName?: string;
   deptPath?: string;
   roleType?: string;
+  roleName?: string;
   shareRatio?: number | string;
   amount: number;
   settled?: boolean;
   settleDate?: string;
-  contractCount?: number;          // 人层：后端聚合的合同数
+  employeeCount?: number;       // 合同层：涉及人数
   detailCount: number;
-  hasChildren?: boolean;           // el-table lazy：是否可展开
-  children?: TreeNode[];           // 懒加载挂载点（人→合同 / 合同→明细）
-  detailNodes?: TreeNode[];        // 合同层懒加载的明细缓存
+  hasChildren?: boolean;
+  children?: TreeNode[];
+  detailNodes?: TreeNode[];     // 人层懒加载的明细缓存
   [key: string]: unknown;
 }
 
 /**
- * 把单个员工的扁平明细组装成「合同 → 明细」两级节点（人节点懒加载时调用）。
- * - contract：同一人同一合同汇总（合同号/订单号/类型/地址/门店组别取该组首行），
- *   明细节点挂在 detailNodes，展开合同行时由 el-table lazy resolve
+ * 把单个合同的扁平明细组装成「人 → 明细」两级节点（合同节点懒加载时调用）。
+ * - person：同一合同下同一员工汇总（姓名/门店组别取首行），明细节点挂在 detailNodes
  * - detail：角色明细行
  */
-const buildContractNodes = (empKey: string, rows: PerformanceManageRow[]): TreeNode[] => {
-  const contractMap = new Map<string, TreeNode>();
+const buildPersonNodes = (contractKey: string, rows: PerformanceManageRow[]): TreeNode[] => {
+  const personMap = new Map<string, TreeNode>();
 
   for (const row of rows) {
-    const contractKey = row.contractNo || '(无合同号)';
-    let contract = contractMap.get(contractKey);
-    if (!contract) {
-      contract = {
-        id: `c_${empKey}_${contractKey}`,
-        level: 'contract',
-        employeeName: row.employeeName,
-        contractNo: contractKey,
+    const personKey = String(row.employeeId || row.employeeName || '(未知)');
+    let person = personMap.get(personKey);
+    if (!person) {
+      person = {
+        id: `p_${contractKey}_${personKey}`,
+        level: 'person',
+        contractNo: row.contractNo,
         orderNo: row.orderNo,
-        businessDate: row.businessDate,
         bizType: row.bizType,
         propertyAddress: row.propertyAddress,
+        businessDate: row.businessDate,
+        employeeId: String(row.employeeId),
+        employeeName: row.employeeName || '未知',
         deptPath: row.deptPath,
         amount: 0,
         detailCount: 0,
         hasChildren: true,
         detailNodes: []
       };
-      contractMap.set(contractKey, contract);
+      personMap.set(personKey, person);
     }
-    contract.amount += num(row.amount);
-    contract.detailCount += 1;
-    // 合同层日期取最早签约日；同一合同多个订单号时合并展示
-    if (row.businessDate && (!contract.businessDate || row.businessDate < contract.businessDate)) {
-      contract.businessDate = row.businessDate;
-    }
-    if (row.orderNo) {
-      const orderNos = (contract.orderNo ?? '').split(' / ').filter(Boolean);
-      if (!orderNos.includes(row.orderNo)) {
-        orderNos.push(row.orderNo);
-        contract.orderNo = orderNos.join(' / ');
-      }
-    }
+    person.amount += num(row.amount);
+    person.detailCount += 1;
 
-    contract.detailNodes!.push({ ...row, id: `d_${row.id}`, level: 'detail', amount: num(row.amount), detailCount: 1 });
+    person.detailNodes!.push({ ...row, id: `d_${row.id}`, level: 'detail', amount: num(row.amount), detailCount: 1 });
   }
 
-  return Array.from(contractMap.values());
+  return Array.from(personMap.values());
 };
 
 // ==================== 明细懒加载 ====================
-// 明细查询的公共筛选条件（与人分页接口保持一致）
 const baseDetailParams = () => ({
   period: queryParams.period,
   factType: activeTab.value,
@@ -367,74 +354,65 @@ const baseDetailParams = () => ({
   keyword: keyword.value.trim() || undefined
 });
 
-// 批量拉取员工明细并写入缓存
-const batchLoadDetails = async (ids: string[]) => {
-  if (!ids.length) return;
-  const res = await performanceApi.listManageDetails({ ...baseDetailParams(), employeeIds: ids.join(',') });
+const batchLoadDetails = async (nos: string[]) => {
+  if (!nos.length) return;
+  const res = await performanceApi.listManageContractDetails({ ...baseDetailParams(), contractNos: nos.join(',') });
   const all: PerformanceManageRow[] = res.data ?? [];
-  for (const id of ids) {
-    detailCache.value.set(id, all.filter((r) => String(r.employeeId) === id));
+  for (const no of nos) {
+    detailCache.value.set(no, all.filter((r) => String(r.contractNo) === no));
   }
 };
 
-const ensureDetailCached = async (ids: string[]) => {
-  const missing = Array.from(new Set(ids)).filter((id) => !detailCache.value.has(id));
+const ensureDetailCached = async (nos: string[]) => {
+  const missing = Array.from(new Set(nos)).filter((no) => !detailCache.value.has(no));
   if (missing.length) await batchLoadDetails(missing);
 };
 
-// 用缓存明细构建合同节点并挂到人节点下（幂等：已构建直接复用）
-const attachContracts = (person: TreeNode): TreeNode[] => {
-  if (person.children?.length) return person.children;
-  const contracts = buildContractNodes(
-    person.employeeId!,
-    detailCache.value.get(person.employeeId!) ?? []
-  );
-  person.children = contracts;
-  return contracts;
+const attachPersons = (contract: TreeNode): TreeNode[] => {
+  if (contract.children?.length) return contract.children;
+  const persons = buildPersonNodes(contract.contractNo!, detailCache.value.get(contract.contractNo!) ?? []);
+  contract.children = persons;
+  return persons;
 };
 
-// el-table lazy 回调：展开人 → 查明细挂合同层；展开合同 → 取已缓存明细
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const handleLoad = async (row: TreeNode, _treeNode: any, resolve: (data: TreeNode[]) => void) => {
   try {
-    if (row.level === 'person' && row.employeeId) {
-      await ensureDetailCached([row.employeeId]);
-      resolve(attachContracts(row));
-    } else if (row.level === 'contract') {
+    if (row.level === 'contract' && row.contractNo) {
+      await ensureDetailCached([row.contractNo]);
+      resolve(attachPersons(row));
+    } else if (row.level === 'person') {
       resolve(row.detailNodes ?? []);
     } else {
       resolve([]);
     }
   } catch (e) {
-    console.error('[performance-manage] 明细懒加载失败', e);
+    console.error('[performance-contract] 明细懒加载失败', e);
     resolve([]);
   }
 };
 
 // ==================== 展开控制 ====================
-// 单击人/合同行切换展开（明细行是叶子，忽略）
 const onRowClick = (row: TreeNode) => {
-  if (row.level === 'person' || row.level === 'contract') {
+  if (row.level === 'contract' || row.level === 'person') {
     tableRef.value?.toggleRowExpansion(row);
   }
 };
 
 // ==================== 加载 ====================
-// 部门树与人员页同源（/people/employee/deptTree：大区→门店→小组，不含占位根），
-// check-strictly 允许选任意一级；后端按 dept_id = 选中节点 OR 祖级链包含该节点过滤（含下级）
 const loadDeptTree = async () => {
   try {
     const res = await employeeApi.deptTree();
     deptTreeData.value = res.data ?? [];
   } catch (e) {
-    console.error('[performance-manage] 部门树加载失败', e);
+    console.error('[performance-contract] 部门树加载失败', e);
   }
 };
 
 const getList = async () => {
   if (!queryParams.period) {
-    personData.value = [];
-    totalEmployees.value = 0;
+    contractData.value = [];
+    totalContracts.value = 0;
     summary.value = emptySummary();
     bizTypeOptions.value = [];
     detailCache.value = new Map();
@@ -442,7 +420,7 @@ const getList = async () => {
   }
   loading.value = true;
   try {
-    const res = await performanceApi.listManage({
+    const res = await performanceApi.listManageByContract({
       period: queryParams.period,
       factType: activeTab.value,
       deptId: queryParams.deptId ? String(queryParams.deptId) : undefined,
@@ -453,46 +431,41 @@ const getList = async () => {
       pageSize: pageSize.value
     });
     const page = res.data;
-    // 只映射人层聚合行；树表 lazy，合同/明细单击展开时才请求
-    personData.value = (page?.rows ?? []).map((e: PerformanceManageEmployee) => ({
-      id: `p_${e.employeeId}`,
-      level: 'person' as const,
-      employeeId: String(e.employeeId),
-      employeeCode: e.employeeCode,
-      employeeName: e.employeeName || '未知',
-      deptPath: e.deptPath,
-      amount: num(e.amount),
-      contractCount: e.contractCount ?? 0,
-      detailCount: e.detailCount ?? 0,
-      hasChildren: (e.detailCount ?? 0) > 0
+    contractData.value = (page?.rows ?? []).map((c: PerformanceManageContract) => ({
+      id: `c_${c.contractNo}`,
+      level: 'contract' as const,
+      contractNo: c.contractNo,
+      orderNo: c.orderNo,
+      bizType: c.bizType,
+      propertyAddress: c.propertyAddress,
+      businessDate: c.businessDate,
+      amount: num(c.amount),
+      employeeCount: c.employeeCount ?? 0,
+      detailCount: c.detailCount ?? 0,
+      hasChildren: (c.detailCount ?? 0) > 0
     }));
-    totalEmployees.value = page?.total ?? 0;
+    totalContracts.value = page?.total ?? 0;
     summary.value = page?.summary ?? emptySummary();
     bizTypeOptions.value = page?.bizTypes ?? [];
-    // 筛选条件已变化，明细缓存作废；新人行默认全部收起
     detailCache.value = new Map();
   } finally {
     loading.value = false;
   }
 };
 
-// 分页事件（v-model 已更新页码，这里只触发查询）
 const onPageChange = () => getList();
 const onSizeChange = () => {
   pageNum.value = 1;
   getList();
 };
-
 const onTabChange = () => {
   pageNum.value = 1;
   getList();
 };
-
 const handleQuery = () => {
   pageNum.value = 1;
   getList();
 };
-
 const resetQuery = () => {
   queryParams.deptId = undefined;
   queryParams.bizType = '';
@@ -508,7 +481,6 @@ const resetQuery = () => {
 
 const rowClassName = ({ row }: { row: TreeNode }) => `row-${row.level}`;
 
-// 初始化：默认选中最新有数据的期间并加载
 onMounted(async () => {
   await loadDeptTree();
   try {
@@ -526,7 +498,7 @@ onMounted(async () => {
 </script>
 
 <style lang="scss" scoped>
-.performance-manage-page {
+.performance-contract-page {
   padding: 16px;
 }
 
@@ -549,120 +521,107 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: 8px 14px;
-  margin-bottom: 10px;
-  background: var(--el-fill-color-light);
-  border-radius: 8px;
-  font-size: 13px;
-  color: var(--el-text-color-regular);
+  padding: 8px 4px 12px;
+  flex-wrap: wrap;
 
   .summary-left {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
+    flex: 1;
+    flex-wrap: wrap;
   }
 
   .summary-right {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 16px;
+  }
+
+  .keyword-input {
+    width: 320px;
+  }
+
+  .summary-text {
+    font-size: 13px;
+    color: #606266;
+
+    b {
+      color: #303133;
+      margin: 0 2px;
+    }
+
+    .unsettled {
+      color: #e6a23c;
+    }
   }
 
   .hint-text {
     font-size: 12px;
-    color: var(--el-text-color-secondary);
+    color: #909399;
   }
 
-  .keyword-input {
-    width: 300px;
-  }
+  .summary-amount {
+    font-size: 13px;
+    color: #606266;
 
-  b {
-    color: var(--el-text-color-primary);
-    font-weight: 600;
-    margin: 0 2px;
-  }
-
-  .unsettled {
-    color: var(--el-color-warning);
-  }
-
-  .summary-amount b {
-    color: var(--el-color-primary);
-    font-size: 16px;
+    b {
+      color: #f56c6c;
+      font-size: 15px;
+      margin-left: 4px;
+    }
   }
 }
 
 .data-table {
   width: 100%;
 
-  // 隐藏树表自带的展开箭头图标，单击行展开；懒加载中的转圈图标保留
-  :deep(.el-table__expand-icon:not(.is-loading)) {
+  :deep(.el-table__expand-icon) {
     display: none;
-  }
-
-  // 人层：浅蓝底加粗，突出第一维度；人/合同行可单击
-  :deep(.row-person) {
-    background: var(--el-color-primary-light-9);
-    cursor: pointer;
-
-    td {
-      background: var(--el-color-primary-light-9) !important;
-      font-weight: 600;
-    }
-  }
-
-  // 合同层：斑马灰，第二维度
-  :deep(.row-contract) {
-    cursor: pointer;
-
-    td {
-      background: var(--el-fill-color-lighter) !important;
-    }
-  }
-
-  .person-code {
-    font-variant-numeric: tabular-nums;
-    color: var(--el-text-color-regular);
-  }
-
-  .person-name {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 6px;
-    color: var(--el-color-primary);
-    font-weight: 600;
-
-    .person-meta {
-      font-style: normal;
-      font-size: 11px;
-      font-weight: 400;
-      color: var(--el-text-color-secondary);
-    }
   }
 
   .contract-no {
     font-weight: 600;
+    color: #409eff;
   }
 
   .amount {
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  .amount-person {
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--el-color-primary);
-  }
-
-  .amount-contract {
     font-weight: 600;
-    color: var(--el-text-color-primary);
+  }
+  .amount-contract {
+    color: #f56c6c;
+  }
+  .amount-person {
+    color: #67c23a;
+  }
+  .amount-detail {
+    color: #909399;
+    font-weight: 400;
   }
 
-  .amount-detail {
-    color: var(--el-color-danger-light-3);
+  .person-name {
+    font-weight: 600;
+
+    .person-meta {
+      font-style: normal;
+      font-weight: 400;
+      font-size: 12px;
+      color: #909399;
+      margin-left: 4px;
+    }
+  }
+
+  :deep(.row-contract) {
+    background-color: #f5f7fa !important;
+    cursor: pointer;
+  }
+  :deep(.row-person) {
+    background-color: #fafafa !important;
+    cursor: pointer;
+  }
+  :deep(.row-detail) {
+    background-color: #ffffff !important;
   }
 }
 

@@ -181,6 +181,32 @@ export interface PerformanceManagePage {
   summary: PerformanceManageSummary;
 }
 
+/** 业绩管理合同层聚合行（/perf/fact/manage/contract 返回，每合同一行） */
+export interface PerformanceManageContract {
+  contractNo: string;        // 合同号
+  orderNo?: string;          // 订单号
+  bizType?: string;          // 业务类型
+  propertyAddress?: string;  // 房源地址
+  businessDate?: string;     // 签约/认购日期
+  amount: number;            // 合同金额合计（PERF_EXPECT=应收 / PERF_REAL=实收）
+  employeeCount: number;     // 涉及签约人数
+  detailCount: number;       // 明细条数
+  unsettledCount: number;    // 未结算条数
+}
+
+/** 合同明细懒加载查询参数（展开合同时按合同号查） */
+export type ManageContractDetailQuery = Omit<ManageQuery, 'pageNum' | 'pageSize'> & {
+  contractNos: string;       // 合同号，逗号分隔（单合同展开传 1 个）
+};
+
+/** 业绩管理合同维度分页结果（rows=当前页合同聚合行，明细懒加载） */
+export interface PerformanceManageContractPage {
+  total: number;             // 合同总数
+  rows: PerformanceManageContract[];
+  bizTypes: string[];
+  summary: PerformanceManageSummary;
+}
+
 // ========== API ==========
 export const performanceApi = {
   // 业绩事实
@@ -202,6 +228,13 @@ export const performanceApi = {
   // 有业绩数据的期间（倒序）
   listManagePeriods: () =>
     panjiaRequest.get<string[]>('/perf/fact/manage/periods'),
+
+  // 业绩明细-合同维度（合同→人→明细 懒加载树表，后端按合同分页）
+  listManageByContract: (params: ManageQuery) =>
+    panjiaRequest.get<PerformanceManageContractPage>('/perf/fact/manage/contract', params),
+  // 按合同号懒加载明细（展开单合同传 1 个合同号）
+  listManageContractDetails: (params: ManageContractDetailQuery) =>
+    panjiaRequest.get<PerformanceManageRow[]>('/perf/fact/manage/contract/details', params),
 
   // 调整单
   listAdjusts: (params: AdjustQuery) =>

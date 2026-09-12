@@ -1,14 +1,9 @@
 <template>
   <div class="performance-adjust-page">
-    <el-card class="page-card">
-      <template #header>
-        <div class="card-header">
-          <span>业绩调整单</span>
-        </div>
-      </template>
+    <el-card class="page-card" shadow="never">
       <div class="page-content">
         <!-- 筛选条件 -->
-        <el-form class="filter-form" :inline="true" :model="queryParams">
+        <el-form class="filter-form" :inline="true" :model="queryParams" @submit.prevent>
           <el-form-item label="期间" prop="period">
             <el-date-picker
               v-model="queryParams.period"
@@ -17,6 +12,7 @@
               placeholder="选择月份"
               clearable
               style="width: 160px"
+              @change="handleQuery"
             />
           </el-form-item>
           <el-form-item label="调整类型" prop="adjustType">
@@ -24,7 +20,8 @@
               v-model="queryParams.adjustType"
               placeholder="全部类型"
               clearable
-              style="width: 160px"
+              style="width: 150px"
+              @change="handleQuery"
             >
               <el-option
                 v-for="opt in adjustTypeOptions"
@@ -39,7 +36,8 @@
               v-model="queryParams.status"
               placeholder="全部状态"
               clearable
-              style="width: 140px"
+              style="width: 130px"
+              @change="handleQuery"
             >
               <el-option
                 v-for="opt in statusOptions"
@@ -49,20 +47,38 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="员工" prop="employeeName">
-            <el-input
-              v-model="queryParams.employeeName"
-              placeholder="员工姓名"
+          <el-form-item label="员工" prop="employeeId">
+            <el-select
+              v-model="queryParams.employeeId"
+              placeholder="搜索员工姓名/工号"
+              filterable
+              remote
               clearable
-              style="width: 160px"
-            />
+              :remote-method="searchEmployee"
+              :loading="employeeLoading"
+              style="width: 220px"
+              @change="handleQuery"
+            >
+              <el-option
+                v-for="emp in employeeOptions"
+                :key="emp.employeeId"
+                :label="`${emp.employeeName}（${emp.employeeCode}）`"
+                :value="emp.employeeId"
+              />
+            </el-select>
           </el-form-item>
-          <el-form-item label="部门" prop="deptName">
-            <el-input
-              v-model="queryParams.deptName"
-              placeholder="部门名称"
+          <el-form-item label="门店/组别" prop="deptId">
+            <el-tree-select
+              v-model="queryParams.deptId"
+              :data="deptTreeData"
+              :props="{ label: 'deptName', children: 'children' }"
+              value-key="deptId"
+              node-key="deptId"
+              placeholder="全部门店/组别"
               clearable
-              style="width: 160px"
+              check-strictly
+              style="width: 220px"
+              @change="handleQuery"
             />
           </el-form-item>
           <el-form-item>
@@ -87,9 +103,19 @@
         >
           <el-table-column label="调整单号" align="center" prop="adjustNo" min-width="180" show-overflow-tooltip />
           <el-table-column label="期间" align="center" prop="period" width="100" />
-          <el-table-column label="员工" align="center" prop="employeeName" width="100" show-overflow-tooltip />
-          <el-table-column label="部门" align="center" prop="deptName" min-width="140" show-overflow-tooltip />
-          <el-table-column label="调整类型" align="center" width="110">
+          <el-table-column label="员工" align="center" width="110" show-overflow-tooltip>
+            <template #default="scope">
+              {{ scope.row.employeeName || scope.row.employeeId || '—' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="门店/组别" align="center" min-width="150" show-overflow-tooltip>
+            <template #default="scope">
+              <span>{{ scope.row.deptName || '—' }}</span>
+              <span v-if="scope.row.adjustType === 'TRANSFER' && scope.row.targetDeptName"
+                class="transfer-arrow"> → {{ scope.row.targetDeptName }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="调整类型" align="center" width="100">
             <template #default="scope">
               {{ adjustTypeMap[scope.row.adjustType] ?? scope.row.adjustType }}
             </template>
@@ -109,7 +135,6 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="申请人" align="center" prop="applicantName" width="100" show-overflow-tooltip />
           <el-table-column label="申请时间" align="center" prop="createTime" width="170" sortable />
           <el-table-column label="操作" align="center" width="260" class-name="small-padding fixed-width">
             <template #default="scope">
@@ -129,7 +154,7 @@
 
         <!-- 空状态 -->
         <div v-if="!loading && adjustList.length === 0" class="empty-wrap">
-          <el-empty description="暂无数据" />
+          <el-empty description="暂无调整单" />
         </div>
 
         <!-- 分页 -->
@@ -141,7 +166,7 @@
             :total="total"
             layout="total, sizes, prev, pager, next, jumper"
             background
-            @size-change="getList"
+            @size-change="handleQuery"
             @current-change="getList"
           />
         </div>
@@ -152,8 +177,9 @@
     <el-dialog
       v-model="formDialog.visible"
       :title="formDialog.title"
-      width="600px"
+      width="640px"
       append-to-body
+      destroy-on-close
     >
       <el-form
         ref="formRef"
@@ -179,16 +205,49 @@
             value-format="YYYY-MM"
             placeholder="选择月份"
             style="width: 100%"
+            @change="loadFactOptions"
           />
         </el-form-item>
         <el-form-item label="员工" prop="employeeId">
-          <el-input v-model="formData.employeeId" placeholder="员工ID" />
+          <el-select
+            v-model="formData.employeeId"
+            placeholder="搜索员工姓名/工号"
+            filterable
+            remote
+            :remote-method="searchEmployeeForForm"
+            :loading="employeeLoading"
+            style="width: 100%"
+            @change="onFormEmployeeChange"
+          >
+            <el-option
+              v-for="emp in formEmployeeOptions"
+              :key="emp.employeeId"
+              :label="`${emp.employeeName}（${emp.employeeCode}）`"
+              :value="emp.employeeId"
+            />
+          </el-select>
         </el-form-item>
-        <el-form-item label="部门" prop="deptId">
-          <el-input v-model="formData.deptId" placeholder="部门ID" />
+        <el-form-item v-if="formData.employeeId" label="门店/组别">
+          <el-input :model-value="selectedEmployeeDept" disabled placeholder="选择员工后自动带出" />
         </el-form-item>
-        <el-form-item label="关联事实ID" prop="factId">
-          <el-input v-model="formData.factId" placeholder="可选，关联原业绩事实ID" clearable />
+        <el-form-item label="关联业绩" prop="factId">
+          <el-select
+            v-model="formData.factId"
+            placeholder="先选期间和员工后自动加载"
+            :loading="factLoading"
+            :disabled="!formData.period || !formData.employeeId"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="f in factOptions"
+              :key="f.id"
+              :label="factOptionLabel(f)"
+              :value="f.id"
+            />
+          </el-select>
+          <div v-if="formData.factId" class="fact-amount-hint">
+            当前原始金额：¥{{ formatAmount(selectedFact?.originAmount) }}
+          </div>
         </el-form-item>
         <el-form-item v-if="formData.adjustType === 'AMOUNT'" label="变动金额" prop="deltaAmount">
           <el-input-number
@@ -199,11 +258,21 @@
             :step="100"
             style="width: 100%"
           />
+          <div class="form-hint">正数调增，负数调减；调整后原始金额 = 当前 + 变动金额</div>
         </el-form-item>
-        <el-form-item v-if="formData.adjustType === 'TRANSFER'" label="目标部门" prop="targetDeptId">
-          <el-input v-model="formData.targetDeptId" placeholder="目标部门ID" />
+        <el-form-item v-if="formData.adjustType === 'TRANSFER'" label="目标门店" prop="targetDeptId">
+          <el-tree-select
+            v-model="formData.targetDeptId"
+            :data="deptTreeData"
+            :props="{ label: 'deptName', children: 'children' }"
+            value-key="deptId"
+            node-key="deptId"
+            placeholder="请选择目标门店/组别"
+            check-strictly
+            style="width: 100%"
+          />
         </el-form-item>
-        <el-form-item label="原因" prop="reason">
+        <el-form-item label="调整原因" prop="reason">
           <el-input
             v-model="formData.reason"
             type="textarea"
@@ -214,6 +283,7 @@
           />
         </el-form-item>
       </el-form>
+
       <template v-if="formDialog.mode === 'detail'">
         <el-descriptions v-if="detailData" :column="2" border size="small" class="detail-desc">
           <el-descriptions-item label="状态">
@@ -221,13 +291,15 @@
               {{ statusMap[detailData.status] ?? detailData.status }}
             </el-tag>
           </el-descriptions-item>
+          <el-descriptions-item label="调整单号">{{ detailData.adjustNo }}</el-descriptions-item>
           <el-descriptions-item label="申请人">{{ detailData.applicantName || '—' }}</el-descriptions-item>
           <el-descriptions-item label="审批人">{{ detailData.approverName || '—' }}</el-descriptions-item>
           <el-descriptions-item label="审批时间">{{ detailData.approveTime || '—' }}</el-descriptions-item>
           <el-descriptions-item label="执行时间">{{ detailData.executeTime || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="创建时间">{{ detailData.createTime }}</el-descriptions-item>
+          <el-descriptions-item label="创建时间" :span="2">{{ detailData.createTime }}</el-descriptions-item>
         </el-descriptions>
       </template>
+
       <template #footer>
         <el-button @click="formDialog.visible = false">关 闭</el-button>
         <el-button
@@ -245,18 +317,19 @@
 
 <script setup lang="ts">
 import { performanceApi } from '@/api/panjia/performance';
-import type { PerformanceAdjust, AdjustQuery, AdjustCreateForm } from '@/api/panjia/performance';
+import type { PerformanceAdjust, AdjustQuery, AdjustCreateForm, PerformanceFact } from '@/api/panjia/performance';
+import { employeeApi } from '@/api/panjia/employee';
+import type { DeptNode, Employee } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
 
-// 调整类型映射
+// ==================== 枚举 ====================
 const adjustTypeMap: Record<string, string> = {
   AMOUNT: '金额调整',
-  VOID: '作废调整',
-  TRANSFER: '部门转移'
+  VOID: '业绩冲销',
+  TRANSFER: '部门划转'
 };
 const adjustTypeOptions = Object.entries(adjustTypeMap).map(([value, label]) => ({ value, label }));
 
-// 状态映射
 const statusMap: Record<string, string> = {
   SUBMITTED: '已提交',
   APPROVED: '已审批',
@@ -278,17 +351,58 @@ const statusTagType = (status: string): TagType => {
   return map[status] ?? 'info';
 };
 
+// ==================== 部门树（与人员页同源） ====================
+const deptTreeData = ref<DeptNode[]>([]);
+const loadDeptTree = async () => {
+  try {
+    const res = await employeeApi.deptTree();
+    deptTreeData.value = res.data ?? [];
+  } catch (e) {
+    console.error('[adjust] 部门树加载失败', e);
+  }
+};
+
+// ==================== 员工远程搜索（筛选条用） ====================
+const employeeOptions = ref<Employee[]>([]);
+const employeeLoading = ref(false);
+let empSearchTimer: ReturnType<typeof setTimeout> | null = null;
+const searchEmployee = (keyword: string) => {
+  if (empSearchTimer) clearTimeout(empSearchTimer);
+  empSearchTimer = setTimeout(async () => {
+    employeeLoading.value = true;
+    try {
+      const res = await employeeApi.list({ employeeName: keyword || undefined, pageSize: 20 });
+      employeeOptions.value = res.data?.rows ?? [];
+    } finally {
+      employeeLoading.value = false;
+    }
+  }, 300);
+};
+
+// 表单内员工搜索（独立选项集，避免与筛选条串数据）
+const formEmployeeOptions = ref<Employee[]>([]);
+const searchEmployeeForForm = (keyword: string) => {
+  if (empSearchTimer) clearTimeout(empSearchTimer);
+  empSearchTimer = setTimeout(async () => {
+    employeeLoading.value = true;
+    try {
+      const res = await employeeApi.list({ employeeName: keyword || undefined, pageSize: 20 });
+      formEmployeeOptions.value = res.data?.rows ?? [];
+    } finally {
+      employeeLoading.value = false;
+    }
+  }, 300);
+};
+
 // ==================== 筛选 & 分页 ====================
-const queryParams = reactive<AdjustQuery & { employeeName?: string; deptName?: string }>({
+const queryParams = reactive<AdjustQuery & { pageNum: number; pageSize: number }>({
   pageNum: 1,
   pageSize: 20,
-  period: '',
-  adjustType: '',
-  status: '',
-  employeeId: '',
-  employeeName: '',
-  deptId: '',
-  deptName: ''
+  period: undefined,
+  adjustType: undefined,
+  status: undefined,
+  employeeId: undefined,
+  deptId: undefined
 });
 
 // ==================== 列表 ====================
@@ -299,7 +413,7 @@ const adjustList = ref<PerformanceAdjust[]>([]);
 const getList = async () => {
   loading.value = true;
   try {
-    const params: AdjustQuery = {
+    const res = await performanceApi.listAdjusts({
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
       period: queryParams.period || undefined,
@@ -307,8 +421,7 @@ const getList = async () => {
       status: queryParams.status || undefined,
       employeeId: queryParams.employeeId || undefined,
       deptId: queryParams.deptId || undefined
-    };
-    const res = await performanceApi.listAdjusts(params);
+    });
     adjustList.value = res.data?.rows ?? [];
     total.value = res.data?.total ?? 0;
   } finally {
@@ -322,25 +435,30 @@ const handleQuery = () => {
 };
 
 const resetQuery = () => {
-  queryParams.period = '';
-  queryParams.adjustType = '';
-  queryParams.status = '';
-  queryParams.employeeId = '';
-  queryParams.employeeName = '';
-  queryParams.deptId = '';
-  queryParams.deptName = '';
-  queryParams.pageNum = 1;
+  Object.assign(queryParams, {
+    period: undefined,
+    adjustType: undefined,
+    status: undefined,
+    employeeId: undefined,
+    deptId: undefined,
+    pageNum: 1
+  });
   getList();
 };
 
 // ==================== 工具方法 ====================
-// 后端 Jackson 把 BigDecimal 序列化成字符串，Number() 归一后再格式化（字符串直接 toFixed 会 TypeError 炸整表）
+const num = (v: number | string | null | undefined): number => {
+  if (v === null || v === undefined || v === '') return 0;
+  const n = Number(v);
+  return Number.isNaN(n) ? 0 : n;
+};
+
 const formatAmount = (val: number | string | undefined | null): string => {
-  if (val === undefined || val === null || val === '') return '—';
-  const num = Number(val);
-  if (Number.isNaN(num)) return String(val);
-  const prefix = num > 0 ? '+' : '';
-  return prefix + num.toFixed(2);
+  if (val === undefined || val === null || val === '') return '0.00';
+  const n = Number(val);
+  if (Number.isNaN(n)) return String(val);
+  const prefix = n > 0 ? '+' : '';
+  return prefix + n.toFixed(2);
 };
 
 const getAmountClass = (val: number | undefined): string => {
@@ -351,7 +469,7 @@ const getAmountClass = (val: number | undefined): string => {
 };
 
 // ==================== 操作：审批 / 拒绝 / 执行 / 取消 ====================
-const handleApprove = async (row: PerformanceAdjust) => {
+const handleApprove = async (row: any) => {
   try {
     await modal.confirm(`确认通过调整单「${row.adjustNo}」？`);
   } catch {
@@ -362,11 +480,11 @@ const handleApprove = async (row: PerformanceAdjust) => {
     modal.msgSuccess('审批通过');
     getList();
   } catch {
-    // 错误已在拦截器处理
+    /* 拦截器已处理 */
   }
 };
 
-const handleReject = async (row: PerformanceAdjust) => {
+const handleReject = async (row: any) => {
   try {
     const { value } = await modal.prompt('请输入拒绝原因');
     if (!value?.trim()) {
@@ -377,11 +495,11 @@ const handleReject = async (row: PerformanceAdjust) => {
     modal.msgSuccess('已拒绝');
     getList();
   } catch {
-    // 用户取消或错误已处理
+    /* 用户取消或已处理 */
   }
 };
 
-const handleExecute = async (row: PerformanceAdjust) => {
+const handleExecute = async (row: any) => {
   try {
     await modal.confirm(`确认执行调整单「${row.adjustNo}」？执行后将生成实际业绩变动。`);
   } catch {
@@ -392,11 +510,11 @@ const handleExecute = async (row: PerformanceAdjust) => {
     modal.msgSuccess('执行成功');
     getList();
   } catch {
-    // 错误已在拦截器处理
+    /* 拦截器已处理 */
   }
 };
 
-const handleCancel = async (row: PerformanceAdjust) => {
+const handleCancel = async (row: any) => {
   try {
     await modal.confirm(`确认取消调整单「${row.adjustNo}」？`);
   } catch {
@@ -407,7 +525,7 @@ const handleCancel = async (row: PerformanceAdjust) => {
     modal.msgSuccess('已取消');
     getList();
   } catch {
-    // 错误已在拦截器处理
+    /* 拦截器已处理 */
   }
 };
 
@@ -421,7 +539,18 @@ const formRef = ref();
 const submitLoading = ref(false);
 const detailData = ref<PerformanceAdjust | null>(null);
 
-const defaultFormData = (): AdjustCreateForm => ({
+// 关联业绩事实下拉
+const factOptions = ref<PerformanceFact[]>([]);
+const factLoading = ref(false);
+const selectedFact = computed<PerformanceFact | undefined>(() =>
+  factOptions.value.find((f) => f.id === formData.factId)
+);
+const factOptionLabel = (f: PerformanceFact) => {
+  const type = f.factType === 'PERF_REAL' ? '实收' : '应收';
+  return `${type} · ${f.sourceKey} · ¥${formatAmount(f.originAmount)}`;
+};
+
+const defaultFormData = (): AdjustCreateForm & { factId: string } => ({
   factId: '',
   period: '',
   employeeId: '',
@@ -432,52 +561,85 @@ const defaultFormData = (): AdjustCreateForm => ({
   reason: ''
 });
 
-const formData = reactive<AdjustCreateForm>(defaultFormData());
+const formData = reactive(defaultFormData());
 
 const formRules = {
   adjustType: [{ required: true, message: '请选择调整类型', trigger: 'change' }],
   period: [{ required: true, message: '请选择期间', trigger: 'change' }],
-  employeeId: [{ required: true, message: '请输入员工ID', trigger: 'blur' }],
-  deptId: [{ required: true, message: '请输入部门ID', trigger: 'blur' }],
-  reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }]
+  employeeId: [{ required: true, message: '请选择员工', trigger: 'change' }],
+  deptId: [{ required: true, message: '请选择门店/组别', trigger: 'change' }],
+  factId: [{ required: true, message: '请选择关联业绩事实', trigger: 'change' }],
+  reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
+  targetDeptId: [{ required: true, message: '请选择目标门店', trigger: 'change' }]
+};
+
+// 选完员工：自动带出部门，并尝试加载该员工的业绩事实
+const onFormEmployeeChange = async (employeeId: string) => {
+  const emp = formEmployeeOptions.value.find((e) => e.employeeId === employeeId);
+  if (emp && emp.deptId) {
+    formData.deptId = emp.deptId;
+  }
+  formData.factId = '';
+  await loadFactOptions();
+};
+
+const loadFactOptions = async () => {
+  factOptions.value = [];
+  if (!formData.period || !formData.employeeId) return;
+  factLoading.value = true;
+  try {
+    const res = await performanceApi.listFacts({
+      period: formData.period,
+      employeeId: formData.employeeId,
+      factStatus: 'ACTIVE',
+      pageSize: 100
+    });
+    factOptions.value = res.data?.rows ?? [];
+  } finally {
+    factLoading.value = false;
+  }
 };
 
 const handleCreate = () => {
   Object.assign(formData, defaultFormData());
+  factOptions.value = [];
   detailData.value = null;
   formDialog.mode = 'create';
   formDialog.title = '新增调整单';
   formDialog.visible = true;
 };
 
-const handleDetail = async (row: PerformanceAdjust) => {
+const handleDetail = async (row: any) => {
   detailData.value = null;
   formDialog.mode = 'detail';
   formDialog.title = '调整单详情';
   formDialog.visible = true;
   try {
     const res = await performanceApi.getAdjust(row.id);
-    detailData.value = res.data ?? row;
-    if (res.data) {
-      formData.factId = res.data.factId || '';
-      formData.period = res.data.period;
-      formData.employeeId = res.data.employeeId;
-      formData.deptId = res.data.deptId;
-      formData.adjustType = res.data.adjustType;
-      formData.deltaAmount = res.data.deltaAmount;
-      formData.targetDeptId = res.data.targetDeptId || '';
-      formData.reason = res.data.reason;
-    }
+    const d = res.data ?? row;
+    detailData.value = d;
+    Object.assign(formData, defaultFormData(), {
+      factId: d.factId || '',
+      period: d.period,
+      employeeId: d.employeeId,
+      deptId: d.deptId,
+      adjustType: d.adjustType,
+      deltaAmount: num(d.deltaAmount),
+      targetDeptId: d.targetDeptId || '',
+      reason: d.reason
+    });
   } catch {
     detailData.value = row;
-    formData.factId = row.factId || '';
-    formData.period = row.period;
-    formData.employeeId = row.employeeId;
-    formData.deptId = row.deptId;
-    formData.adjustType = row.adjustType;
-    formData.deltaAmount = row.deltaAmount;
-    formData.targetDeptId = row.targetDeptId || '';
-    formData.reason = row.reason;
+    Object.assign(formData, defaultFormData(), {
+      factId: row.factId || '',
+      period: row.period,
+      employeeId: row.employeeId,
+      deptId: row.deptId,
+      adjustType: row.adjustType,
+      deltaAmount: num(row.deltaAmount),
+      targetDeptId: row.targetDeptId || '',
+      reason: row.reason
+    });
   }
 };
 
@@ -510,6 +672,7 @@ const handleSubmit = async () => {
 };
 
 onMounted(() => {
+  loadDeptTree();
   getList();
 });
 </script>
@@ -520,12 +683,7 @@ onMounted(() => {
 }
 
 .page-card {
-  border-radius: 16px;
-}
-
-.card-header {
-  font-weight: 600;
-  font-size: 16px;
+  border-radius: 12px;
 }
 
 .page-content {
@@ -557,6 +715,24 @@ onMounted(() => {
     color: var(--el-color-danger);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
+  }
+
+  .transfer-arrow {
+    color: var(--el-color-primary);
+  }
+
+  .form-hint {
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    line-height: 1.4;
+    margin-top: 4px;
+  }
+
+  .fact-amount-hint {
+    font-size: 12px;
+    color: var(--el-color-primary);
+    line-height: 1.4;
+    margin-top: 4px;
   }
 
   .empty-wrap {
