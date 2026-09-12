@@ -82,8 +82,6 @@
         <div class="summary-right">
           <span class="hint-text">单击行展开/收起</span>
           <span class="summary-amount">{{ amountLabel }}合计：<b>{{ formatAmount(summary.totalAmount) }}</b></span>
-          <el-button link type="primary" @click="expandAll">全部展开</el-button>
-          <el-button link type="primary" @click="collapseAll">全部收起</el-button>
         </div>
       </div>
 
@@ -424,35 +422,6 @@ const handleLoad = async (row: TreeNode, _treeNode: any, resolve: (data: TreeNod
 };
 
 // ==================== 展开控制 ====================
-// 全部展开：批量预取当前页所有人明细（一次请求），再逐层展开
-const expandAll = async () => {
-  const persons = personData.value;
-  if (!persons.length) return;
-  try {
-    const missing = persons
-      .map((p) => p.employeeId)
-      .filter((id): id is string => !!id && !detailCache.value.has(id));
-    if (missing.length) await batchLoadDetails(missing);
-    // 先展开人层（handleLoad 命中缓存），渲染后再展开合同层
-    for (const p of persons) tableRef.value?.toggleRowExpansion(p, true);
-    await nextTick();
-    await nextTick();
-    for (const p of persons) {
-      for (const c of p.children ?? []) tableRef.value?.toggleRowExpansion(c, true);
-    }
-  } catch (e) {
-    console.error('[performance-manage] 全部展开失败', e);
-  }
-};
-
-// 全部收起：先收合同层再收人层
-const collapseAll = () => {
-  for (const p of personData.value) {
-    for (const c of p.children ?? []) tableRef.value?.toggleRowExpansion(c, false);
-    tableRef.value?.toggleRowExpansion(p, false);
-  }
-};
-
 // 单击人/合同行切换展开（明细行是叶子，忽略）
 const onRowClick = (row: TreeNode) => {
   if (row.level === 'person' || row.level === 'contract') {
