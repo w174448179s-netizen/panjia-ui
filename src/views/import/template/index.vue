@@ -269,8 +269,7 @@ import type { ImportTemplate, PeopleImportTemplate, ColumnDef, ColumnMapping, Te
 import modal from '@/plugins/modal';
 
 const sourceTypeMap: Record<string, string> = {
-  KE_SIGNED: '贝壳结佣',
-  KE_NEW_SIGN: '新签业绩',
+  KE_SIGNED: '贝壳业绩明细',
   ATTENDANCE: '考勤',
   POINTS: '积分',
   OTHERS: '手工费用'

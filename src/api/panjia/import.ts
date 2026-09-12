@@ -4,7 +4,7 @@ import { getToken } from '@/utils/auth';
 
 /**
  * 导入域 V2.0 接口（实际前缀 /api/panjia）。
- * 单据导入：业绩（KE_SIGNED/KE_NEW_SIGN）/ 考勤 / 积分 / 费用。
+ * 单据导入：业绩（KE_SIGNED，唯一来源：贝壳业绩明细表）/ 考勤 / 积分 / 费用。
  */
 export const importApi = {
   /** 文件上传导入（sourceType 指定单据类型） */
@@ -42,8 +42,7 @@ export const importApi = {
   },
   /**
    * 批次原始数据列表（审计/追溯入口，按 batchId 查询对应 raw 分表，分页）。
-   * - KE_SIGNED  → pj_import_raw_signed
-   * - KE_NEW_SIGN → pj_import_raw_new_sign
+   * - KE_SIGNED  → pj_import_raw_signed（贝壳业绩明细表，唯一业绩来源）
    * - ATTENDANCE → pj_import_raw_attendance
    * - POINTS     → pj_import_raw_points
    * - OTHERS     → pj_import_raw_manual

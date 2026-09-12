@@ -157,9 +157,12 @@ export const performanceApi = {
   getSummary: (params: { period?: string; factType?: string; employeeId?: string; deptId?: string }) =>
     panjiaRequest.get<number>('/perf/fact/summary', params),
 
-  // 业绩管理（人→合同→明细 树表）
+  // 业绩明细（人→合同→明细 树表）
   listManage: (params: ManageQuery) =>
     panjiaRequest.get<PerformanceManageRow[]>('/perf/fact/manage', params),
+  // 有业绩数据的期间（倒序）
+  listManagePeriods: () =>
+    panjiaRequest.get<string[]>('/perf/fact/manage/periods'),
 
   // 调整单
   listAdjusts: (params: AdjustQuery) =>

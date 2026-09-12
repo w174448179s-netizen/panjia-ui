@@ -199,10 +199,9 @@ import type { ImportBatch, ImportIssue } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
 import { Warning, Download, Refresh, Loading, Box } from '@element-plus/icons-vue';
 
-// 单据类型映射（跨所有单据类型）
+// 单据类型映射（跨所有单据类型；业绩来源唯一：贝壳业绩明细表）
 const sourceTypeMap: Record<string, string> = {
-  KE_SIGNED: '贝壳结佣',
-  KE_NEW_SIGN: '新签业绩',
+  KE_SIGNED: '贝壳业绩明细',
   ATTENDANCE: '考勤',
   POINTS: '积分',
   OTHERS: '手工费用'
