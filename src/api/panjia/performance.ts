@@ -152,6 +152,7 @@ export interface PerformanceManageEmployee {
   employeeId: string;
   employeeCode?: string;     // 工号
   employeeName?: string;     // 签约人
+  deptPath?: string;         // 门店/组别全路径：大区-门店-组（组与门店同名时只到两级）
   amount: number;            // 金额合计（PERF_EXPECT=应收 / PERF_REAL=实收）
   contractCount: number;     // 合同数
   detailCount: number;       // 明细条数

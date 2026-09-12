@@ -18,13 +18,14 @@
           <el-tree-select
             v-model="queryParams.deptId"
             :data="deptTreeData"
-            :props="{ label: 'deptName', children: 'children' }"
+            :props="{ label: 'deptName', children: 'children' } as any"
             value-key="deptId"
             node-key="deptId"
             placeholder="全部门店/组别"
             clearable
             check-strictly
             style="width: 210px"
+            @change="handleQuery"
           />
         </el-form-item>
         <el-form-item label="类型">
@@ -142,7 +143,7 @@
         </el-table-column>
         <el-table-column label="门店/组别" align="center" width="200" show-overflow-tooltip>
           <template #default="scope">
-            <span v-if="scope.row.level !== 'person'">{{ scope.row.deptPath || '—' }}</span>
+            <span>{{ scope.row.deptPath || '—' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="所属角色" align="center" width="130" show-overflow-tooltip>
@@ -198,8 +199,8 @@
 import { Search } from '@element-plus/icons-vue';
 import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceManageEmployee, PerformanceManageRow } from '@/api/panjia/performance';
-import { listDept } from '@/api/system/dept';
-import type { DeptVO } from '@/api/system/dept/types';
+import { employeeApi } from '@/api/panjia/employee';
+import type { DeptNode } from '@/api/panjia/types';
 
 // ==================== Tab & 筛选 ====================
 const activeTab = ref<'PERF_EXPECT' | 'PERF_REAL'>('PERF_EXPECT');
@@ -217,7 +218,7 @@ const queryParams = reactive<{
   settled: undefined
 });
 
-const deptTreeData = ref<DeptVO[]>([]);
+const deptTreeData = ref<DeptNode[]>([]);
 
 // ==================== 数据（后端按签约人分页，明细懒加载） ====================
 const loading = ref(false);
@@ -419,10 +420,12 @@ const onRowClick = (row: TreeNode) => {
 };
 
 // ==================== 加载 ====================
+// 部门树与人员页同源（/people/employee/deptTree：大区→门店→小组，不含占位根），
+// check-strictly 允许选任意一级；后端按 dept_id = 选中节点 OR 祖级链包含该节点过滤（含下级）
 const loadDeptTree = async () => {
   try {
-    const res = await listDept();
-    deptTreeData.value = (res as any).data ?? [];
+    const res = await employeeApi.deptTree();
+    deptTreeData.value = res.data ?? [];
   } catch (e) {
     console.error('[performance-manage] 部门树加载失败', e);
   }
@@ -457,6 +460,7 @@ const getList = async () => {
       employeeId: String(e.employeeId),
       employeeCode: e.employeeCode,
       employeeName: e.employeeName || '未知',
+      deptPath: e.deptPath,
       amount: num(e.amount),
       contractCount: e.contractCount ?? 0,
       detailCount: e.detailCount ?? 0,
