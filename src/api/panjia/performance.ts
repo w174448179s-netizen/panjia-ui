@@ -136,13 +136,49 @@ export interface PerformanceManageRow {
   sourceKey: string;
 }
 
-/** 业绩管理查询参数 */
+/** 业绩管理查询参数（以签约人为维度后端分页） */
 export interface ManageQuery {
   period: string;
   factType: string;          // PERF_REAL / PERF_EXPECT
   deptId?: string;
   bizType?: string;
   settled?: boolean;
+  keyword?: string;          // 员工号/姓名/合同号/订单号/房源地址/角色/门店/店组
+  pageNum?: number;
+  pageSize?: number;
+}
+
+/** 业绩管理人层聚合行（/perf/fact/manage 返回，每人一行） */
+export interface PerformanceManageEmployee {
+  employeeId: string;
+  employeeCode?: string;     // 工号
+  employeeName?: string;     // 签约人
+  amount: number;            // 金额合计（PERF_EXPECT=应收 / PERF_REAL=实收）
+  contractCount: number;     // 合同数
+  detailCount: number;       // 明细条数
+  unsettledCount: number;    // 未结算条数
+}
+
+/** 业绩明细懒加载查询参数（展开人时按员工查） */
+export type ManageDetailQuery = Omit<ManageQuery, 'pageNum' | 'pageSize'> & {
+  employeeIds: string;       // 员工 ID，逗号分隔（单人展开传 1 个）
+};
+
+/** 业绩管理全局汇总（跨所有页） */
+export interface PerformanceManageSummary {
+  employeeCount: number;
+  contractCount: number;
+  detailCount: number;
+  unsettledCount: number;
+  totalAmount: number;
+}
+
+/** 业绩管理人维度分页结果（rows=当前页签约人聚合行，明细懒加载） */
+export interface PerformanceManagePage {
+  total: number;             // 签约人总数
+  rows: PerformanceManageEmployee[];
+  bizTypes: string[];        // 当前期间/口径下的业务类型选项
+  summary: PerformanceManageSummary;
 }
 
 // ========== API ==========
@@ -157,9 +193,12 @@ export const performanceApi = {
   getSummary: (params: { period?: string; factType?: string; employeeId?: string; deptId?: string }) =>
     panjiaRequest.get<number>('/perf/fact/summary', params),
 
-  // 业绩明细（人→合同→明细 树表）
+  // 业绩明细（人→合同→明细 懒加载树表，后端按人分页）
   listManage: (params: ManageQuery) =>
-    panjiaRequest.get<PerformanceManageRow[]>('/perf/fact/manage', params),
+    panjiaRequest.get<PerformanceManagePage>('/perf/fact/manage', params),
+  // 按员工懒加载明细（展开单人传 1 个 ID，全部展开传当前页全部 ID）
+  listManageDetails: (params: ManageDetailQuery) =>
+    panjiaRequest.get<PerformanceManageRow[]>('/perf/fact/manage/details', params),
   // 有业绩数据的期间（倒序）
   listManagePeriods: () =>
     panjiaRequest.get<string[]>('/perf/fact/manage/periods'),
