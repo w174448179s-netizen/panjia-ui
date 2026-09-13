@@ -248,8 +248,6 @@ export const performanceApi = {
     panjiaRequest.post<string>('/perf/adjust', data),
   cancelAdjust: (id: string | number) =>
     panjiaRequest.put<void>(`/perf/adjust/cancel/${id}`),
-  executeAdjust: (id: string | number) =>
-    panjiaRequest.put<void>(`/perf/adjust/execute/${id}`),
 
   // 期间封账
   listPeriods: () =>

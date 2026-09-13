@@ -10,7 +10,9 @@
       </div>
       <el-table :data="list" stripe border>
         <el-table-column label="归属月" prop="period" width="110" />
-        <el-table-column label="员工ID" prop="employeeId" width="120" />
+        <el-table-column label="员工" width="160">
+          <template #default="{ row }">{{ empName(row.employeeId) || row.employeeId }}</template>
+        </el-table-column>
         <el-table-column label="类型" width="100">
           <template #default="{ row }">{{ typeLabel(row.itemType) }}</template>
         </el-table-column>
@@ -33,8 +35,23 @@
         <el-form-item label="归属月">
           <el-date-picker v-model="form.period" type="month" value-format="YYYY-MM" style="width:100%" />
         </el-form-item>
-        <el-form-item label="员工ID">
-          <el-input-number v-model="form.employeeId" :min="1" style="width:100%" />
+        <el-form-item label="员工">
+          <el-select
+            v-model="form.employeeId"
+            filterable
+            remote
+            :remote-method="searchEmp"
+            :loading="empLoading"
+            placeholder="输入姓名/工号搜索"
+            style="width:100%"
+          >
+            <el-option
+              v-for="e in empOptions"
+              :key="e.employeeId"
+              :label="`${e.employeeName}（${e.employeeCode}）`"
+              :value="e.employeeId"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="类型">
           <el-select v-model="form.itemType" style="width:100%">
@@ -59,11 +76,35 @@
 import { ref, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { payrollApi, type ManualItem } from '@/api/panjia/payroll';
+import { employeeApi } from '@/api/panjia/employee';
+import type { Employee } from '@/api/panjia/types';
 
 const period = ref(new Date().toISOString().slice(0, 7));
 const list = ref<ManualItem[]>([]);
 const showAdd = ref(false);
 const form = ref<any>({ period: '', employeeId: null, itemType: 'BONUS', subType: '', amount: 0, reason: '' });
+
+const empOptions = ref<Employee[]>([]);
+const empLoading = ref(false);
+const empCache = new Map<string, string>();
+
+const searchEmp = async (keyword: string) => {
+  if (!keyword) return;
+  empLoading.value = true;
+  try {
+    const res = await employeeApi.list({ employeeName: keyword, pageSize: 20 } as any);
+    empOptions.value = (res as any).data?.rows ?? [];
+  } finally {
+    empLoading.value = false;
+  }
+};
+
+const empName = (id: string | number) => {
+  const cached = empCache.get(String(id));
+  if (cached) return cached;
+  const found = empOptions.value.find(e => e.employeeId === String(id));
+  return found?.employeeName;
+};
 
 const typeLabel = (t: string) => ({ BONUS: '奖金', OTHER_INCOME: '其他收入', OTHER_DEDUCT: '其他支出' }[t] || t);
 
@@ -73,10 +114,12 @@ const load = async () => {
 
 const submit = async () => {
   if (!form.value.period || !form.value.employeeId) {
-    ElMessage.warning('请填写归属月和员工ID');
+    ElMessage.warning('请填写归属月和选择员工');
     return;
   }
   form.value.period = period.value;
+  const selectedEmp = empOptions.value.find(e => e.employeeId === form.value.employeeId);
+  if (selectedEmp) empCache.set(String(selectedEmp.employeeId), selectedEmp.employeeName);
   await payrollApi.createManual(form.value);
   showAdd.value = false;
   form.value = { period: '', employeeId: null, itemType: 'BONUS', subType: '', amount: 0, reason: '' };

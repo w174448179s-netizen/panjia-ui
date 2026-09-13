@@ -1,31 +1,49 @@
 import panjiaRequest from './index';
-import type { CommissionImport, CommissionRecord, CommissionQuery, PageResult } from './types';
+import type { PageQuery, PageResult } from './types';
+
+export interface CommissionAdjust {
+  id: number;
+  adjustNo: string;
+  applicationId: number;
+  itemId?: number;
+  period?: string;
+  adjustType: string;    // DISCOUNT / DIFF / VOID
+  newAmount?: number;
+  diffAmount?: number;
+  targetPeriod?: string;
+  reason: string;
+  status: string;        // SUBMITTED / APPROVED / REJECTED / CANCELLED / EXECUTED
+  processInstanceId?: string;
+  applicantId?: number;
+  approverId?: number;
+  createTime: string;
+  updateTime?: string;
+}
+
+export interface CommissionAdjustQuery extends PageQuery {
+  adjustType?: string;
+  status?: string;
+  period?: string;
+  applicationId?: number;
+}
+
+export interface CommissionAdjustCreateDTO {
+  applicationId: number;
+  itemId: number;
+  adjustType: string;    // DISCOUNT / DIFF / VOID
+  newAmount?: number;
+  diffAmount?: number;
+  targetPeriod?: string;
+  reason: string;
+}
 
 export const commissionApi = {
-  // 导入批次列表
-  batchList(params: CommissionQuery) {
-    return panjiaRequest.get<PageResult<CommissionImport>>('/commission/batch/page', params);
-  },
-  // 导入贝壳数据
-  importFile(file: File) {
-    const formData = new FormData();
-    formData.append('file', file);
-    return panjiaRequest.post('/commission/import', formData);
-  },
-  // 佣金记录列表
-  recordList(params: CommissionQuery) {
-    return panjiaRequest.get<PageResult<CommissionRecord>>('/commission/record/page', params);
-  },
-  // 结佣审批列表
-  approvalList(params: CommissionQuery) {
-    return panjiaRequest.get<PageResult<CommissionRecord>>('/commission/approval/page', params);
-  },
-  // 审批通过
-  approve(id: string) {
-    return panjiaRequest.put(`/commission/approve/${id}`);
-  },
-  // 审批驳回
-  reject(id: string, reason: string) {
-    return panjiaRequest.put(`/commission/reject/${id}`, { reason });
-  }
+  listAdjusts: (params: CommissionAdjustQuery) =>
+    panjiaRequest.get<PageResult<CommissionAdjust>>('/commission/adjust/list', params),
+  getAdjust: (id: number) =>
+    panjiaRequest.get<CommissionAdjust>(`/commission/adjust/${id}`),
+  createAdjust: (data: CommissionAdjustCreateDTO) =>
+    panjiaRequest.post<number>('/commission/adjust', data),
+  cancelAdjust: (id: number) =>
+    panjiaRequest.post<void>(`/commission/adjust/${id}/cancel`),
 };

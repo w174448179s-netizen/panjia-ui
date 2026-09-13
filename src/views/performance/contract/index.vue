@@ -2,7 +2,7 @@
   <div class="performance-contract-page">
     <el-card class="page-card" v-loading="loading">
       <!-- 筛选条件（经纪人无任何查询项，后端强制限定本人业绩） -->
-      <el-form v-if="!isBroker" class="filter-form" :inline="true" :model="queryParams">
+      <el-form v-if="!isBroker" class="filter-form" :inline="true" :model="queryParams" @submit.prevent>
         <el-form-item label="期间">
           <el-date-picker
             v-model="queryParams.period"
@@ -63,7 +63,7 @@
         <el-tab-pane label="结佣业绩（当月实收）" name="PERF_REAL" />
       </el-tabs>
 
-      <!-- 汇总条（经纪人隐藏搜索框，只看统计） -->
+      <!-- 汇总条 -->
       <div class="summary-bar">
         <div class="summary-left">
           <el-input
@@ -73,6 +73,7 @@
             clearable
             :prefix-icon="Search"
             class="keyword-input"
+            @keydown.enter.prevent="handleQuery"
           />
           <span class="summary-text">
             共 <b>{{ summary.contractCount }}</b> 个合同 ·
@@ -82,100 +83,50 @@
           </span>
         </div>
         <div class="summary-right">
-          <span class="hint-text">单击行展开/收起</span>
           <span class="summary-amount">{{ amountLabel }}合计：<b>{{ formatAmount(summary.totalAmount) }}</b></span>
         </div>
       </div>
 
-      <!-- 树表：合同 → 人 → 明细（后端按合同分页，单击行懒加载展开） -->
-      <el-table
-        ref="tableRef"
-        border
-        lazy
-        class="data-table"
-        :data="contractData"
-        row-key="id"
-        :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
-        :load="handleLoad"
-        :row-class-name="rowClassName"
-        @row-click="onRowClick"
-      >
-        <el-table-column label="合同号/订单号" align="center" min-width="170" show-overflow-tooltip fixed="left">
+      <!-- 合同列表（扁平表格，点击合同号跳转明细页） -->
+      <el-table border class="data-table" :data="contractData">
+        <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="scope">
-            <span v-if="scope.row.level === 'contract'" class="contract-no">
+            <el-button type="primary" link class="contract-link" @click="goDetail(scope.row)">
               {{ contractOrOrderNo(scope.row) }}
-            </span>
-            <span v-else-if="scope.row.level === 'person' || scope.row.level === 'detail'">
-              {{ contractOrOrderNo(scope.row) || '—' }}
-            </span>
+            </el-button>
           </template>
         </el-table-column>
         <el-table-column :label="amountLabel" align="right" width="150" fixed="left">
           <template #default="scope">
-            <span class="amount" :class="[`amount-${scope.row.level}`, { 'amount-redink': scope.row.level === 'detail' && scope.row.amount < 0 }]">{{ formatAmount(scope.row.amount) }}</span>
-            <el-tag v-if="scope.row.level === 'detail' && scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
+            <span class="amount amount-contract">{{ formatAmount(scope.row.amount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="类型" align="center" width="100">
+          <template #default="scope">{{ scope.row.bizType || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="房源地址" align="left" min-width="200" show-overflow-tooltip>
+          <template #default="scope">{{ scope.row.propertyAddress || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="签约/认购时间" align="center" width="170">
+          <template #default="scope">{{ formatDateTime(scope.row.businessDate) }}</template>
+        </el-table-column>
+        <el-table-column label="涉及人数" align="center" width="90">
+          <template #default="scope">{{ scope.row.employeeCount ?? 0 }}</template>
+        </el-table-column>
+        <el-table-column label="明细条数" align="center" width="90">
+          <template #default="scope">{{ scope.row.detailCount ?? 0 }}</template>
+        </el-table-column>
+        <el-table-column label="未结算" align="center" width="90">
           <template #default="scope">
-            <span v-if="scope.row.level !== 'person'">{{ scope.row.bizType || '—' }}</span>
+            <el-tag v-if="(scope.row.unsettledCount ?? 0) > 0" type="warning" size="small">{{ scope.row.unsettledCount }}</el-tag>
+            <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="房源地址" align="left" min-width="180" show-overflow-tooltip>
+        <!-- 操作列：详情 + 合同级业绩调整（经纪人无调整权限） -->
+        <el-table-column label="操作" align="center" width="140" fixed="right">
           <template #default="scope">
-            <span v-if="scope.row.level !== 'person'">{{ scope.row.propertyAddress || '—' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="签约/认购日期" align="center" width="120">
-          <template #default="scope">
-            <span v-if="scope.row.level !== 'person'">{{ scope.row.businessDate || '—' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="姓名" align="center" width="120">
-          <template #default="scope">
-            <span v-if="scope.row.level === 'person'" class="person-name">
-              {{ scope.row.employeeName }}
-              <em class="person-meta">{{ scope.row.detailCount }}条</em>
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column label="门店/组别" align="center" min-width="160" show-overflow-tooltip>
-          <template #default="scope">
-            <span v-if="scope.row.level === 'person' || scope.row.level === 'detail'">{{ scope.row.deptPath || '—' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="所属角色" align="center" width="110">
-          <template #default="scope">
-            <span v-if="scope.row.level === 'detail'">{{ scope.row.roleType || scope.row.roleName || '—' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="角色占比" align="center" width="90">
-          <template #default="scope">
-            <span v-if="scope.row.level === 'detail'">{{ formatRatio(scope.row.shareRatio) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="是否结算" align="center" width="90">
-          <template #default="scope">
-            <el-tag v-if="scope.row.level === 'detail'" :type="scope.row.settled ? 'success' : 'info'" size="small" effect="light">
-              {{ scope.row.settled ? '已结算' : '未结算' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="结算日期" align="center" width="110">
-          <template #default="scope">
-            <span v-if="scope.row.level === 'detail'">{{ formatDate(scope.row.settleDate) }}</span>
-          </template>
-        </el-table-column>
-        <!-- 操作列：合同级/明细级业绩调整（经纪人无权限，不显示） -->
-        <el-table-column v-if="!isBroker" label="操作" align="center" width="100" fixed="right">
-          <template #default="scope">
-            <el-button
-              v-if="scope.row.level === 'contract' || scope.row.level === 'detail'"
-              type="primary"
-              link
-              size="small"
-              @click.stop="openAdjustDialog(scope.row)"
-            >调整</el-button>
+            <el-button type="primary" link size="small" @click="goDetail(scope.row)">详情</el-button>
+            <el-button v-if="!isBroker" type="warning" link size="small" @click="openAdjustDialog(scope.row)">调整</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -201,7 +152,7 @@
     <!-- 业绩调整弹窗 -->
     <el-dialog
       v-model="adjustDialog.visible"
-      :title="adjustDialog.scope === 'CONTRACT' ? '合同业绩调整' : '明细业绩调整'"
+      title="合同业绩调整"
       width="480px"
       destroy-on-close
     >
@@ -212,11 +163,9 @@
         label-width="90px"
       >
         <el-form-item label="调整范围">
-          <el-tag :type="adjustDialog.scope === 'CONTRACT' ? 'warning' : 'info'">
-            {{ adjustDialog.scope === 'CONTRACT' ? '合同级（按比例分摊到各明细）' : '明细级（单条调整）' }}
-          </el-tag>
+          <el-tag type="warning">合同级（按比例分摊到各明细）</el-tag>
         </el-form-item>
-        <el-form-item v-if="adjustDialog.scope === 'CONTRACT'" label="合同号">
+        <el-form-item label="合同号">
           <span>{{ adjustDialog.contractNo }}</span>
         </el-form-item>
         <el-form-item label="调整类型">
@@ -269,13 +218,15 @@
 
 <script setup lang="ts">
 import { Search } from '@element-plus/icons-vue';
+import { useRouter } from 'vue-router';
 import { performanceApi } from '@/api/panjia/performance';
-import type { PerformanceManageContract, PerformanceManageRow } from '@/api/panjia/performance';
+import type { PerformanceManageContract } from '@/api/panjia/performance';
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
 import { useUserStore } from '@/store/modules/user';
 
-// 经纪人角色无查询项，后端强制限定本人业绩
+const router = useRouter();
+
 const userStore = useUserStore();
 const isBroker = computed(() => userStore.roles.includes('agent'));
 
@@ -297,15 +248,11 @@ const queryParams = reactive<{
 
 const deptTreeData = ref<DeptNode[]>([]);
 
-// ==================== 数据（后端按合同分页，明细懒加载） ====================
+// ==================== 数据 ====================
 const loading = ref(false);
-const contractData = ref<TreeNode[]>([]);      // 当前页合同聚合行
-const totalContracts = ref(0);                  // 符合条件的合同总数
+const contractData = ref<PerformanceManageContract[]>([]);
+const totalContracts = ref(0);
 const keyword = ref('');
-const tableRef = ref<ElTableInstance>();
-
-// 已懒加载过的合同明细缓存：contractNo → 明细行
-const detailCache = ref(new Map<string, PerformanceManageRow[]>());
 
 const pageNum = ref(1);
 const pageSize = ref(20);
@@ -314,10 +261,9 @@ const emptySummary = () => ({ employeeCount: 0, contractCount: 0, detailCount: 0
 const summary = ref(emptySummary());
 
 // ==================== 工具 ====================
-const num = (v: number | string | undefined | null): number => {
-  if (v === undefined || v === null || v === '') return 0;
-  const n = Number(v);
-  return Number.isNaN(n) ? 0 : n;
+const formatDateTime = (val: string | undefined | null): string => {
+  if (!val) return '—';
+  return val.replace('T', ' ').substring(0, 19);
 };
 
 const formatAmount = (val: number | string | undefined | null): string => {
@@ -326,25 +272,24 @@ const formatAmount = (val: number | string | undefined | null): string => {
   return Number.isNaN(n) ? String(val) : n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-const formatRatio = (val: number | string | undefined | null): string => {
-  if (val === undefined || val === null || val === '') return '—';
-  const n = Number(val);
-  if (Number.isNaN(n)) return String(val);
-  const pct = n * 100;
-  return `${Number.isInteger(pct) ? pct : pct.toFixed(2)}%`;
-};
-
-const formatDate = (val?: string | null): string => {
-  if (!val) return '—';
-  return val.length >= 10 ? val.substring(0, 10) : val;
-};
-
 // 合同号/订单号合并展示：业务类型为「一手房」时展示订单号，其它展示合同号
-const contractOrOrderNo = (row: any): string => {
+const contractOrOrderNo = (row: PerformanceManageContract): string => {
   if (row.bizType === '一手房') {
     return row.orderNo || row.contractNo || '—';
   }
   return row.contractNo || row.orderNo || '—';
+};
+
+// ==================== 跳转明细页 ====================
+const goDetail = (row: PerformanceManageContract) => {
+  router.push({
+    path: '/performance/contract/detail',
+    query: {
+      contractNo: row.contractNo || row.orderNo || '',
+      period: queryParams.period,
+      factType: activeTab.value
+    }
+  });
 };
 
 // ==================== 关键字搜索（防抖） ====================
@@ -359,125 +304,6 @@ watch(keyword, () => {
     getList();
   }, 350);
 });
-
-interface TreeNode {
-  id: string;
-  level: 'contract' | 'person' | 'detail';
-  contractNo?: string;
-  orderNo?: string;
-  bizType?: string;
-  propertyAddress?: string;
-  businessDate?: string;
-  employeeId?: string;
-  employeeName?: string;
-  deptPath?: string;
-  roleType?: string;
-  roleName?: string;
-  shareRatio?: number | string;
-  amount: number;
-  settled?: boolean;
-  settleDate?: string;
-  employeeCount?: number;       // 合同层：涉及人数
-  detailCount: number;
-  hasChildren?: boolean;
-  children?: TreeNode[];
-  detailNodes?: TreeNode[];     // 人层懒加载的明细缓存
-  [key: string]: unknown;
-}
-
-/**
- * 把单个合同的扁平明细组装成「人 → 明细」两级节点（合同节点懒加载时调用）。
- * - person：同一合同下同一员工汇总（姓名/门店组别取首行），明细节点挂在 detailNodes
- * - detail：角色明细行
- */
-const buildPersonNodes = (contractKey: string, rows: PerformanceManageRow[]): TreeNode[] => {
-  const personMap = new Map<string, TreeNode>();
-
-  for (const row of rows) {
-    const personKey = String(row.employeeId || row.employeeName || '(未知)');
-    let person = personMap.get(personKey);
-    if (!person) {
-      person = {
-        id: `p_${contractKey}_${personKey}`,
-        level: 'person',
-        contractNo: row.contractNo,
-        orderNo: row.orderNo,
-        bizType: row.bizType,
-        propertyAddress: row.propertyAddress,
-        businessDate: row.businessDate,
-        employeeId: String(row.employeeId),
-        employeeName: row.employeeName || '未知',
-        deptPath: row.deptPath,
-        amount: 0,
-        detailCount: 0,
-        hasChildren: true,
-        detailNodes: []
-      };
-      personMap.set(personKey, person);
-    }
-    person.amount += num(row.amount);
-    person.detailCount += 1;
-
-    person.detailNodes!.push({ ...row, id: `d_${row.id}`, level: 'detail', amount: num(row.amount), detailCount: 1 });
-  }
-
-  return Array.from(personMap.values());
-};
-
-// ==================== 明细懒加载 ====================
-const baseDetailParams = () => ({
-  period: queryParams.period,
-  factType: activeTab.value,
-  deptId: queryParams.deptId ? String(queryParams.deptId) : undefined,
-  bizType: queryParams.bizType || undefined,
-  settled: queryParams.settled,
-  keyword: keyword.value.trim() || undefined
-});
-
-const batchLoadDetails = async (nos: string[]) => {
-  if (!nos.length) return;
-  const res = await performanceApi.listManageContractDetails({ ...baseDetailParams(), contractNos: nos.join(',') });
-  const all: PerformanceManageRow[] = res.data ?? [];
-  for (const no of nos) {
-    detailCache.value.set(no, all.filter((r) => String(r.contractNo) === no));
-  }
-};
-
-const ensureDetailCached = async (nos: string[]) => {
-  const missing = Array.from(new Set(nos)).filter((no) => !detailCache.value.has(no));
-  if (missing.length) await batchLoadDetails(missing);
-};
-
-const attachPersons = (contract: TreeNode): TreeNode[] => {
-  if (contract.children?.length) return contract.children;
-  const persons = buildPersonNodes(contract.contractNo!, detailCache.value.get(contract.contractNo!) ?? []);
-  contract.children = persons;
-  return persons;
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const handleLoad = async (row: TreeNode, _treeNode: any, resolve: (data: TreeNode[]) => void) => {
-  try {
-    if (row.level === 'contract' && row.contractNo) {
-      await ensureDetailCached([row.contractNo]);
-      resolve(attachPersons(row));
-    } else if (row.level === 'person') {
-      resolve(row.detailNodes ?? []);
-    } else {
-      resolve([]);
-    }
-  } catch (e) {
-    console.error('[performance-contract] 明细懒加载失败', e);
-    resolve([]);
-  }
-};
-
-// ==================== 展开控制 ====================
-const onRowClick = (row: TreeNode) => {
-  if (row.level === 'contract' || row.level === 'person') {
-    tableRef.value?.toggleRowExpansion(row);
-  }
-};
 
 // ==================== 加载 ====================
 const loadDeptTree = async () => {
@@ -495,7 +321,6 @@ const getList = async () => {
     totalContracts.value = 0;
     summary.value = emptySummary();
     bizTypeOptions.value = [];
-    detailCache.value = new Map();
     return;
   }
   loading.value = true;
@@ -511,23 +336,10 @@ const getList = async () => {
       pageSize: pageSize.value
     });
     const page = res.data;
-    contractData.value = (page?.rows ?? []).map((c: PerformanceManageContract) => ({
-      id: `c_${c.contractNo}`,
-      level: 'contract' as const,
-      contractNo: c.contractNo,
-      orderNo: c.orderNo,
-      bizType: c.bizType,
-      propertyAddress: c.propertyAddress,
-      businessDate: c.businessDate,
-      amount: num(c.amount),
-      employeeCount: c.employeeCount ?? 0,
-      detailCount: c.detailCount ?? 0,
-      hasChildren: (c.detailCount ?? 0) > 0
-    }));
+    contractData.value = page?.rows ?? [];
     totalContracts.value = page?.total ?? 0;
     summary.value = page?.summary ?? emptySummary();
     bizTypeOptions.value = page?.bizTypes ?? [];
-    detailCache.value = new Map();
   } finally {
     loading.value = false;
   }
@@ -559,18 +371,12 @@ const resetQuery = () => {
   });
 };
 
-const rowClassName = ({ row }: { row: TreeNode }) => `row-${row.level}`;
-
 // ==================== 业绩调整弹窗 ====================
 const adjustFormRef = ref();
 const adjustSubmitting = ref(false);
 const adjustDialog = reactive({
   visible: false,
-  scope: 'DETAIL' as 'CONTRACT' | 'DETAIL',
   contractNo: '',
-  factId: '',
-  employeeId: '',
-  deptId: '',
 });
 const adjustForm = reactive({
   adjustType: 'AMOUNT',
@@ -606,13 +412,8 @@ const adjustRules = {
   ],
 };
 
-const openAdjustDialog = (row: TreeNode) => {
-  adjustDialog.scope = row.level === 'contract' ? 'CONTRACT' : 'DETAIL';
-  adjustDialog.contractNo = row.contractNo || '';
-  // 明细行 id 格式为 d_${factId}
-  adjustDialog.factId = row.level === 'detail' ? String(row.id).replace(/^d_/, '') : '';
-  adjustDialog.employeeId = row.employeeId || '';
-  adjustDialog.deptId = '';
+const openAdjustDialog = (row: PerformanceManageContract) => {
+  adjustDialog.contractNo = row.contractNo || row.orderNo || '';
   adjustForm.adjustType = 'AMOUNT';
   adjustForm.deltaAmount = undefined;
   adjustForm.targetDeptId = undefined;
@@ -625,18 +426,15 @@ const submitAdjust = async () => {
   adjustSubmitting.value = true;
   try {
     await performanceApi.createAdjust({
-      factId: adjustDialog.scope === 'DETAIL' ? adjustDialog.factId : undefined,
       period: queryParams.period,
-      employeeId: adjustDialog.employeeId,
-      deptId: adjustDialog.deptId || '0',
       adjustType: adjustForm.adjustType,
-      adjustScope: adjustDialog.scope,
-      contractNo: adjustDialog.scope === 'CONTRACT' ? adjustDialog.contractNo : undefined,
+      adjustScope: 'CONTRACT',
+      contractNo: adjustDialog.contractNo,
       factType: activeTab.value,
       deltaAmount: adjustForm.deltaAmount,
       targetDeptId: adjustForm.targetDeptId,
       reason: adjustForm.reason.trim(),
-    });
+    } as any);
     ElMessage.success('调整单已提交审批');
     adjustDialog.visible = false;
     getList();
@@ -728,11 +526,6 @@ onMounted(async () => {
     }
   }
 
-  .hint-text {
-    font-size: 12px;
-    color: #909399;
-  }
-
   .summary-amount {
     font-size: 13px;
     color: #606266;
@@ -748,13 +541,9 @@ onMounted(async () => {
 .data-table {
   width: 100%;
 
-  :deep(.el-table__expand-icon) {
-    display: none;
-  }
-
-  .contract-no {
+  .contract-link {
     font-weight: 600;
-    color: #409eff;
+    padding: 0;
   }
 
   .amount {
@@ -763,46 +552,6 @@ onMounted(async () => {
   }
   .amount-contract {
     color: #f56c6c;
-  }
-  .amount-person {
-    color: #67c23a;
-  }
-  .amount-detail {
-    color: #909399;
-    font-weight: 400;
-  }
-  .amount-redink {
-    color: #f56c6c;
-    font-weight: 600;
-  }
-  .redink-tag {
-    margin-left: 4px;
-    transform: scale(0.85);
-    transform-origin: left center;
-  }
-
-  .person-name {
-    font-weight: 600;
-
-    .person-meta {
-      font-style: normal;
-      font-weight: 400;
-      font-size: 12px;
-      color: #909399;
-      margin-left: 4px;
-    }
-  }
-
-  :deep(.row-contract) {
-    background-color: #f5f7fa !important;
-    cursor: pointer;
-  }
-  :deep(.row-person) {
-    background-color: #fafafa !important;
-    cursor: pointer;
-  }
-  :deep(.row-detail) {
-    background-color: #ffffff !important;
   }
 }
 

@@ -88,6 +88,20 @@ export interface ManualItem {
   createTime: string;
 }
 
+export interface PayrollAdjust {
+  id: number;
+  sourceBatchId?: number;
+  targetPeriod: string;
+  employeeId: number;
+  adjustType: string; // ADJUST / SUPPLEMENT / RECOVER
+  amount: number;
+  reason: string;
+  status: string; // SUBMITTED / APPROVED / REJECTED / CANCELLED / EXECUTED
+  operatorId?: number;
+  createTime: string;
+  updateTime?: string;
+}
+
 export const payrollApi = {
   // 批次
   createBatch(data: { period: string; deptScope?: string }) {
@@ -153,5 +167,16 @@ export const payrollApi = {
   },
   deleteManual(id: number) {
     return panjiaRequest.delete(`/payroll/manual-item/${id}`);
+  },
+
+  // 调整/补发
+  listAdjusts(params: { period?: string; adjustType?: string; status?: string; pageNum?: number; pageSize?: number }) {
+    return panjiaRequest.get<{ total: number; rows: PayrollAdjust[] }>('/payroll/adjust/list', params);
+  },
+  createAdjust(data: Partial<PayrollAdjust>) {
+    return panjiaRequest.post<number>('/payroll/adjust', data);
+  },
+  getAdjust(id: number) {
+    return panjiaRequest.get<PayrollAdjust>(`/payroll/adjust/${id}`);
   },
 };
