@@ -33,6 +33,16 @@
             <el-option v-for="opt in statusOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="关键字">
+          <el-input
+            v-model="queryParams.keyword"
+            placeholder="合同号/订单号/房源"
+            clearable
+            style="width: 200px"
+            @keyup.enter="handleQuery"
+            @clear="handleQuery"
+          />
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
           <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -50,7 +60,9 @@
         </div>
         <div class="summary-right">
           <span class="summary-amount">结佣合计：<b>{{ formatAmount(summary.totalAmount) }}</b></span>
-          <el-button type="primary" icon="Plus" @click="openCreate">发起结佣</el-button>
+          <el-button type="primary" icon="Plus" :loading="batchCreating" @click="openBatchCreate">
+            批量发起{{ queryParams.period ? `（${queryParams.period}）` : '' }}
+          </el-button>
         </div>
       </div>
 
@@ -58,9 +70,10 @@
       <el-table border class="data-table" :data="contractList">
         <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="{ row }">
-            <el-button type="primary" link class="contract-link" @click="viewDetail(row)">
+            <el-button v-if="row.applicationId" type="primary" link class="contract-link" @click="viewDetail(row)">
               {{ contractOrOrderNo(row) }}
             </el-button>
+            <span v-else class="contract-text">{{ contractOrOrderNo(row) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="结佣金额" align="right" width="120" fixed="left">
@@ -93,30 +106,28 @@
         </el-table-column>
         <el-table-column label="操作" align="center" width="220" fixed="right">
           <template #default="{ row }">
-            <el-tooltip content="详情" placement="top">
+            <el-tooltip v-if="row.applicationId" content="详情" placement="top">
               <el-button link type="primary" icon="View" @click="viewDetail(row)"></el-button>
             </el-tooltip>
-            <template v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'">
-              <el-tooltip content="增量重拉" placement="top">
-                <el-button link type="success" icon="Refresh" @click="refresh(row)"></el-button>
-              </el-tooltip>
-              <el-tooltip v-if="row.status === 'DRAFT'" content="提交" placement="top">
-                <el-button link type="warning" icon="Upload" @click="submit(row)"></el-button>
-              </el-tooltip>
-              <el-tooltip v-if="row.status === 'SUBMITTED'" content="通过" placement="top">
-                <el-button link type="success" icon="CircleCheck" @click="approve(row, true)"></el-button>
-              </el-tooltip>
-              <el-tooltip v-if="row.status === 'SUBMITTED'" content="驳回" placement="top">
-                <el-button link type="danger" icon="CircleClose" @click="approve(row, false)"></el-button>
-              </el-tooltip>
-              <el-tooltip content="作废" placement="top">
-                <el-button link type="info" icon="Delete" @click="cancel(row)"></el-button>
-              </el-tooltip>
-            </template>
+            <el-tooltip v-if="canOriginate(row)" content="发起" placement="top">
+              <el-button link type="primary" icon="Plus" @click="originate(row as CommissionContractVO)"></el-button>
+            </el-tooltip>
+            <el-tooltip v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" content="提交" placement="top">
+              <el-button link type="warning" icon="Upload" @click="submit(row)"></el-button>
+            </el-tooltip>
+            <el-tooltip v-if="row.status === 'SUBMITTED'" content="通过" placement="top">
+              <el-button link type="success" icon="CircleCheck" @click="approve(row, true)"></el-button>
+            </el-tooltip>
+            <el-tooltip v-if="row.status === 'SUBMITTED'" content="驳回" placement="top">
+              <el-button link type="danger" icon="CircleClose" @click="approve(row, false)"></el-button>
+            </el-tooltip>
+            <el-tooltip v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'" content="作废" placement="top">
+              <el-button link type="info" icon="Delete" @click="cancel(row)"></el-button>
+            </el-tooltip>
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty :description="queryParams.period ? '该期间暂无结佣申请' : '暂无结佣申请单'" />
+          <el-empty :description="queryParams.period ? '该期间暂无可结佣合同' : '请选择期间'" />
         </template>
       </el-table>
 
@@ -135,40 +146,19 @@
       </div>
     </el-card>
 
-    <!-- 发起结佣弹窗 -->
-    <el-dialog v-model="showCreate" title="发起结佣" width="480px" destroy-on-close>
-      <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="100px">
-        <el-form-item label="结算月" prop="period">
-          <el-date-picker v-model="createForm.period" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="门店" prop="deptId">
-          <el-tree-select
-            v-model="createForm.deptId"
-            :data="deptTreeData"
-            :props="{ label: 'deptName', children: 'children' } as any"
-            value-key="deptId"
-            node-key="deptId"
-            placeholder="选择门店"
-            check-strictly
-            style="width:100%"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showCreate = false">取消</el-button>
-        <el-button type="primary" :loading="creating" @click="doCreate">发起</el-button>
-      </template>
-    </el-dialog>
-
     <!-- 详情弹窗 -->
     <el-dialog v-model="showDetail" title="结佣申请单详情" width="1000px" top="5vh">
       <el-descriptions v-if="detailApp" :column="3" border size="small" class="detail-desc">
         <el-descriptions-item label="申请单号">{{ detailApp.applyNo }}</el-descriptions-item>
         <el-descriptions-item label="期间">{{ detailApp.period }}</el-descriptions-item>
-        <el-descriptions-item label="门店">{{ deptName(detailApp.deptId) }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="statusTagType(detailApp.status)" size="small">{{ statusLabel(detailApp.status) }}</el-tag>
         </el-descriptions-item>
+        <el-descriptions-item label="合同号">{{ detailApp.contractNo || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="订单号">{{ detailApp.orderNo || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="签约时间">{{ formatDateTime(detailApp.businessDate) }}</el-descriptions-item>
+        <el-descriptions-item label="房源地址" :span="3">{{ detailApp.propertyAddress || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="归属门店">{{ detailApp.deptId ? deptName(detailApp.deptId) : '跨门店合作' }}</el-descriptions-item>
         <el-descriptions-item label="明细数">{{ detailApp.itemCount }}</el-descriptions-item>
         <el-descriptions-item label="合计金额">
           <span class="amount amount-red">¥{{ formatAmount(detailApp.totalAmount) }}</span>
@@ -222,7 +212,6 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import type { FormInstance } from 'element-plus';
 import { commissionApi, type CommissionApplication, type CommissionContractVO, type CommissionItem } from '@/api/panjia/commission';
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
@@ -239,12 +228,19 @@ const loading = ref(false);
 const contractList = ref<CommissionContractVO[]>([]);
 const total = ref(0);
 
+// 当前月份（YYYY-MM）
+const currentPeriod = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
 const queryParams = reactive({
   pageNum: 1,
   pageSize: 20,
-  period: '' as string,
+  period: currentPeriod(),
   deptId: undefined as string | undefined,
   status: '' as string,
+  keyword: '' as string,
 });
 
 // 汇总统计（按合同维度）
@@ -328,23 +324,27 @@ const loadEmployeeMap = async () => {
 
 // 状态映射
 const STATUS_MAP: Record<string, string> = {
-  DRAFT: '草稿', SUBMITTED: '已提交', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
+  NONE: '未发起', DRAFT: '草稿', SUBMITTED: '已提交', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
 };
 const statusOptions = Object.entries(STATUS_MAP).map(([value, label]) => ({ value, label }));
 const statusLabel = (s: string) => STATUS_MAP[s] || s || '—';
 const statusTagType = (s: string) => {
   const map: Record<string, string> = {
-    DRAFT: 'info', SUBMITTED: 'warning', APPROVED: 'primary', LOCKED: 'success', REJECTED: 'danger', CANCELLED: 'info',
+    NONE: 'info', DRAFT: 'info', SUBMITTED: 'warning', APPROVED: 'primary', LOCKED: 'success', REJECTED: 'danger', CANCELLED: 'info',
   };
   return (map as any)[s] || 'info';
 };
 
+// 可发起：未发起 / 已作废（作废时明细已冲销，事实释放可重新发起）；净额为 0 的合同无可入账事实
+const canOriginate = (row: CommissionContractVO) =>
+  (row.status === 'NONE' || row.status === 'CANCELLED') && num(row.amount) !== 0;
+
 const ITEM_STATUS_MAP: Record<string, string> = {
-  PENDING: '待审批', APPROVED: '已通过', REVERSED: '已冲销',
+  DRAFT: '待提交', PENDING: '待审批', APPROVED: '已通过', REVERSED: '已冲销',
 };
 const itemStatusLabel = (s: string) => ITEM_STATUS_MAP[s] || s || '—';
 const itemStatusTagType = (s: string) => {
-  const map: Record<string, string> = { PENDING: 'warning', APPROVED: 'success', REVERSED: 'danger' };
+  const map: Record<string, string> = { DRAFT: 'info', PENDING: 'warning', APPROVED: 'success', REVERSED: 'danger' };
   return (map as any)[s] || 'info';
 };
 
@@ -353,9 +353,10 @@ const getList = async () => {
   loading.value = true;
   try {
     const res: any = await commissionApi.listContracts({
-      period: queryParams.period || undefined,
+      period: queryParams.period || currentPeriod(),
       deptId: queryParams.deptId ? Number(queryParams.deptId) : undefined,
       status: queryParams.status || undefined,
+      keyword: queryParams.keyword || undefined,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
     });
@@ -376,56 +377,54 @@ const handleQuery = () => {
 };
 
 const resetQuery = () => {
-  Object.assign(queryParams, { period: '', deptId: undefined, status: '', pageNum: 1 });
+  Object.assign(queryParams, {
+    period: currentPeriod(), deptId: undefined, status: '', keyword: '', pageNum: 1,
+  });
   getList();
 };
 
-// 发起
-const showCreate = ref(false);
-const creating = ref(false);
-const createFormRef = ref<FormInstance>();
-const createForm = reactive({ period: '', deptId: undefined as string | undefined });
-const createRules = {
-  period: [{ required: true, message: '请选择结算月', trigger: 'change' }],
-  deptId: [{ required: true, message: '请选择门店', trigger: 'change' }],
-};
-
-const openCreate = () => {
-  createForm.period = '';
-  createForm.deptId = undefined;
-  showCreate.value = true;
-};
-
-const doCreate = async () => {
-  if (!createFormRef.value) return;
+// 单个合同发起
+const originate = async (row: CommissionContractVO) => {
+  const no = contractOrOrderNo(row);
   try {
-    await createFormRef.value.validate();
+    await ElMessageBox.confirm(
+      `确认为合同「${no}」${row.period} 月发起结佣？将按该合同当月实收业绩生成申请单（草稿）。`,
+      '发起结佣', { type: 'info' },
+    );
   } catch {
     return;
   }
-  creating.value = true;
   try {
-    await commissionApi.createApplication({ period: createForm.period, deptId: Number(createForm.deptId) });
+    await commissionApi.createApplication({ period: row.period, contractNo: row.contractNo });
     ElMessage.success('发起成功');
-    showCreate.value = false;
-    getList();
-  } finally {
-    creating.value = false;
-  }
-};
-
-// 增量重拉
-const refresh = async (row: CommissionContractVO) => {
-  try {
-    await ElMessageBox.confirm(`确认对申请单「${row.applyNo}」执行增量重拉？将追加新导入的实收业绩。`, '提示', { type: 'info' });
-  } catch {
-    return;
-  }
-  try {
-    await commissionApi.refreshApplication(row.applicationId);
-    ElMessage.success('增量重拉完成');
     getList();
   } catch { /* 拦截器处理 */ }
+};
+
+// 批量发起
+const batchCreating = ref(false);
+const openBatchCreate = async () => {
+  const period = queryParams.period || currentPeriod();
+  const scope = queryParams.deptId ? '当前选中门店（含下级）范围内' : '全部门店';
+  try {
+    await ElMessageBox.confirm(
+      `确认为${scope}${period} 月所有「未发起」合同批量创建结佣申请单？`,
+      '批量发起结佣', { type: 'info' },
+    );
+  } catch {
+    return;
+  }
+  batchCreating.value = true;
+  try {
+    const res: any = await commissionApi.batchCreateApplications({
+      period,
+      deptId: queryParams.deptId ? Number(queryParams.deptId) : undefined,
+    });
+    ElMessage.success(res?.msg || '批量发起完成');
+    getList();
+  } catch { /* 拦截器处理（含部分失败提示） */ } finally {
+    batchCreating.value = false;
+  }
 };
 
 // 提交
@@ -477,6 +476,7 @@ const detailApp = ref<CommissionApplication | null>(null);
 const detailItems = ref<CommissionItem[]>([]);
 
 const viewDetail = async (row: CommissionContractVO) => {
+  if (!row.applicationId) return;
   detailItems.value = [];
   showDetail.value = true;
   await loadEmployeeMap();
@@ -602,6 +602,11 @@ onMounted(() => {
   .contract-link {
     font-weight: 600;
     padding: 0;
+  }
+
+  .contract-text {
+    font-weight: 600;
+    color: #303133;
   }
 
   .amount {

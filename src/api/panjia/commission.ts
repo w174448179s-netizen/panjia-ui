@@ -43,7 +43,11 @@ export interface CommissionApplication {
   id: number;
   applyNo: string;
   period: string;
-  deptId: number;
+  contractNo?: string;
+  orderNo?: string;
+  propertyAddress?: string;
+  businessDate?: string;
+  deptId?: number;     // 跨门店合作单为空
   itemCount: number;
   totalAmount: number;
   status: string;        // DRAFT / SUBMITTED / APPROVED / LOCKED / REJECTED / CANCELLED
@@ -68,7 +72,7 @@ export interface CommissionItem {
   roleType?: string;
   feeItem?: string;
   amount: number;
-  status: string;        // PENDING / APPROVED / REVERSED
+  status: string;        // DRAFT / PENDING / APPROVED / REVERSED
   originReversed?: boolean;
   adjustId?: number;
   createTime: string;
@@ -78,17 +82,19 @@ export interface CommissionApplyQuery extends PageQuery {
   period?: string;
   deptId?: number;
   status?: string;
+  keyword?: string;
 }
 
 export interface CommissionApplyCreateDTO {
   period: string;
-  deptId: number;
+  contractNo?: string;   // 单个发起必填；批量发起不传
+  deptId?: number;       // 仅批量发起使用
 }
 
 // 结佣申请「合同」维度行
 export interface CommissionContractVO {
-  applicationId: number;
-  applyNo: string;
+  applicationId?: number;   // 未发起（NONE）时为空
+  applyNo?: string;
   contractNo?: string;
   orderNo?: string;
   bizType?: string;
@@ -98,8 +104,8 @@ export interface CommissionContractVO {
   employeeCount: number;
   detailCount: number;
   period: string;
-  deptId: number;
-  status: string;
+  deptId?: number;
+  status: string;           // NONE / DRAFT / SUBMITTED / LOCKED / REJECTED / CANCELLED
   applicantId?: number;
   createTime?: string;
 }
@@ -114,10 +120,10 @@ export const commissionApi = {
     panjiaRequest.get<{ application: CommissionApplication; items: CommissionItem[] }>(`/commission/apply/${id}`),
   createApplication: (data: CommissionApplyCreateDTO) =>
     panjiaRequest.post<number>('/commission/apply', data),
+  batchCreateApplications: (data: CommissionApplyCreateDTO) =>
+    panjiaRequest.post<number>('/commission/apply/batch', data),
   submitApplication: (id: number) =>
     panjiaRequest.post<void>(`/commission/apply/${id}/submit`),
-  refreshApplication: (id: number) =>
-    panjiaRequest.post<void>(`/commission/apply/${id}/refresh`),
   approveApplication: (id: number, approve: boolean) =>
     panjiaRequest.post<void>(`/commission/apply/${id}/callback`, { approve }),
   cancelApplication: (id: number) =>
