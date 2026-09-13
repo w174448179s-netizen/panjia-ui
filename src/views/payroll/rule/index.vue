@@ -34,7 +34,9 @@
           <el-table-column label="生效日" prop="effectiveFrom" width="110" />
           <el-table-column label="操作" width="80" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="editRank(row as RankRule)">编辑</el-button>
+              <el-tooltip content="编辑" placement="top">
+                <el-button link type="primary" icon="Edit" @click="editRank(row as RankRule)"></el-button>
+              </el-tooltip>
             </template>
           </el-table-column>
         </el-table>
@@ -202,7 +204,9 @@
               </el-table-column>
               <el-table-column label="操作" width="70" align="center">
                 <template #default="{ $index }">
-                  <el-button link type="danger" @click="policyJson.tax.brackets.splice($index, 1)">删除</el-button>
+                  <el-tooltip content="删除" placement="top">
+                    <el-button link type="danger" icon="Delete" @click="policyJson.tax.brackets.splice($index, 1)"></el-button>
+                  </el-tooltip>
                 </template>
               </el-table-column>
             </el-table>
@@ -222,7 +226,9 @@
           <el-table-column label="生效日" prop="effectiveFrom" width="120" />
           <el-table-column label="操作" width="80">
             <template #default="{ row }">
-              <el-button link type="primary" @click="editConversion(row as ConversionRule)">编辑</el-button>
+              <el-tooltip content="编辑" placement="top">
+                <el-button link type="primary" icon="Edit" @click="editConversion(row as ConversionRule)"></el-button>
+              </el-tooltip>
             </template>
           </el-table-column>
         </el-table>
@@ -303,7 +309,9 @@
               </el-table-column>
               <el-table-column label="操作" width="70" align="center">
                 <template #default="{ $index }">
-                  <el-button link type="danger" @click="rankJson.brackets.splice($index, 1)">删除</el-button>
+                  <el-tooltip content="删除" placement="top">
+                    <el-button link type="danger" icon="Delete" @click="rankJson.brackets.splice($index, 1)"></el-button>
+                  </el-tooltip>
                 </template>
               </el-table-column>
             </el-table>

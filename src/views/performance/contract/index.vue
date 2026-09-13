@@ -123,10 +123,14 @@
           </template>
         </el-table-column>
         <!-- 操作列：详情 + 合同级业绩调整（经纪人无调整权限） -->
-        <el-table-column label="操作" align="center" width="140" fixed="right">
+        <el-table-column label="操作" align="center" width="110" fixed="right">
           <template #default="scope">
-            <el-button type="primary" link size="small" @click="goDetail(scope.row)">详情</el-button>
-            <el-button v-if="!isBroker" type="warning" link size="small" @click="openAdjustDialog(scope.row)">调整</el-button>
+            <el-tooltip content="详情" placement="top">
+              <el-button link type="primary" icon="View" @click="goDetail(scope.row)"></el-button>
+            </el-tooltip>
+            <el-tooltip v-if="!isBroker" content="调整" placement="top">
+              <el-button link type="warning" icon="Edit" @click="openAdjustDialog(scope.row)"></el-button>
+            </el-tooltip>
           </template>
         </el-table-column>
         <template #empty>

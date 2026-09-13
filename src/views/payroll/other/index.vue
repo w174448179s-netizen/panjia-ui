@@ -39,7 +39,9 @@
             </el-table-column>
             <el-table-column label="操作" width="80" fixed="right">
               <template #default="{ row }">
-                <el-button link type="danger" @click="remove(row)">删除</el-button>
+                <el-tooltip content="删除" placement="top">
+                  <el-button link type="danger" icon="Delete" @click="remove(row)"></el-button>
+                </el-tooltip>
               </template>
             </el-table-column>
             <template #empty><el-empty description="暂无其他收入记录" /></template>
@@ -71,7 +73,9 @@
             </el-table-column>
             <el-table-column label="操作" width="80" fixed="right">
               <template #default="{ row }">
-                <el-button link type="danger" @click="remove(row)">删除</el-button>
+                <el-tooltip content="删除" placement="top">
+                  <el-button link type="danger" icon="Delete" @click="remove(row)"></el-button>
+                </el-tooltip>
               </template>
             </el-table-column>
             <template #empty><el-empty description="暂无其他支出记录" /></template>

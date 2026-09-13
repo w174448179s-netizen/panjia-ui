@@ -33,15 +33,29 @@
         </el-table-column>
         <el-table-column label="算薪次数" prop="attempt" width="80" align="center" />
         <el-table-column label="创建时间" prop="createTime" width="170" />
-        <el-table-column label="操作" width="360" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="viewDetail(row)">明细</el-button>
-            <el-button v-if="canCalc(row.status)" link type="warning" @click="doAction(row, 'calculate')">算薪</el-button>
-            <el-button v-if="row.status === 'CALCULATED'" link type="primary" @click="doAction(row, 'submit')">提交</el-button>
-            <el-button v-if="row.status === 'REVIEWING'" link type="success" @click="doAction(row, 'approve')">通过</el-button>
-            <el-button v-if="row.status === 'REVIEWING'" link type="danger" @click="doAction(row, 'reject')">驳回</el-button>
-            <el-button v-if="row.status === 'APPROVED'" link type="success" @click="doAction(row, 'lock')">锁定</el-button>
-            <el-button v-if="row.status === 'LOCKED'" link type="primary" @click="doAction(row, 'pay')">标记发放</el-button>
+            <el-tooltip content="明细" placement="top">
+              <el-button link type="primary" icon="View" @click="viewDetail(row)"></el-button>
+            </el-tooltip>
+            <el-tooltip v-if="canCalc(row.status)" content="算薪" placement="top">
+              <el-button link type="warning" icon="Calculator" @click="doAction(row, 'calculate')"></el-button>
+            </el-tooltip>
+            <el-tooltip v-if="row.status === 'CALCULATED'" content="提交" placement="top">
+              <el-button link type="primary" icon="Upload" @click="doAction(row, 'submit')"></el-button>
+            </el-tooltip>
+            <el-tooltip v-if="row.status === 'REVIEWING'" content="通过" placement="top">
+              <el-button link type="success" icon="CircleCheck" @click="doAction(row, 'approve')"></el-button>
+            </el-tooltip>
+            <el-tooltip v-if="row.status === 'REVIEWING'" content="驳回" placement="top">
+              <el-button link type="danger" icon="CircleClose" @click="doAction(row, 'reject')"></el-button>
+            </el-tooltip>
+            <el-tooltip v-if="row.status === 'APPROVED'" content="锁定" placement="top">
+              <el-button link type="success" icon="Lock" @click="doAction(row, 'lock')"></el-button>
+            </el-tooltip>
+            <el-tooltip v-if="row.status === 'LOCKED'" content="标记发放" placement="top">
+              <el-button link type="primary" icon="Money" @click="doAction(row, 'pay')"></el-button>
+            </el-tooltip>
           </template>
         </el-table-column>
       </el-table>

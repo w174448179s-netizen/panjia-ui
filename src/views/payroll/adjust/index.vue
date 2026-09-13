@@ -85,7 +85,9 @@
         <el-table-column label="创建时间" prop="createTime" width="170" />
         <el-table-column label="操作" width="80" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
+            <el-tooltip content="详情" placement="top">
+              <el-button link type="primary" icon="View" @click="viewDetail(row)"></el-button>
+            </el-tooltip>
           </template>
         </el-table-column>
         <template #empty><el-empty description="暂无调整记录" /></template>

@@ -1,13 +1,8 @@
 <template>
-  <div class="commission-apply" style="padding: 12px;">
-    <el-card>
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-semibold">结佣申请</h3>
-        <el-button type="primary" @click="openCreate">+ 发起结佣</el-button>
-      </div>
-
-      <!-- 筛选 -->
-      <el-form :inline="true" :model="queryParams" @submit.prevent>
+  <div class="commission-apply-page">
+    <el-card class="page-card" v-loading="loading">
+      <!-- 筛选条件 -->
+      <el-form class="filter-form" :inline="true" :model="queryParams" @submit.prevent>
         <el-form-item label="期间">
           <el-date-picker
             v-model="queryParams.period"
@@ -15,21 +10,21 @@
             value-format="YYYY-MM"
             placeholder="选择月份"
             clearable
-            style="width: 160px"
+            style="width: 150px"
             @change="handleQuery"
           />
         </el-form-item>
-        <el-form-item label="门店">
+        <el-form-item label="门店/组别">
           <el-tree-select
             v-model="queryParams.deptId"
             :data="deptTreeData"
             :props="{ label: 'deptName', children: 'children' } as any"
             value-key="deptId"
             node-key="deptId"
-            placeholder="全部门店"
+            placeholder="全部门店/组别"
             clearable
             check-strictly
-            style="width: 200px"
+            style="width: 210px"
             @change="handleQuery"
           />
         </el-form-item>
@@ -39,55 +34,98 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleQuery">搜索</el-button>
-          <el-button @click="resetQuery">重置</el-button>
+          <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
+          <el-button icon="Refresh" @click="resetQuery">重置</el-button>
         </el-form-item>
       </el-form>
 
+      <!-- 汇总条 -->
+      <div class="summary-bar">
+        <div class="summary-left">
+          <span class="summary-text">
+            共 <b>{{ summary.applyCount }}</b> 个申请单 ·
+            涉及 <b>{{ summary.employeeCount }}</b> 人 ·
+            合计 <b>{{ summary.itemCount }}</b> 条明细
+          </span>
+        </div>
+        <div class="summary-right">
+          <span class="summary-amount">结佣合计：<b>{{ formatAmount(summary.totalAmount) }}</b></span>
+          <el-button type="primary" icon="Plus" @click="openCreate">发起结佣</el-button>
+        </div>
+      </div>
+
       <!-- 表格 -->
-      <el-table v-loading="loading" :data="appList" stripe border>
-        <el-table-column label="申请单号" prop="applyNo" min-width="200" show-overflow-tooltip />
-        <el-table-column label="期间" prop="period" width="100" />
-        <el-table-column label="门店" width="140">
+      <el-table border class="data-table" :data="appList">
+        <el-table-column label="申请单号" align="center" min-width="200" show-overflow-tooltip fixed="left">
+          <template #default="{ row }">
+            <el-button type="primary" link class="apply-link" @click="viewDetail(row)">
+              {{ row.applyNo }}
+            </el-button>
+          </template>
+        </el-table-column>
+        <el-table-column label="期间" align="center" width="100">
+          <template #default="{ row }">{{ row.period }}</template>
+        </el-table-column>
+        <el-table-column label="门店" align="center" width="140">
           <template #default="{ row }">{{ deptName(row.deptId) }}</template>
         </el-table-column>
-        <el-table-column label="明细数" prop="itemCount" width="90" align="center" />
-        <el-table-column label="合计金额" width="140" align="right">
-          <template #default="{ row }">¥{{ fmt(row.totalAmount) }}</template>
+        <el-table-column label="明细数" align="center" width="90">
+          <template #default="{ row }">{{ row.itemCount }}</template>
         </el-table-column>
-        <el-table-column label="状态" width="100" align="center">
+        <el-table-column label="合计金额" align="right" width="130">
+          <template #default="{ row }">
+            <span class="amount amount-red">¥{{ formatAmount(row.totalAmount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" align="center" width="100">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="发起人" width="100" align="center">
+        <el-table-column label="发起人" align="center" width="100">
           <template #default="{ row }">{{ row.applicantId === 0 ? '系统' : (row.applicantId || '—') }}</template>
         </el-table-column>
-        <el-table-column label="创建时间" prop="createTime" width="170" />
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="创建时间" align="center" width="160">
+          <template #default="{ row }">{{ row.createTime }}</template>
+        </el-table-column>
+        <el-table-column label="操作" align="center" width="220" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
+            <el-tooltip content="详情" placement="top">
+              <el-button link type="primary" icon="View" @click="viewDetail(row)"></el-button>
+            </el-tooltip>
             <template v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'">
-              <el-button link type="success" @click="refresh(row)">增量重拉</el-button>
-              <el-button v-if="row.status === 'DRAFT'" link type="warning" @click="submit(row)">提交</el-button>
-              <el-button v-if="row.status === 'SUBMITTED'" link type="success" @click="approve(row, true)">通过</el-button>
-              <el-button v-if="row.status === 'SUBMITTED'" link type="danger" @click="approve(row, false)">驳回</el-button>
-              <el-button link type="info" @click="cancel(row)">作废</el-button>
+              <el-tooltip content="增量重拉" placement="top">
+                <el-button link type="success" icon="Refresh" @click="refresh(row)"></el-button>
+              </el-tooltip>
+              <el-tooltip v-if="row.status === 'DRAFT'" content="提交" placement="top">
+                <el-button link type="warning" icon="Upload" @click="submit(row)"></el-button>
+              </el-tooltip>
+              <el-tooltip v-if="row.status === 'SUBMITTED'" content="通过" placement="top">
+                <el-button link type="success" icon="CircleCheck" @click="approve(row, true)"></el-button>
+              </el-tooltip>
+              <el-tooltip v-if="row.status === 'SUBMITTED'" content="驳回" placement="top">
+                <el-button link type="danger" icon="CircleClose" @click="approve(row, false)"></el-button>
+              </el-tooltip>
+              <el-tooltip content="作废" placement="top">
+                <el-button link type="info" icon="Delete" @click="cancel(row)"></el-button>
+              </el-tooltip>
             </template>
           </template>
         </el-table-column>
-        <template #empty><el-empty description="暂无结佣申请单" /></template>
+        <template #empty>
+          <el-empty :description="queryParams.period ? '该期间暂无结佣申请' : '暂无结佣申请单'" />
+        </template>
       </el-table>
 
       <!-- 分页 -->
-      <div class="pagination-wrap">
+      <div class="pager-bar">
         <el-pagination
+          background
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="total"
+          :page-sizes="[10, 20, 50, 100]"
           v-model:current-page="queryParams.pageNum"
           v-model:page-size="queryParams.pageSize"
-          :page-sizes="[10, 20, 50, 100]"
-          :total="total"
-          layout="total, sizes, prev, pager, next, jumper"
-          background
           @size-change="handleQuery"
           @current-change="getList"
         />
@@ -120,8 +158,8 @@
     </el-dialog>
 
     <!-- 详情弹窗 -->
-    <el-dialog v-model="showDetail" title="结佣申请单详情" width="900px" top="5vh">
-      <el-descriptions v-if="detailApp" :column="3" border size="small">
+    <el-dialog v-model="showDetail" title="结佣申请单详情" width="1000px" top="5vh">
+      <el-descriptions v-if="detailApp" :column="3" border size="small" class="detail-desc">
         <el-descriptions-item label="申请单号">{{ detailApp.applyNo }}</el-descriptions-item>
         <el-descriptions-item label="期间">{{ detailApp.period }}</el-descriptions-item>
         <el-descriptions-item label="门店">{{ deptName(detailApp.deptId) }}</el-descriptions-item>
@@ -129,32 +167,40 @@
           <el-tag :type="statusTagType(detailApp.status)" size="small">{{ statusLabel(detailApp.status) }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="明细数">{{ detailApp.itemCount }}</el-descriptions-item>
-        <el-descriptions-item label="合计金额">¥{{ fmt(detailApp.totalAmount) }}</el-descriptions-item>
+        <el-descriptions-item label="合计金额">
+          <span class="amount amount-red">¥{{ formatAmount(detailApp.totalAmount) }}</span>
+        </el-descriptions-item>
         <el-descriptions-item label="发起人">{{ detailApp.applicantId === 0 ? '系统自动' : (detailApp.applicantId || '—') }}</el-descriptions-item>
         <el-descriptions-item label="审批通过月">{{ detailApp.approvedMonth || '—' }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ detailApp.createTime }}</el-descriptions-item>
       </el-descriptions>
 
-      <div class="mt-4">
-        <div class="text-sm font-medium mb-2">结佣明细（{{ detailItems.length }} 条）</div>
-        <el-table :data="detailItems" stripe border size="small" max-height="400">
-          <el-table-column label="明细ID" prop="id" width="120" />
-          <el-table-column label="业绩事实ID" prop="performanceFactId" width="120">
-            <template #default="{ row }">{{ row.performanceFactId || '—' }}</template>
+      <div class="detail-table-wrap">
+        <div class="detail-table-title">结佣明细（{{ detailItems.length }} 条）</div>
+        <el-table :data="detailItems" border size="small" max-height="450" class="detail-table">
+          <el-table-column label="序号" type="index" width="55" align="center" />
+          <el-table-column label="员工" min-width="120">
+            <template #default="{ row }">{{ employeeName(row.employeeId) }}</template>
           </el-table-column>
-          <el-table-column label="期间" prop="period" width="90" />
-          <el-table-column label="员工ID" prop="employeeId" width="100" />
-          <el-table-column label="业务类型" prop="bizType" width="100" />
-          <el-table-column label="角色类型" prop="roleType" width="100" />
-          <el-table-column label="金额" width="120" align="right">
-            <template #default="{ row }">¥{{ fmt(row.amount) }}</template>
+          <el-table-column label="业务类型" align="center" width="110">
+            <template #default="{ row }">{{ row.bizType || '—' }}</template>
           </el-table-column>
-          <el-table-column label="状态" width="90" align="center">
+          <el-table-column label="角色类型" align="center" width="110">
+            <template #default="{ row }">{{ row.roleType || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="费用项" align="center" min-width="100">
+            <template #default="{ row }">{{ row.feeItem || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="金额" align="right" width="120">
+            <template #default="{ row }">
+              <span class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" align="center" width="90">
             <template #default="{ row }">
               <el-tag :type="itemStatusTagType(row.status)" size="small">{{ itemStatusLabel(row.status) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="创建时间" prop="createTime" width="160" />
         </el-table>
       </div>
 
@@ -170,7 +216,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
@@ -198,6 +244,23 @@ const queryParams = reactive({
   status: '' as string,
 });
 
+// 汇总统计
+const summary = computed(() => {
+  const list = appList.value;
+  const totalAmount = list.reduce((s, r) => s + (r.totalAmount || 0), 0);
+  const itemCount = list.reduce((s, r) => s + (r.itemCount || 0), 0);
+  return {
+    applyCount: list.length,
+    itemCount,
+    employeeCount: 0,
+    totalAmount,
+  };
+});
+
+// 金额格式化
+const formatAmount = (n: number | null | undefined) =>
+  n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 // 部门树
 const deptTreeData = ref<DeptNode[]>([]);
 const deptMap = new Map<number, string>();
@@ -222,6 +285,23 @@ const deptName = (deptId: number | undefined) => {
   return deptMap.get(deptId) ?? String(deptId);
 };
 
+// 员工姓名映射
+const employeeMap = new Map<number, string>();
+const employeeName = (empId: number | undefined) => {
+  if (empId == null) return '—';
+  return employeeMap.get(empId) ?? `员工#${empId}`;
+};
+
+const loadEmployeeMap = async () => {
+  try {
+    const res: any = await employeeApi.list({ pageNum: 1, pageSize: 9999 });
+    const rows = res.data?.rows ?? [];
+    for (const e of rows) {
+      if (e.employeeId != null) employeeMap.set(Number(e.employeeId), e.employeeName || `员工#${e.employeeId}`);
+    }
+  } catch { /* ignore */ }
+};
+
 // 状态映射
 const STATUS_MAP: Record<string, string> = {
   DRAFT: '草稿', SUBMITTED: '已提交', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
@@ -243,9 +323,6 @@ const itemStatusTagType = (s: string) => {
   const map: Record<string, string> = { PENDING: 'warning', APPROVED: 'success', REVERSED: 'danger' };
   return (map as any)[s] || 'info';
 };
-
-const fmt = (n: number | null | undefined) =>
-  n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // 列表
 const getList = async () => {
@@ -379,6 +456,7 @@ const viewDetail = async (row: CommissionApplication) => {
   detailApp.value = row;
   detailItems.value = [];
   showDetail.value = true;
+  await loadEmployeeMap();
   try {
     const res: any = await commissionApi.getApplication(row.id);
     const data = res.data ?? {};
@@ -413,6 +491,7 @@ const openFromWorkflow = async () => {
   if (!id || !type) return;
   flowType.value = type;
   flowTaskId.value = taskId || '';
+  await loadEmployeeMap();
   try {
     const res: any = await commissionApi.getApplication(Number(id));
     const data = res.data ?? {};
@@ -431,22 +510,103 @@ onMounted(() => {
 });
 </script>
 
-<style scoped>
-.pagination-wrap {
+<style lang="scss" scoped>
+.commission-apply-page {
+  padding: 16px;
+}
+
+.page-card {
+  border-radius: 12px;
+}
+
+.filter-form {
+  margin-bottom: 4px;
+}
+
+.summary-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 4px 12px;
+  flex-wrap: wrap;
+
+  .summary-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+    flex-wrap: wrap;
+  }
+
+  .summary-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .summary-text {
+    font-size: 13px;
+    color: #606266;
+
+    b {
+      color: #303133;
+      margin: 0 2px;
+    }
+  }
+
+  .summary-amount {
+    font-size: 13px;
+    color: #606266;
+
+    b {
+      color: #f56c6c;
+      font-size: 15px;
+      margin-left: 4px;
+    }
+  }
+}
+
+.data-table {
+  width: 100%;
+
+  .apply-link {
+    font-weight: 600;
+    padding: 0;
+  }
+
+  .amount {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .amount-red {
+    color: #f56c6c;
+  }
+}
+
+.pager-bar {
   display: flex;
   justify-content: flex-end;
   margin-top: 12px;
 }
-.mt-4 {
+
+.detail-table-wrap {
   margin-top: 16px;
 }
-.text-sm {
+
+.detail-table-title {
   font-size: 14px;
-}
-.font-medium {
   font-weight: 500;
-}
-.mb-2 {
   margin-bottom: 8px;
+}
+
+.detail-table {
+  .amount {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .amount-red {
+    color: #f56c6c;
+  }
 }
 </style>

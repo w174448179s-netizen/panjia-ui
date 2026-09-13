@@ -24,7 +24,9 @@
         <el-table-column label="状态" prop="status" width="80" />
         <el-table-column label="操作" width="80">
           <template #default="{ row }">
-            <el-button link type="danger" @click="remove(row)">删除</el-button>
+            <el-tooltip content="删除" placement="top">
+              <el-button link type="danger" icon="Delete" @click="remove(row)"></el-button>
+            </el-tooltip>
           </template>
         </el-table-column>
       </el-table>
