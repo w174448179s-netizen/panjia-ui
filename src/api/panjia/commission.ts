@@ -37,7 +37,72 @@ export interface CommissionAdjustCreateDTO {
   reason: string;
 }
 
+// ==================== 结佣申请单 ====================
+
+export interface CommissionApplication {
+  id: number;
+  applyNo: string;
+  period: string;
+  deptId: number;
+  itemCount: number;
+  totalAmount: number;
+  status: string;        // DRAFT / SUBMITTED / APPROVED / LOCKED / REJECTED / CANCELLED
+  approvedMonth?: string;
+  processInstanceId?: string;
+  applicantId?: number;
+  approverId?: number;
+  lockTime?: string;
+  createTime: string;
+  updateTime?: string;
+}
+
+export interface CommissionItem {
+  id: number;
+  applicationId: number;
+  performanceFactId?: number;
+  period: string;
+  approvedMonth?: string;
+  employeeId?: number;
+  deptId?: number;
+  bizType?: string;
+  roleType?: string;
+  feeItem?: string;
+  amount: number;
+  status: string;        // PENDING / APPROVED / REVERSED
+  originReversed?: boolean;
+  adjustId?: number;
+  createTime: string;
+}
+
+export interface CommissionApplyQuery extends PageQuery {
+  period?: string;
+  deptId?: number;
+  status?: string;
+}
+
+export interface CommissionApplyCreateDTO {
+  period: string;
+  deptId: number;
+}
+
 export const commissionApi = {
+  // 结佣申请单
+  listApplications: (params: CommissionApplyQuery) =>
+    panjiaRequest.get<PageResult<CommissionApplication>>('/commission/apply/list', params),
+  getApplication: (id: number) =>
+    panjiaRequest.get<{ application: CommissionApplication; items: CommissionItem[] }>(`/commission/apply/${id}`),
+  createApplication: (data: CommissionApplyCreateDTO) =>
+    panjiaRequest.post<number>('/commission/apply', data),
+  submitApplication: (id: number) =>
+    panjiaRequest.post<void>(`/commission/apply/${id}/submit`),
+  refreshApplication: (id: number) =>
+    panjiaRequest.post<void>(`/commission/apply/${id}/refresh`),
+  approveApplication: (id: number, approve: boolean) =>
+    panjiaRequest.post<void>(`/commission/apply/${id}/callback`, { approve }),
+  cancelApplication: (id: number) =>
+    panjiaRequest.post<void>(`/commission/apply/${id}/cancel`),
+
+  // 结佣调整
   listAdjusts: (params: CommissionAdjustQuery) =>
     panjiaRequest.get<PageResult<CommissionAdjust>>('/commission/adjust/list', params),
   getAdjust: (id: number) =>
