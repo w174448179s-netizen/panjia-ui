@@ -52,7 +52,13 @@
       <template #header>
         <div class="flex items-center justify-between">
           <span>工资明细 — {{ currentBatch.period }}（{{ statusLabel(currentBatch.status) }}）</span>
-          <el-button text @click="currentBatch = null; details = []">关闭</el-button>
+          <div class="flex items-center gap-2">
+            <template v-if="flowType === 'approval'">
+              <el-button type="success" size="small" :loading="taskOperating" @click="handleFlowPass">通过</el-button>
+              <el-button type="danger" size="small" :loading="taskOperating" @click="handleFlowReject">驳回</el-button>
+            </template>
+            <el-button text @click="closeDetail">关闭</el-button>
+          </div>
         </div>
       </template>
       <el-table :data="details" stripe border max-height="600" :summary-method="summaryMethod" show-summary>
@@ -139,8 +145,15 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { payrollApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
+import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
+
+const route = useRoute();
+const { taskOperating, passTask, rejectTask } = useWorkflowTask();
+const flowType = ref<string>('');
+const flowTaskId = ref<string>('');
 
 const batches = ref<PayrollBatch[]>([]);
 const details = ref<PayrollDetail[]>([]);
@@ -214,6 +227,47 @@ const viewDetail = async (row: PayrollBatch) => {
   details.value = (res as any).data ?? [];
 };
 
+const closeDetail = () => {
+  currentBatch.value = null;
+  details.value = [];
+};
+
+// 工作流：通过
+const handleFlowPass = async () => {
+  const ok = await passTask(flowTaskId.value);
+  if (ok) {
+    closeDetail();
+    loadBatches();
+  }
+};
+
+// 工作流：驳回
+const handleFlowReject = async () => {
+  const ok = await rejectTask(flowTaskId.value);
+  if (ok) {
+    closeDetail();
+    loadBatches();
+  }
+};
+
+// 工作流跳转
+const openFromWorkflow = async () => {
+  const id = route.query.id as string;
+  const type = route.query.type as string;
+  const taskId = route.query.taskId as string;
+  if (!id || !type) return;
+  flowType.value = type;
+  flowTaskId.value = taskId || '';
+  try {
+    const res: any = await payrollApi.getBatch(Number(id));
+    currentBatch.value = res.data;
+    const detRes = await payrollApi.getDetails(Number(id));
+    details.value = (detRes as any).data ?? [];
+  } catch {
+    ElMessage.error('加载批次失败');
+  }
+};
+
 const summaryMethod = ({ columns, data }: any) => {
   const sums: string[] = [];
   columns.forEach((col: any, idx: number) => {
@@ -233,7 +287,10 @@ const summaryMethod = ({ columns, data }: any) => {
   return sums;
 };
 
-onMounted(loadBatches);
+onMounted(() => {
+  loadBatches();
+  openFromWorkflow();
+});
 </script>
 
 <style scoped>

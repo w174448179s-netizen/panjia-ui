@@ -165,6 +165,9 @@ export const payrollApi = {
   listManual(period: string) {
     return panjiaRequest.get<ManualItem[]>('/payroll/manual-item', { period });
   },
+  getManual(id: number) {
+    return panjiaRequest.get<ManualItem>(`/payroll/manual-item/${id}`);
+  },
   deleteManual(id: number) {
     return panjiaRequest.delete(`/payroll/manual-item/${id}`);
   },

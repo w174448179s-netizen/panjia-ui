@@ -294,7 +294,11 @@
       </template>
 
       <template #footer>
-        <el-button @click="formDialog.visible = false">关 闭</el-button>
+        <el-button @click="formDialog.visible = false">{{ flowType === 'approval' ? '取消' : '关 闭' }}</el-button>
+        <template v-if="flowType === 'approval'">
+          <el-button type="success" :loading="taskOperating" @click="handleFlowPass">通过</el-button>
+          <el-button type="danger" :loading="taskOperating" @click="handleFlowReject">驳回</el-button>
+        </template>
         <el-button
           v-if="formDialog.mode === 'create'"
           type="primary"
@@ -314,6 +318,13 @@ import type { PerformanceAdjust, AdjustQuery, AdjustCreateForm, PerformanceFact 
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode, Employee } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
+import { useRoute } from 'vue-router';
+import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
+
+const route = useRoute();
+const { taskOperating, passTask, rejectTask } = useWorkflowTask();
+const flowType = ref<string>('');
+const flowTaskId = ref<string>('');
 
 // ==================== 枚举 ====================
 const adjustTypeMap: Record<string, string> = {
@@ -619,9 +630,58 @@ const handleSubmit = async () => {
   }
 };
 
+// 工作流：通过
+const handleFlowPass = async () => {
+  const ok = await passTask(flowTaskId.value);
+  if (ok) {
+    formDialog.visible = false;
+    getList();
+  }
+};
+
+// 工作流：驳回
+const handleFlowReject = async () => {
+  const ok = await rejectTask(flowTaskId.value);
+  if (ok) {
+    formDialog.visible = false;
+    getList();
+  }
+};
+
+// 工作流跳转
+const openFromWorkflow = async () => {
+  const id = route.query.id as string;
+  const type = route.query.type as string;
+  const taskId = route.query.taskId as string;
+  if (!id || !type) return;
+  flowType.value = type;
+  flowTaskId.value = taskId || '';
+  try {
+    const res = await performanceApi.getAdjust(Number(id));
+    const d = res.data;
+    detailData.value = d;
+    Object.assign(formData, defaultFormData(), {
+      factId: d.factId || '',
+      period: d.period,
+      employeeId: d.employeeId,
+      deptId: d.deptId,
+      adjustType: d.adjustType,
+      deltaAmount: num(d.deltaAmount),
+      targetDeptId: d.targetDeptId || '',
+      reason: d.reason
+    });
+    formDialog.mode = 'detail';
+    formDialog.title = '调整单详情';
+    formDialog.visible = true;
+  } catch {
+    modal.msgError('加载单据失败');
+  }
+};
+
 onMounted(() => {
   loadDeptTree();
   getList();
+  openFromWorkflow();
 });
 </script>
 

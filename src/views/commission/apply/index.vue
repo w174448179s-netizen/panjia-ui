@@ -159,7 +159,11 @@
       </div>
 
       <template #footer>
-        <el-button @click="showDetail = false">关闭</el-button>
+        <template v-if="flowType === 'approval'">
+          <el-button type="success" :loading="taskOperating" @click="handleFlowPass">通过</el-button>
+          <el-button type="danger" :loading="taskOperating" @click="handleFlowReject">驳回</el-button>
+        </template>
+        <el-button @click="showDetail = false">{{ flowType === 'approval' ? '取消' : '关闭' }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -167,11 +171,20 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import { commissionApi, type CommissionApplication, type CommissionItem } from '@/api/panjia/commission';
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
+import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
+
+const route = useRoute();
+const { taskOperating, passTask, rejectTask } = useWorkflowTask();
+
+// 工作流跳转参数
+const flowType = ref<string>(''); // view | approval
+const flowTaskId = ref<string>('');
 
 const loading = ref(false);
 const appList = ref<CommissionApplication[]>([]);
@@ -374,9 +387,47 @@ const viewDetail = async (row: CommissionApplication) => {
   } catch { /* 使用列表数据 */ }
 };
 
+// 工作流：通过
+const handleFlowPass = async () => {
+  const ok = await passTask(flowTaskId.value);
+  if (ok) {
+    showDetail.value = false;
+    getList();
+  }
+};
+
+// 工作流：驳回
+const handleFlowReject = async () => {
+  const ok = await rejectTask(flowTaskId.value);
+  if (ok) {
+    showDetail.value = false;
+    getList();
+  }
+};
+
+// 工作流跳转：根据 query 参数打开详情
+const openFromWorkflow = async () => {
+  const id = route.query.id as string;
+  const type = route.query.type as string;
+  const taskId = route.query.taskId as string;
+  if (!id || !type) return;
+  flowType.value = type;
+  flowTaskId.value = taskId || '';
+  try {
+    const res: any = await commissionApi.getApplication(Number(id));
+    const data = res.data ?? {};
+    detailApp.value = data.application;
+    detailItems.value = data.items ?? [];
+    showDetail.value = true;
+  } catch {
+    ElMessage.error('加载单据失败');
+  }
+};
+
 onMounted(() => {
   loadDeptTree();
   getList();
+  openFromWorkflow();
 });
 </script>
 

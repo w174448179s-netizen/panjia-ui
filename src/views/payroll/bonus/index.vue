@@ -93,16 +93,45 @@
         <el-button type="primary" :loading="submitting" @click="submit">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 详情弹窗 -->
+    <el-dialog v-model="showDetail" title="奖金详情" width="480px">
+      <el-descriptions v-if="detailData" :column="2" border size="small">
+        <el-descriptions-item label="归属月">{{ detailData.period }}</el-descriptions-item>
+        <el-descriptions-item label="员工">{{ empDisplay(detailData.employeeId) }}</el-descriptions-item>
+        <el-descriptions-item label="子类型">{{ detailData.subType || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="金额">¥{{ fmt(detailData.amount) }}</el-descriptions-item>
+        <el-descriptions-item label="状态">
+          <el-tag :type="statusTagType(detailData.status)" size="small">{{ statusLabel(detailData.status) }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="创建时间">{{ detailData.createTime }}</el-descriptions-item>
+        <el-descriptions-item label="事由" :span="2">{{ detailData.reason || '—' }}</el-descriptions-item>
+      </el-descriptions>
+      <template #footer>
+        <template v-if="flowType === 'approval'">
+          <el-button type="success" :loading="taskOperating" @click="handleFlowPass">通过</el-button>
+          <el-button type="danger" :loading="taskOperating" @click="handleFlowReject">驳回</el-button>
+        </template>
+        <el-button @click="showDetail = false">{{ flowType === 'approval' ? '取消' : '关闭' }}</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import { payrollApi, type ManualItem } from '@/api/panjia/payroll';
 import { employeeApi } from '@/api/panjia/employee';
 import type { Employee } from '@/api/panjia/types';
+import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
+
+const route = useRoute();
+const { taskOperating, passTask, rejectTask } = useWorkflowTask();
+const flowType = ref<string>('');
+const flowTaskId = ref<string>('');
 
 const period = ref(new Date().toISOString().slice(0, 7));
 const list = ref<ManualItem[]>([]);
@@ -255,7 +284,49 @@ const remove = async (row: ManualItem) => {
   } catch { /* 拦截器处理 */ }
 };
 
-onMounted(load);
+// 详情
+const showDetail = ref(false);
+const detailData = ref<ManualItem | null>(null);
+
+// 工作流：通过
+const handleFlowPass = async () => {
+  const ok = await passTask(flowTaskId.value);
+  if (ok) {
+    showDetail.value = false;
+    load();
+  }
+};
+
+// 工作流：驳回
+const handleFlowReject = async () => {
+  const ok = await rejectTask(flowTaskId.value);
+  if (ok) {
+    showDetail.value = false;
+    load();
+  }
+};
+
+// 工作流跳转
+const openFromWorkflow = async () => {
+  const id = route.query.id as string;
+  const type = route.query.type as string;
+  const taskId = route.query.taskId as string;
+  if (!id || !type) return;
+  flowType.value = type;
+  flowTaskId.value = taskId || '';
+  try {
+    const res = await payrollApi.getManual(Number(id));
+    detailData.value = (res as any).data;
+    showDetail.value = true;
+  } catch {
+    ElMessage.error('加载单据失败');
+  }
+};
+
+onMounted(() => {
+  load();
+  openFromWorkflow();
+});
 </script>
 
 <style scoped>

@@ -163,7 +163,11 @@
         <el-descriptions-item label="原因" :span="2">{{ detailData.reason || '—' }}</el-descriptions-item>
       </el-descriptions>
       <template #footer>
-        <el-button @click="showDetail = false">关闭</el-button>
+        <template v-if="flowType === 'approval'">
+          <el-button type="success" :loading="taskOperating" @click="handleFlowPass">通过</el-button>
+          <el-button type="danger" :loading="taskOperating" @click="handleFlowReject">驳回</el-button>
+        </template>
+        <el-button @click="showDetail = false">{{ flowType === 'approval' ? '取消' : '关闭' }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -171,11 +175,18 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import { payrollApi, type PayrollAdjust } from '@/api/panjia/payroll';
 import { employeeApi } from '@/api/panjia/employee';
 import type { Employee } from '@/api/panjia/types';
+import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
+
+const route = useRoute();
+const { taskOperating, passTask, rejectTask } = useWorkflowTask();
+const flowType = ref<string>('');
+const flowTaskId = ref<string>('');
 
 const loading = ref(false);
 const adjustList = ref<PayrollAdjust[]>([]);
@@ -361,7 +372,45 @@ const viewDetail = async (row: PayrollAdjust) => {
   } catch { /* 使用列表数据 */ }
 };
 
-onMounted(getList);
+// 工作流：通过
+const handleFlowPass = async () => {
+  const ok = await passTask(flowTaskId.value);
+  if (ok) {
+    showDetail.value = false;
+    getList();
+  }
+};
+
+// 工作流：驳回
+const handleFlowReject = async () => {
+  const ok = await rejectTask(flowTaskId.value);
+  if (ok) {
+    showDetail.value = false;
+    getList();
+  }
+};
+
+// 工作流跳转
+const openFromWorkflow = async () => {
+  const id = route.query.id as string;
+  const type = route.query.type as string;
+  const taskId = route.query.taskId as string;
+  if (!id || !type) return;
+  flowType.value = type;
+  flowTaskId.value = taskId || '';
+  try {
+    const res = await payrollApi.getAdjust(Number(id));
+    detailData.value = (res as any).data;
+    showDetail.value = true;
+  } catch {
+    ElMessage.error('加载单据失败');
+  }
+};
+
+onMounted(() => {
+  getList();
+  openFromWorkflow();
+});
 </script>
 
 <style scoped>
