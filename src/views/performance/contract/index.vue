@@ -96,7 +96,7 @@
             </el-button>
           </template>
         </el-table-column>
-        <el-table-column :label="amountLabel" align="right" width="150" fixed="left">
+        <el-table-column :label="amountLabel" align="right" width="100" fixed="left">
           <template #default="scope">
             <span class="amount amount-contract">{{ formatAmount(scope.row.amount) }}</span>
           </template>
@@ -110,13 +110,13 @@
         <el-table-column label="签约/认购时间" align="center" width="170">
           <template #default="scope">{{ formatDateTime(scope.row.businessDate) }}</template>
         </el-table-column>
-        <el-table-column label="涉及人数" align="center" width="90">
+        <el-table-column label="涉及人数" align="center" width="80">
           <template #default="scope">{{ scope.row.employeeCount ?? 0 }}</template>
         </el-table-column>
-        <el-table-column label="明细条数" align="center" width="90">
+        <el-table-column label="明细条数" align="center" width="80">
           <template #default="scope">{{ scope.row.detailCount ?? 0 }}</template>
         </el-table-column>
-        <el-table-column label="未结算" align="center" width="90">
+        <el-table-column label="未结算" align="center" width="80">
           <template #default="scope">
             <el-tag v-if="(scope.row.unsettledCount ?? 0) > 0" type="warning" size="small">{{ scope.row.unsettledCount }}</el-tag>
             <span v-else>—</span>

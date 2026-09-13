@@ -34,7 +34,7 @@
 
       <!-- 明细列表（扁平表格，无展开） -->
       <el-table border class="data-table" :data="detailList">
-        <el-table-column label="门店/组别" align="left" min-width="160" show-overflow-tooltip fixed="left">
+        <el-table-column label="门店/组别" align="left" min-width="120" show-overflow-tooltip>
           <template #default="scope">{{ scope.row.deptPath || '—' }}</template>
         </el-table-column>
         <el-table-column label="工号" align="center" width="100">
@@ -51,7 +51,7 @@
         <el-table-column label="角色占比" align="center" width="90">
           <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
         </el-table-column>
-        <el-table-column :label="factType === 'PERF_EXPECT' ? '应收金额' : '实收金额'" align="right" width="140">
+        <el-table-column :label="factType === 'PERF_EXPECT' ? '应收金额' : '实收金额'" align="right" width="120">
           <template #default="scope">
             <span class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
             <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
