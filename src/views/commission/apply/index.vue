@@ -43,9 +43,9 @@
       <div class="summary-bar">
         <div class="summary-left">
           <span class="summary-text">
-            共 <b>{{ summary.applyCount }}</b> 个申请单 ·
+            共 <b>{{ summary.contractCount }}</b> 个合同 ·
             涉及 <b>{{ summary.employeeCount }}</b> 人 ·
-            合计 <b>{{ summary.itemCount }}</b> 条明细
+            <b>{{ summary.detailCount }}</b> 条明细
           </span>
         </div>
         <div class="summary-right">
@@ -54,28 +54,34 @@
         </div>
       </div>
 
-      <!-- 表格 -->
-      <el-table border class="data-table" :data="appList">
-        <el-table-column label="申请单号" align="center" min-width="200" show-overflow-tooltip fixed="left">
+      <!-- 合同维度表格 -->
+      <el-table border class="data-table" :data="contractList">
+        <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="{ row }">
-            <el-button type="primary" link class="apply-link" @click="viewDetail(row)">
-              {{ row.applyNo }}
+            <el-button type="primary" link class="contract-link" @click="viewDetail(row)">
+              {{ contractOrOrderNo(row) }}
             </el-button>
           </template>
         </el-table-column>
-        <el-table-column label="期间" align="center" width="100">
-          <template #default="{ row }">{{ row.period }}</template>
-        </el-table-column>
-        <el-table-column label="门店" align="center" width="140">
-          <template #default="{ row }">{{ deptName(row.deptId) }}</template>
-        </el-table-column>
-        <el-table-column label="明细数" align="center" width="90">
-          <template #default="{ row }">{{ row.itemCount }}</template>
-        </el-table-column>
-        <el-table-column label="合计金额" align="right" width="130">
+        <el-table-column label="结佣金额" align="right" width="120" fixed="left">
           <template #default="{ row }">
-            <span class="amount amount-red">¥{{ formatAmount(row.totalAmount) }}</span>
+            <span class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
           </template>
+        </el-table-column>
+        <el-table-column label="类型" align="center" width="100">
+          <template #default="{ row }">{{ row.bizType || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="房源地址" align="left" min-width="200" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.propertyAddress || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="签约/认购时间" align="center" width="170">
+          <template #default="{ row }">{{ formatDateTime(row.businessDate) }}</template>
+        </el-table-column>
+        <el-table-column label="涉及人数" align="center" width="80">
+          <template #default="{ row }">{{ row.employeeCount ?? 0 }}</template>
+        </el-table-column>
+        <el-table-column label="明细条数" align="center" width="80">
+          <template #default="{ row }">{{ row.detailCount ?? 0 }}</template>
         </el-table-column>
         <el-table-column label="状态" align="center" width="100">
           <template #default="{ row }">
@@ -83,10 +89,7 @@
           </template>
         </el-table-column>
         <el-table-column label="发起人" align="center" width="100">
-          <template #default="{ row }">{{ row.applicantId === 0 ? '系统' : (row.applicantId || '—') }}</template>
-        </el-table-column>
-        <el-table-column label="创建时间" align="center" width="160">
-          <template #default="{ row }">{{ row.createTime }}</template>
+          <template #default="{ row }">{{ row.applicantId === 0 ? '系统' : (applicantName(row.applicantId) || '—') }}</template>
         </el-table-column>
         <el-table-column label="操作" align="center" width="220" fixed="right">
           <template #default="{ row }">
@@ -170,7 +173,7 @@
         <el-descriptions-item label="合计金额">
           <span class="amount amount-red">¥{{ formatAmount(detailApp.totalAmount) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="发起人">{{ detailApp.applicantId === 0 ? '系统自动' : (detailApp.applicantId || '—') }}</el-descriptions-item>
+        <el-descriptions-item label="发起人">{{ detailApp.applicantId === 0 ? '系统自动' : (applicantName(detailApp.applicantId) || '—') }}</el-descriptions-item>
         <el-descriptions-item label="审批通过月">{{ detailApp.approvedMonth || '—' }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ detailApp.createTime }}</el-descriptions-item>
       </el-descriptions>
@@ -220,7 +223,7 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
-import { commissionApi, type CommissionApplication, type CommissionItem } from '@/api/panjia/commission';
+import { commissionApi, type CommissionApplication, type CommissionContractVO, type CommissionItem } from '@/api/panjia/commission';
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
 import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
@@ -233,7 +236,7 @@ const flowType = ref<string>(''); // view | approval
 const flowTaskId = ref<string>('');
 
 const loading = ref(false);
-const appList = ref<CommissionApplication[]>([]);
+const contractList = ref<CommissionContractVO[]>([]);
 const total = ref(0);
 
 const queryParams = reactive({
@@ -244,22 +247,37 @@ const queryParams = reactive({
   status: '' as string,
 });
 
-// 汇总统计
+// 汇总统计（按合同维度）
 const summary = computed(() => {
-  const list = appList.value;
-  const totalAmount = list.reduce((s, r) => s + (r.totalAmount || 0), 0);
-  const itemCount = list.reduce((s, r) => s + (r.itemCount || 0), 0);
+  const list = contractList.value;
+  const totalAmount = list.reduce((s, r) => s + num(r.amount), 0);
+  const detailCount = list.reduce((s, r) => s + (r.detailCount || 0), 0);
   return {
-    applyCount: list.length,
-    itemCount,
+    contractCount: list.length,
+    detailCount,
     employeeCount: 0,
     totalAmount,
   };
 });
 
+// 数字安全转换
+const num = (v: number | string | null | undefined): number => {
+  if (v === undefined || v === null || v === '') return 0;
+  const n = Number(v);
+  return Number.isNaN(n) ? 0 : n;
+};
+
 // 金额格式化
-const formatAmount = (n: number | null | undefined) =>
-  n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatAmount = (n: number | string | null | undefined) =>
+  n == null ? '0.00' : num(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// 合同号/订单号合并展示
+const contractOrOrderNo = (row: CommissionContractVO): string => {
+  if (row.bizType === '一手房') {
+    return row.orderNo || row.contractNo || '—';
+  }
+  return row.contractNo || row.orderNo || '—';
+};
 
 // 部门树
 const deptTreeData = ref<DeptNode[]>([]);
@@ -290,6 +308,12 @@ const employeeMap = new Map<number, string>();
 const employeeName = (empId: number | undefined) => {
   if (empId == null) return '—';
   return employeeMap.get(empId) ?? `员工#${empId}`;
+};
+
+// 发起人姓名（从员工映射取）
+const applicantName = (applicantId: number | undefined) => {
+  if (applicantId == null) return '—';
+  return employeeMap.get(applicantId) ?? `用户#${applicantId}`;
 };
 
 const loadEmployeeMap = async () => {
@@ -328,7 +352,7 @@ const itemStatusTagType = (s: string) => {
 const getList = async () => {
   loading.value = true;
   try {
-    const res: any = await commissionApi.listApplications({
+    const res: any = await commissionApi.listContracts({
       period: queryParams.period || undefined,
       deptId: queryParams.deptId ? Number(queryParams.deptId) : undefined,
       status: queryParams.status || undefined,
@@ -336,10 +360,10 @@ const getList = async () => {
       pageSize: queryParams.pageSize,
     });
     const data = res.data;
-    appList.value = data?.rows ?? [];
+    contractList.value = data?.rows ?? [];
     total.value = data?.total ?? 0;
   } catch {
-    appList.value = [];
+    contractList.value = [];
     total.value = 0;
   } finally {
     loading.value = false;
@@ -391,35 +415,35 @@ const doCreate = async () => {
 };
 
 // 增量重拉
-const refresh = async (row: CommissionApplication) => {
+const refresh = async (row: CommissionContractVO) => {
   try {
     await ElMessageBox.confirm(`确认对申请单「${row.applyNo}」执行增量重拉？将追加新导入的实收业绩。`, '提示', { type: 'info' });
   } catch {
     return;
   }
   try {
-    await commissionApi.refreshApplication(row.id);
+    await commissionApi.refreshApplication(row.applicationId);
     ElMessage.success('增量重拉完成');
     getList();
   } catch { /* 拦截器处理 */ }
 };
 
 // 提交
-const submit = async (row: CommissionApplication) => {
+const submit = async (row: CommissionContractVO) => {
   try {
     await ElMessageBox.confirm(`确认提交申请单「${row.applyNo}」？提交后进入审批流程。`, '提示', { type: 'warning' });
   } catch {
     return;
   }
   try {
-    await commissionApi.submitApplication(row.id);
+    await commissionApi.submitApplication(row.applicationId);
     ElMessage.success('已提交');
     getList();
   } catch { /* 拦截器处理 */ }
 };
 
 // 审批
-const approve = async (row: CommissionApplication, pass: boolean) => {
+const approve = async (row: CommissionContractVO, pass: boolean) => {
   const action = pass ? '通过' : '驳回';
   try {
     await ElMessageBox.confirm(`确认${action}申请单「${row.applyNo}」？${pass ? '通过后结佣明细将锁定并进入工资计算。' : ''}`, '提示', { type: pass ? 'success' : 'warning' });
@@ -427,21 +451,21 @@ const approve = async (row: CommissionApplication, pass: boolean) => {
     return;
   }
   try {
-    await commissionApi.approveApplication(row.id, pass);
+    await commissionApi.approveApplication(row.applicationId, pass);
     ElMessage.success(`已${action}`);
     getList();
   } catch { /* 拦截器处理 */ }
 };
 
 // 作废
-const cancel = async (row: CommissionApplication) => {
+const cancel = async (row: CommissionContractVO) => {
   try {
     await ElMessageBox.confirm(`确认作废申请单「${row.applyNo}」？作废后不可恢复。`, '提示', { type: 'warning' });
   } catch {
     return;
   }
   try {
-    await commissionApi.cancelApplication(row.id);
+    await commissionApi.cancelApplication(row.applicationId);
     ElMessage.success('已作废');
     getList();
   } catch { /* 拦截器处理 */ }
@@ -452,17 +476,16 @@ const showDetail = ref(false);
 const detailApp = ref<CommissionApplication | null>(null);
 const detailItems = ref<CommissionItem[]>([]);
 
-const viewDetail = async (row: CommissionApplication) => {
-  detailApp.value = row;
+const viewDetail = async (row: CommissionContractVO) => {
   detailItems.value = [];
   showDetail.value = true;
   await loadEmployeeMap();
   try {
-    const res: any = await commissionApi.getApplication(row.id);
+    const res: any = await commissionApi.getApplication(row.applicationId);
     const data = res.data ?? {};
-    detailApp.value = data.application ?? row;
+    detailApp.value = data.application ?? null;
     detailItems.value = data.items ?? [];
-  } catch { /* 使用列表数据 */ }
+  } catch { /* 错误已提示 */ }
 };
 
 // 工作流：通过
@@ -503,8 +526,14 @@ const openFromWorkflow = async () => {
   }
 };
 
+const formatDateTime = (val?: string | null): string => {
+  if (!val) return '—';
+  return val.replace('T', ' ').substring(0, 19);
+};
+
 onMounted(() => {
   loadDeptTree();
+  loadEmployeeMap();
   getList();
   openFromWorkflow();
 });
@@ -570,7 +599,7 @@ onMounted(() => {
 .data-table {
   width: 100%;
 
-  .apply-link {
+  .contract-link {
     font-weight: 600;
     padding: 0;
   }

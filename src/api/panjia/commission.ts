@@ -85,10 +85,31 @@ export interface CommissionApplyCreateDTO {
   deptId: number;
 }
 
+// 结佣申请「合同」维度行
+export interface CommissionContractVO {
+  applicationId: number;
+  applyNo: string;
+  contractNo?: string;
+  orderNo?: string;
+  bizType?: string;
+  propertyAddress?: string;
+  businessDate?: string;
+  amount: number;
+  employeeCount: number;
+  detailCount: number;
+  period: string;
+  deptId: number;
+  status: string;
+  applicantId?: number;
+  createTime?: string;
+}
+
 export const commissionApi = {
   // 结佣申请单
   listApplications: (params: CommissionApplyQuery) =>
     panjiaRequest.get<PageResult<CommissionApplication>>('/commission/apply/list', params),
+  listContracts: (params: CommissionApplyQuery) =>
+    panjiaRequest.get<PageResult<CommissionContractVO>>('/commission/apply/contract-list', params),
   getApplication: (id: number) =>
     panjiaRequest.get<{ application: CommissionApplication; items: CommissionItem[] }>(`/commission/apply/${id}`),
   createApplication: (data: CommissionApplyCreateDTO) =>
