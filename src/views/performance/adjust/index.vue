@@ -136,15 +136,11 @@
             </template>
           </el-table-column>
           <el-table-column label="申请时间" align="center" prop="createTime" width="170" sortable />
-          <el-table-column label="操作" align="center" width="110" class-name="small-padding fixed-width">
+          <el-table-column label="操作" align="center" width="140" class-name="small-padding fixed-width">
             <template #default="scope">
-              <el-tooltip content="详情" placement="top">
-                <el-button link type="primary" icon="View" @click="handleDetail(scope.row)"></el-button>
-              </el-tooltip>
+              <el-button link type="primary" @click="handleDetail(scope.row)">详情</el-button>
               <!-- 审批走 RuoYi 工作流（perf_adjust），不在本页直接通过/拒绝；提交后仅可取消 -->
-              <el-tooltip v-if="scope.row.status === 'SUBMITTED'" content="取消" placement="top">
-                <el-button link type="info" icon="Close" @click="handleCancel(scope.row)"></el-button>
-              </el-tooltip>
+              <el-button v-if="scope.row.status === 'SUBMITTED'" link type="info" @click="handleCancel(scope.row)">取消</el-button>
             </template>
           </el-table-column>
         </el-table>

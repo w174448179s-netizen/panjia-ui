@@ -114,23 +114,13 @@
         <el-table-column label="发起人" align="center" width="100">
           <template #default="{ row }">{{ row.applicantId ? applicantName(row.applicantId) : '系统自动' }}</template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="220" fixed="right">
+        <el-table-column label="操作" align="center" width="280" fixed="right">
           <template #default="{ row }">
-            <el-tooltip content="详情" placement="top">
-              <el-button link type="primary" icon="View" @click="viewDetail(row)"></el-button>
-            </el-tooltip>
-            <el-tooltip v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" content="重新提交" placement="top">
-              <el-button link type="warning" icon="Upload" @click="resubmit(row)"></el-button>
-            </el-tooltip>
-            <el-tooltip v-if="row.status === 'SUBMITTED'" content="通过" placement="top">
-              <el-button link type="success" icon="CircleCheck" @click="approve(row)"></el-button>
-            </el-tooltip>
-            <el-tooltip v-if="row.status === 'SUBMITTED'" content="驳回" placement="top">
-              <el-button link type="danger" icon="CircleClose" @click="reject(row)"></el-button>
-            </el-tooltip>
-            <el-tooltip v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'" content="作废" placement="top">
-              <el-button link type="info" icon="Delete" @click="cancel(row)"></el-button>
-            </el-tooltip>
+            <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
+            <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重新提交</el-button>
+            <el-button v-if="row.status === 'SUBMITTED'" link type="success" @click="approve(row)">通过</el-button>
+            <el-button v-if="row.status === 'SUBMITTED'" link type="danger" @click="reject(row)">驳回</el-button>
+            <el-button v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'" link type="info" @click="cancel(row)">作废</el-button>
           </template>
         </el-table-column>
         <template #empty>
