@@ -176,7 +176,7 @@
     </el-card>
 
     <!-- 详情弹窗 -->
-    <el-dialog v-model="showDetail" title="结佣申请单详情" width="1000px" top="5vh">
+    <el-dialog v-model="showDetail" title="结佣明细详情" width="1000px" top="5vh">
       <el-descriptions v-if="detailApp" :column="3" border size="small" class="detail-desc">
         <el-descriptions-item label="申请单号">{{ detailApp.applyNo }}</el-descriptions-item>
         <el-descriptions-item label="期间">{{ detailApp.period }}</el-descriptions-item>
@@ -440,7 +440,7 @@ const openBatchCreate = async () => {
   const scope = queryParams.deptId ? '当前选中门店（含下级）范围内' : '全部门店';
   try {
     await ElMessageBox.confirm(
-      `确认为${scope}${period} 月所有「未发起」合同批量创建结佣申请单？`,
+      `确认为${scope}${period} 月所有「未发起」合同批量创建结佣明细？`,
       '批量发起结佣', { type: 'info' },
     );
   } catch {

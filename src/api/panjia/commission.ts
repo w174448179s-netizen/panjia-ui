@@ -37,7 +37,7 @@ export interface CommissionAdjustCreateDTO {
   reason: string;
 }
 
-// ==================== 结佣申请单 ====================
+// ==================== 结佣明细 ====================
 
 export interface CommissionApplication {
   id: number;
@@ -94,7 +94,7 @@ export interface CommissionApplyCreateDTO {
   deptId?: number;       // 仅批量发起使用
 }
 
-// 结佣申请「合同」维度行
+// 结佣明细「合同」维度行
 export interface CommissionContractVO {
   applicationId?: number;   // 未发起（NONE）时为空
   applyNo?: string;
@@ -112,6 +112,7 @@ export interface CommissionContractVO {
   period: string;
   deptId?: number;
   status: string;           // NONE / DRAFT / SUBMITTED / LOCKED / REJECTED / CANCELLED
+  receivedStatus?: string;   // 实收审批状态 APPROVED / SUBMITTED / DRAFT / null
   applicantId?: number;
   createTime?: string;
 }
@@ -123,7 +124,7 @@ export interface CommissionBatchResult {
 }
 
 export const commissionApi = {
-  // 结佣申请单
+  // 结佣明细
   listApplications: (params: CommissionApplyQuery) =>
     panjiaRequest.get<PageResult<CommissionApplication>>('/commission/apply/list', params),
   listContracts: (params: CommissionApplyQuery) =>
