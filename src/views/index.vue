@@ -28,7 +28,11 @@
 
       <el-table v-loading="loading" border :data="taskList" stripe>
         <el-table-column type="index" label="序号" width="60" align="center" />
-        <el-table-column prop="businessTitle" label="业务标题" min-width="220" show-overflow-tooltip />
+        <el-table-column label="业务标题" min-width="260" show-overflow-tooltip>
+          <template #default="scope">
+            {{ scope.row.businessTitle || `${scope.row.flowName || '业务单据'}（业务ID ${scope.row.businessId}）` }}
+          </template>
+        </el-table-column>
         <el-table-column prop="flowName" label="流程名称" width="140" align="center" show-overflow-tooltip />
         <el-table-column prop="nodeName" label="当前节点" width="120" align="center" />
         <el-table-column prop="createByName" label="申请人" width="110" align="center" />

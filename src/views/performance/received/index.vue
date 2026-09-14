@@ -1,6 +1,24 @@
 <template>
   <div class="received-apply-page">
     <el-card class="page-card" v-loading="loading">
+      <!-- 审批态提示条：由「我的待办」点【去处理】跳转而来 -->
+      <el-alert
+        v-if="flowType === 'approval'"
+        class="flow-banner"
+        type="warning"
+        :closable="false"
+        show-icon
+      >
+        <template #title>
+          正在审批：<b>{{ detailApp?.applyNo || '—' }}</b>
+          <span class="flow-banner-sep">|</span>
+          {{ detailApp?.contractNo || detailApp?.orderNo || '—' }}
+          <span v-if="detailApp?.propertyAddress"> · {{ detailApp.propertyAddress }}</span>
+          <span v-if="detailApp?.period"> · {{ detailApp.period }}</span>
+          <span class="flow-banner-amount">实收 ¥{{ formatAmount(detailApp?.receivedAmount) }}</span>
+        </template>
+      </el-alert>
+
       <!-- 筛选条件 -->
       <el-form class="filter-form" :inline="true" :model="queryParams" @submit.prevent>
         <el-form-item label="期间">
@@ -146,11 +164,17 @@
         <el-descriptions-item label="合同号">{{ detailApp.contractNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="订单号">{{ detailApp.orderNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="当前节点">{{ detailApp.currentNode ? nodeLabel(detailApp.currentNode) : '—' }}</el-descriptions-item>
+        <el-descriptions-item label="发起人">
+          {{ detailApp.applicantId ? applicantName(detailApp.applicantId) : '系统自动' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="审批人">
+          {{ detailApp.approverId ? applicantName(detailApp.approverId) : '—' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="审批时间">{{ formatDateTime(detailApp.approveTime) }}</el-descriptions-item>
         <el-descriptions-item label="实收合计">
           <span class="amount amount-red">¥{{ formatAmount(detailApp.receivedAmount) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="应收合计">¥{{ formatAmount(detailApp.expectedAmount) }}</el-descriptions-item>
-        <el-descriptions-item label="明细数">{{ detailApp.itemCount }}</el-descriptions-item>
+        <el-descriptions-item label="应收合计" :span="2">¥{{ formatAmount(detailApp.expectedAmount) }}</el-descriptions-item>
         <el-descriptions-item label="房源地址" :span="3">{{ detailApp.propertyAddress || '—' }}</el-descriptions-item>
       </el-descriptions>
 
@@ -173,9 +197,17 @@
       </div>
 
       <template #footer>
-        <el-button v-if="detailApp?.status === 'SUBMITTED'" type="success" @click="approve(detailApp); showDetail = false">审批通过</el-button>
-        <el-button v-if="detailApp?.status === 'SUBMITTED'" type="danger" @click="reject(detailApp); showDetail = false">驳回</el-button>
-        <el-button @click="showDetail = false">关闭</el-button>
+        <!-- 审批态：办理待办任务（不再走业务接口，避免越权与状态错位） -->
+        <template v-if="flowType === 'approval'">
+          <el-button type="success" :loading="taskOperating" @click="handleFlowPass">通 过</el-button>
+          <el-button type="danger" :loading="taskOperating" @click="handleFlowReject">驳 回</el-button>
+          <el-button @click="showDetail = false">取 消</el-button>
+        </template>
+        <template v-else>
+          <el-button v-if="detailApp?.status === 'SUBMITTED'" type="success" @click="approve(detailApp); showDetail = false">审批通过</el-button>
+          <el-button v-if="detailApp?.status === 'SUBMITTED'" type="danger" @click="reject(detailApp); showDetail = false">驳回</el-button>
+          <el-button @click="showDetail = false">关闭</el-button>
+        </template>
       </template>
     </el-dialog>
 
@@ -199,9 +231,18 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { receivedApi, type ReceivedApply, type ReceivedFact } from '@/api/panjia/received';
 import { employeeApi } from '@/api/panjia/employee';
+import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
+
+const route = useRoute();
+const { taskOperating, passTask, rejectTask } = useWorkflowTask();
+
+// 工作流跳转参数（由「我的待办」点【去处理】带入）
+const flowType = ref<string>(''); // view | approval
+const flowTaskId = ref<string>('');
 
 const loading = ref(false);
 const applyList = ref<ReceivedApply[]>([]);
@@ -228,6 +269,11 @@ const num = (v: number | string | null | undefined): number => {
 };
 const formatAmount = (n: number | string | null | undefined) =>
   n == null ? '0.00' : num(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const formatDateTime = (val?: string | null): string => {
+  if (!val) return '—';
+  return val.replace('T', ' ').substring(0, 19);
+};
 
 const summaryAmount = computed(() => applyList.value.reduce((s, r) => s + num(r.receivedAmount), 0));
 
@@ -402,9 +448,58 @@ const handleBatchApproveUpload = async (options: any) => {
   } catch { /* 拦截器处理 */ }
 };
 
+// 工作流：通过（办理待办任务，完成后由监听器回写单据状态）
+const handleFlowPass = async () => {
+  const ok = await passTask(flowTaskId.value);
+  if (ok) {
+    showDetail.value = false;
+    getList();
+  }
+};
+
+// 工作流：驳回
+const handleFlowReject = async () => {
+  const ok = await rejectTask(flowTaskId.value);
+  if (ok) {
+    showDetail.value = false;
+    getList();
+  }
+};
+
+// 工作流跳转：从「我的待办」点【去处理】进入，按 query 参数直接打开待审单据
+const openFromWorkflow = async () => {
+  const id = route.query.id as string;
+  const type = route.query.type as string;
+  const taskId = route.query.taskId as string;
+  if (!id || !type) return;
+  flowType.value = type;
+  flowTaskId.value = taskId || '';
+  await loadEmployeeMap();
+  try {
+    const res: any = await receivedApi.getDetail(id);
+    const apply: ReceivedApply | null = res.data?.apply ?? null;
+    if (!apply) {
+      ElMessage.error('加载单据失败');
+      return;
+    }
+    detailApp.value = apply;
+    detailFacts.value = res.data?.facts ?? [];
+    // 背景列表对齐到该单据期间，便于审批人顺带看到同期间其他单据
+    if (apply.period) {
+      queryParams.period = apply.period;
+      queryParams.pageNum = 1;
+      getList();
+    }
+    showDetail.value = true;
+  } catch {
+    ElMessage.error('加载单据失败');
+  }
+};
+
 onMounted(() => {
   loadEmployeeMap();
   getList();
+  openFromWorkflow();
 });
 </script>
 
@@ -419,6 +514,26 @@ onMounted(() => {
 
 .filter-form {
   margin-bottom: 4px;
+}
+
+.flow-banner {
+  margin-bottom: 12px;
+
+  b {
+    font-weight: 600;
+  }
+
+  .flow-banner-sep {
+    margin: 0 4px;
+    color: var(--el-text-color-placeholder);
+  }
+
+  .flow-banner-amount {
+    margin-left: 8px;
+    color: #f56c6c;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 .summary-bar {
