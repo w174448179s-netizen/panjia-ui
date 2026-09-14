@@ -68,8 +68,10 @@
           </span>
         </div>
         <div class="summary-right">
-          <el-button type="warning" plain icon="EditPen" @click="openManualSubmit">手工提交</el-button>
+          <el-button v-if="checkPermi(['perf:received:submit'])" type="warning" plain icon="EditPen" @click="openManualSubmit">手工提交</el-button>
+          <!-- 批量审批入口按权限码收口（能否批哪张单仍由引擎按节点判权） -->
           <el-upload
+            v-if="checkPermi(['perf:received:batch'])"
             :show-file-list="false"
             :auto-upload="true"
             :http-request="handleBatchApproveUpload"
@@ -262,6 +264,7 @@ import { receivedApi, type ReceivedApply, type ReceivedFact } from '@/api/panjia
 import { employeeApi } from '@/api/panjia/employee';
 import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
+import { checkPermi } from '@/utils/permission';
 
 const route = useRoute();
 const { taskOperating, passTask, rejectTask } = useWorkflowTask();

@@ -60,10 +60,11 @@
         </div>
         <div class="summary-right">
           <span class="summary-amount">结佣合计：<b>{{ formatAmount(summary.totalAmount) }}</b></span>
-          <el-button type="primary" icon="Plus" :loading="batchCreating" @click="openBatchCreate">
+          <el-button v-if="checkPermi(['commission:apply:add'])" type="primary" icon="Plus" :loading="batchCreating" @click="openBatchCreate">
             批量发起{{ queryParams.period ? `（${queryParams.period}）` : '' }}
           </el-button>
           <el-upload
+            v-if="checkPermi(['commission:apply:batch'])"
             :show-file-list="false"
             :auto-upload="true"
             :http-request="handleBatchInitiateUpload"
@@ -71,7 +72,9 @@
           >
             <el-button type="primary" plain icon="Upload">Excel批量发起</el-button>
           </el-upload>
+          <!-- 批量审批入口按权限码收口（能否批哪张单仍由引擎按节点判权） -->
           <el-upload
+            v-if="checkPermi(['commission:apply:batch'])"
             :show-file-list="false"
             :auto-upload="true"
             :http-request="handleBatchApproveUpload"
@@ -238,6 +241,7 @@ import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
 import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
+import { checkPermi } from '@/utils/permission';
 
 const route = useRoute();
 const { taskOperating, passTask, rejectTask } = useWorkflowTask();
