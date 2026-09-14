@@ -50,6 +50,9 @@ export interface CommissionApplication {
   deptId?: number;     // 跨门店合作单为空
   itemCount: number;
   totalAmount: number;
+  expectedAmount?: number;   // 应收合计（§3.4/3.5）
+  aligned?: boolean;         // 是否已实收对齐应收
+  currentNode?: string;      // DIRECTOR / FINANCE
   status: string;        // DRAFT / SUBMITTED / APPROVED / LOCKED / REJECTED / CANCELLED
   approvedMonth?: string;
   processInstanceId?: string;
@@ -101,6 +104,9 @@ export interface CommissionContractVO {
   propertyAddress?: string;
   businessDate?: string;
   amount: number;
+  expectedAmount?: number;   // 应收合计
+  aligned?: boolean;
+  currentNode?: string;      // DIRECTOR / FINANCE
   employeeCount: number;
   detailCount: number;
   period: string;
@@ -108,6 +114,12 @@ export interface CommissionContractVO {
   status: string;           // NONE / DRAFT / SUBMITTED / LOCKED / REJECTED / CANCELLED
   applicantId?: number;
   createTime?: string;
+}
+
+/** Excel 批量操作结果 */
+export interface CommissionBatchResult {
+  successCount: number;
+  failedRows: Array<{ contractNo: string; amount: string; reason: string }>;
 }
 
 export const commissionApi = {
@@ -124,10 +136,28 @@ export const commissionApi = {
     panjiaRequest.post<number>('/commission/apply/batch', data),
   submitApplication: (id: number) =>
     panjiaRequest.post<void>(`/commission/apply/${id}/submit`),
-  approveApplication: (id: number, approve: boolean) =>
-    panjiaRequest.post<void>(`/commission/apply/${id}/callback`, { approve }),
+  /** 单个审批通过（按当前节点：总监/财务，§3.3） */
+  approveApplication: (id: number) =>
+    panjiaRequest.post<void>(`/commission/apply/${id}/approve`),
+  /** 单个驳回 */
+  rejectApplication: (id: number, message?: string) =>
+    panjiaRequest.post<void>(`/commission/apply/${id}/reject`, { approve: false, message }),
   cancelApplication: (id: number) =>
     panjiaRequest.post<void>(`/commission/apply/${id}/cancel`),
+  /** Excel 批量发起（§3.2，按合同号自动发起+提交） */
+  batchInitiate: (file: File, period: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return panjiaRequest.post<CommissionBatchResult>(
+      `/commission/apply/batch-initiate?period=${encodeURIComponent(period)}`, formData);
+  },
+  /** Excel 批量审批（§3.3，匹配合同号+金额） */
+  batchApprove: (file: File, period: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return panjiaRequest.post<CommissionBatchResult>(
+      `/commission/apply/batch-approve?period=${encodeURIComponent(period)}`, formData);
+  },
 
   // 结佣调整
   listAdjusts: (params: CommissionAdjustQuery) =>

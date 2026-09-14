@@ -63,6 +63,22 @@
           <el-button type="primary" icon="Plus" :loading="batchCreating" @click="openBatchCreate">
             批量发起{{ queryParams.period ? `（${queryParams.period}）` : '' }}
           </el-button>
+          <el-upload
+            :show-file-list="false"
+            :auto-upload="true"
+            :http-request="handleBatchInitiateUpload"
+            accept=".xlsx,.xls"
+          >
+            <el-button type="primary" plain icon="Upload">Excel批量发起</el-button>
+          </el-upload>
+          <el-upload
+            :show-file-list="false"
+            :auto-upload="true"
+            :http-request="handleBatchApproveUpload"
+            accept=".xlsx,.xls"
+          >
+            <el-button type="success" plain icon="DocumentChecked">Excel批量审批</el-button>
+          </el-upload>
         </div>
       </div>
 
@@ -76,9 +92,22 @@
             <span v-else class="contract-text">{{ contractOrOrderNo(row) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="结佣金额" align="right" width="120" fixed="left">
+        <el-table-column label="实收(结佣)" align="right" width="120" fixed="left">
           <template #default="{ row }">
             <span class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="应收" align="right" width="120">
+          <template #default="{ row }">
+            <span class="amount">¥{{ formatAmount(row.expectedAmount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="差异/节点" align="center" width="110">
+          <template #default="{ row }">
+            <el-tag v-if="row.aligned" type="success" size="small">已对齐</el-tag>
+            <el-tag v-else-if="hasDiff(row)" type="danger" size="small">有差异</el-tag>
+            <el-tag v-else-if="row.currentNode" type="warning" size="small">{{ nodeLabel(row.currentNode) }}</el-tag>
+            <span v-else>—</span>
           </template>
         </el-table-column>
         <el-table-column label="类型" align="center" width="100">
@@ -160,9 +189,12 @@
         <el-descriptions-item label="房源地址" :span="3">{{ detailApp.propertyAddress || '—' }}</el-descriptions-item>
         <el-descriptions-item label="归属门店">{{ detailApp.deptId ? deptName(detailApp.deptId) : '跨门店合作' }}</el-descriptions-item>
         <el-descriptions-item label="明细数">{{ detailApp.itemCount }}</el-descriptions-item>
-        <el-descriptions-item label="合计金额">
+        <el-descriptions-item label="实收合计">
           <span class="amount amount-red">¥{{ formatAmount(detailApp.totalAmount) }}</span>
         </el-descriptions-item>
+        <el-descriptions-item label="应收合计">¥{{ formatAmount(detailApp.expectedAmount) }}</el-descriptions-item>
+        <el-descriptions-item label="当前节点">{{ detailApp.currentNode ? nodeLabel(detailApp.currentNode) : '—' }}</el-descriptions-item>
+        <el-descriptions-item label="实收对齐应收">{{ detailApp.aligned ? '已对齐' : '未对齐' }}</el-descriptions-item>
         <el-descriptions-item label="发起人">{{ detailApp.applicantId === 0 ? '系统自动' : (applicantName(detailApp.applicantId) || '—') }}</el-descriptions-item>
         <el-descriptions-item label="审批通过月">{{ detailApp.approvedMonth || '—' }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ detailApp.createTime }}</el-descriptions-item>
@@ -441,7 +473,15 @@ const submit = async (row: CommissionContractVO) => {
   } catch { /* 拦截器处理 */ }
 };
 
-// 审批
+// 审批节点中文名
+const nodeLabel = (node?: string) => node === 'DIRECTOR' ? '总监审批' : node === 'FINANCE' ? '财务审批' : (node || '—');
+
+// 是否有差异（实收 vs 应收，均有值时比较）
+const hasDiff = (row: CommissionContractVO) =>
+  row.expectedAmount !== undefined && row.expectedAmount !== null
+  && num(row.amount) !== num(row.expectedAmount);
+
+// 审批（通过：按当前节点办理，总监节点有差异会自动对齐并转财务）
 const approve = async (row: CommissionContractVO, pass: boolean) => {
   const action = pass ? '通过' : '驳回';
   try {
@@ -450,8 +490,50 @@ const approve = async (row: CommissionContractVO, pass: boolean) => {
     return;
   }
   try {
-    await commissionApi.approveApplication(row.applicationId, pass);
+    if (pass) {
+      await commissionApi.approveApplication(row.applicationId!);
+    } else {
+      await commissionApi.rejectApplication(row.applicationId!);
+    }
     ElMessage.success(`已${action}`);
+    getList();
+  } catch { /* 拦截器处理 */ }
+};
+
+// Excel 批量发起上传
+const handleBatchInitiateUpload = async (options: any) => {
+  const period = queryParams.period || currentPeriod();
+  try {
+    const res: any = await commissionApi.batchInitiate(options.file as File, period);
+    const r = res?.data;
+    if (r && r.failedRows?.length) {
+      ElMessageBox.alert(
+        `成功 ${r.successCount} 条，失败 ${r.failedRows.length} 条：\n`
+        + r.failedRows.slice(0, 20).map((f: any) => `· ${f.contractNo}：${f.reason}`).join('\n'),
+        '批量发起结果', { confirmButtonText: '知道了' },
+      );
+    } else {
+      ElMessage.success(`批量发起完成，成功 ${r?.successCount ?? 0} 条`);
+    }
+    getList();
+  } catch { /* 拦截器处理 */ }
+};
+
+// Excel 批量审批上传
+const handleBatchApproveUpload = async (options: any) => {
+  const period = queryParams.period || currentPeriod();
+  try {
+    const res: any = await commissionApi.batchApprove(options.file as File, period);
+    const r = res?.data;
+    if (r && r.failedRows?.length) {
+      ElMessageBox.alert(
+        `成功 ${r.successCount} 条，失败 ${r.failedRows.length} 条：\n`
+        + r.failedRows.slice(0, 20).map((f: any) => `· ${f.contractNo}：${f.reason}`).join('\n'),
+        '批量审批结果', { confirmButtonText: '知道了' },
+      );
+    } else {
+      ElMessage.success(`批量审批完成，成功 ${r?.successCount ?? 0} 条`);
+    }
     getList();
   } catch { /* 拦截器处理 */ }
 };
