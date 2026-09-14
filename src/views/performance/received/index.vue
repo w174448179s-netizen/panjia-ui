@@ -1,24 +1,6 @@
 <template>
   <div class="received-apply-page">
     <el-card class="page-card" v-loading="loading">
-      <!-- 审批态提示条：由「我的待办」点【去处理】跳转而来 -->
-      <el-alert
-        v-if="flowType === 'approval'"
-        class="flow-banner"
-        type="warning"
-        :closable="false"
-        show-icon
-      >
-        <template #title>
-          正在审批：<b>{{ detailApp?.applyNo || '—' }}</b>
-          <span class="flow-banner-sep">|</span>
-          {{ detailApp?.contractNo || detailApp?.orderNo || '—' }}
-          <span v-if="detailApp?.propertyAddress"> · {{ detailApp.propertyAddress }}</span>
-          <span v-if="detailApp?.period"> · {{ detailApp.period }}</span>
-          <span class="flow-banner-amount">实收 ¥{{ formatAmount(detailApp?.receivedAmount) }}</span>
-        </template>
-      </el-alert>
-
       <!-- 筛选条件 -->
       <el-form class="filter-form" :inline="true" :model="queryParams" @submit.prevent>
         <el-form-item label="期间">
@@ -129,9 +111,6 @@
           <template #default="{ row }">
             <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
             <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重新提交</el-button>
-            <!-- 审批只走工作流：仅「我的待办 → 去处理」进入的审批态才显示通过/驳回 -->
-            <el-button v-if="flowType === 'approval' && row.status === 'SUBMITTED'" link type="success" @click="approve(row)">通过</el-button>
-            <el-button v-if="flowType === 'approval' && row.status === 'SUBMITTED'" link type="danger" @click="reject(row)">驳回</el-button>
             <el-button v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'" link type="info" @click="cancel(row)">作废</el-button>
           </template>
         </el-table-column>
@@ -224,17 +203,8 @@
       </div>
 
       <template #footer>
-        <!-- 审批态：办理待办任务（不再走业务接口，避免越权与状态错位） -->
-        <template v-if="flowType === 'approval'">
-          <el-button type="success" :loading="taskOperating" @click="handleFlowPass">通 过</el-button>
-          <el-button type="danger" :loading="taskOperating" @click="handleFlowReject">驳 回</el-button>
-          <el-button @click="showDetail = false">取 消</el-button>
-        </template>
-        <template v-else>
-          <!-- 非审批态不再提供「业务直批」入口：审批统一由工作流驱动，
-               避免财务等角色绕过节点办理人校验审批他人节点的单据 -->
-          <el-button @click="showDetail = false">关闭</el-button>
-        </template>
+        <!-- 审批统一由「我的待办」弹窗办理（工作流任务接口），本页只提供查看；不提供业务直批入口 -->
+        <el-button @click="showDetail = false">关闭</el-button>
       </template>
     </el-dialog>
 
@@ -262,16 +232,10 @@ import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { receivedApi, type ReceivedApply, type ReceivedFact } from '@/api/panjia/received';
 import { employeeApi } from '@/api/panjia/employee';
-import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { checkPermi } from '@/utils/permission';
 
 const route = useRoute();
-const { taskOperating, passTask, rejectTask } = useWorkflowTask();
-
-// 工作流跳转参数（由「我的待办」点【去处理】带入）
-const flowType = ref<string>(''); // view | approval
-const flowTaskId = ref<string>('');
 
 const loading = ref(false);
 const applyList = ref<ReceivedApply[]>([]);
@@ -416,33 +380,6 @@ const viewDetail = async (row: ReceivedApply) => {
   } catch { /* 拦截器处理 */ }
 };
 
-const approve = async (row: ReceivedApply) => {
-  try {
-    await ElMessageBox.confirm(`确认通过实收审批单「${row.applyNo}」？`, '审批通过', { type: 'success' });
-  } catch {
-    return;
-  }
-  try {
-    await receivedApi.approve(row.id);
-    ElMessage.success('已通过');
-    getList();
-  } catch { /* 拦截器处理 */ }
-};
-
-const reject = async (row: ReceivedApply) => {
-  try {
-    const { value } = await ElMessageBox.prompt('请输入驳回原因', '驳回', {
-      confirmButtonText: '确认驳回',
-      cancelButtonText: '取消',
-      inputType: 'textarea',
-      inputValidator: (v: string) => !!(v && v.trim()) || '驳回原因为必填项',
-    });
-    await receivedApi.reject(row.id, value);
-    ElMessage.success('已驳回');
-    getList();
-  } catch { /* 取消或错误 */ }
-};
-
 const cancel = async (row: ReceivedApply) => {
   try {
     await ElMessageBox.confirm(`确认作废实收审批单「${row.applyNo}」？作废后不可恢复。`, '提示', { type: 'warning' });
@@ -508,32 +445,12 @@ const handleBatchApproveUpload = async (options: any) => {
   } catch { /* 拦截器处理 */ }
 };
 
-// 工作流：通过（办理待办任务，完成后由监听器回写单据状态）
-const handleFlowPass = async () => {
-  const ok = await passTask(flowTaskId.value);
-  if (ok) {
-    showDetail.value = false;
-    getList();
-  }
-};
-
-// 工作流：驳回
-const handleFlowReject = async () => {
-  const ok = await rejectTask(flowTaskId.value);
-  if (ok) {
-    showDetail.value = false;
-    getList();
-  }
-};
-
-// 工作流跳转：从「我的待办」点【去处理】进入，按 query 参数直接打开待审单据
+// 工作流跳转：从「我的已办/我的单据」等查看态进入本页时，按 query 参数直接打开单据详情
+// （审批办理已改为「我的待办」原地弹窗，本页不再承担审批态入口）
 const openFromWorkflow = async () => {
   const id = route.query.id as string;
   const type = route.query.type as string;
-  const taskId = route.query.taskId as string;
   if (!id || !type) return;
-  flowType.value = type;
-  flowTaskId.value = taskId || '';
   await loadEmployeeMap();
   try {
     const res: any = await receivedApi.getDetail(id);
@@ -544,7 +461,7 @@ const openFromWorkflow = async () => {
     }
     detailApp.value = apply;
     detailFacts.value = res.data?.facts ?? [];
-    // 背景列表对齐到该单据期间，便于审批人顺带看到同期间其他单据
+    // 背景列表对齐到该单据期间，便于查看人顺带看到同期间其他单据
     if (apply.period) {
       queryParams.period = apply.period;
       queryParams.pageNum = 1;
@@ -576,26 +493,6 @@ onMounted(() => {
 
 .filter-form {
   margin-bottom: 4px;
-}
-
-.flow-banner {
-  margin-bottom: 12px;
-
-  b {
-    font-weight: 600;
-  }
-
-  .flow-banner-sep {
-    margin: 0 4px;
-    color: var(--el-text-color-placeholder);
-  }
-
-  .flow-banner-amount {
-    margin-left: 8px;
-    color: #f56c6c;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-  }
 }
 
 .summary-bar {

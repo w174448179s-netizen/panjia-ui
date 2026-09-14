@@ -303,11 +303,7 @@
       </template>
 
       <template #footer>
-        <el-button @click="formDialog.visible = false">{{ flowType === 'approval' ? '取消' : '关 闭' }}</el-button>
-        <template v-if="flowType === 'approval'">
-          <el-button type="success" :loading="taskOperating" @click="handleFlowPass">通过</el-button>
-          <el-button type="danger" :loading="taskOperating" @click="handleFlowReject">驳回</el-button>
-        </template>
+        <el-button @click="formDialog.visible = false">关 闭</el-button>
         <el-button
           v-if="formDialog.mode === 'create'"
           type="primary"
@@ -328,13 +324,9 @@ import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode, Employee } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
 import { useRoute } from 'vue-router';
-import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
 const route = useRoute();
-const { taskOperating, passTask, rejectTask } = useWorkflowTask();
-const flowType = ref<string>('');
-const flowTaskId = ref<string>('');
 
 // ==================== 枚举 ====================
 const adjustTypeMap: Record<string, string> = {
@@ -648,32 +640,11 @@ const handleSubmit = async () => {
   }
 };
 
-// 工作流：通过
-const handleFlowPass = async () => {
-  const ok = await passTask(flowTaskId.value);
-  if (ok) {
-    formDialog.visible = false;
-    getList();
-  }
-};
-
-// 工作流：驳回
-const handleFlowReject = async () => {
-  const ok = await rejectTask(flowTaskId.value);
-  if (ok) {
-    formDialog.visible = false;
-    getList();
-  }
-};
-
-// 工作流跳转
+// 工作流跳转：查看态打开详情（审批办理已改为「我的待办」原地弹窗）
 const openFromWorkflow = async () => {
   const id = route.query.id as string;
   const type = route.query.type as string;
-  const taskId = route.query.taskId as string;
   if (!id || !type) return;
-  flowType.value = type;
-  flowTaskId.value = taskId || '';
   try {
     const res = await performanceApi.getAdjust(Number(id));
     const d = res.data;

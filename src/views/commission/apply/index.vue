@@ -141,9 +141,6 @@
             <el-button v-if="row.applicationId" link type="primary" @click="viewDetail(row)">详情</el-button>
             <el-button v-if="canOriginate(row)" link type="primary" @click="originate(row as CommissionContractVO)">发起</el-button>
             <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="submit(row)">提交</el-button>
-            <!-- 审批只走工作流：仅「我的待办 → 去处理」进入的审批态才显示通过/驳回 -->
-            <el-button v-if="flowType === 'approval' && row.status === 'SUBMITTED'" link type="success" @click="approve(row, true)">通过</el-button>
-            <el-button v-if="flowType === 'approval' && row.status === 'SUBMITTED'" link type="danger" @click="approve(row, false)">驳回</el-button>
             <el-button v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'" link type="info" @click="cancel(row)">作废</el-button>
           </template>
         </el-table-column>
@@ -222,11 +219,8 @@
       </div>
 
       <template #footer>
-        <template v-if="flowType === 'approval'">
-          <el-button type="success" :loading="taskOperating" @click="handleFlowPass">通过</el-button>
-          <el-button type="danger" :loading="taskOperating" @click="handleFlowReject">驳回</el-button>
-        </template>
-        <el-button @click="showDetail = false">{{ flowType === 'approval' ? '取消' : '关闭' }}</el-button>
+        <!-- 审批统一由「我的待办」弹窗办理（工作流任务接口），本页只提供查看；不提供业务直批入口 -->
+        <el-button @click="showDetail = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>
@@ -239,16 +233,10 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { commissionApi, type CommissionApplication, type CommissionContractVO, type CommissionItem } from '@/api/panjia/commission';
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
-import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { checkPermi } from '@/utils/permission';
 
 const route = useRoute();
-const { taskOperating, passTask, rejectTask } = useWorkflowTask();
-
-// 工作流跳转参数
-const flowType = ref<string>(''); // view | approval
-const flowTaskId = ref<string>('');
 
 const loading = ref(false);
 const contractList = ref<CommissionContractVO[]>([]);
@@ -475,25 +463,6 @@ const hasDiff = (row: CommissionContractVO) =>
   row.expectedAmount !== undefined && row.expectedAmount !== null
   && num(row.amount) !== num(row.expectedAmount);
 
-// 审批（通过：按当前节点办理，总监节点有差异会自动对齐并转财务）
-const approve = async (row: CommissionContractVO, pass: boolean) => {
-  const action = pass ? '通过' : '驳回';
-  try {
-    await ElMessageBox.confirm(`确认${action}申请单「${row.applyNo}」？${pass ? '通过后结佣明细将锁定并进入工资计算。' : ''}`, '提示', { type: pass ? 'success' : 'warning' });
-  } catch {
-    return;
-  }
-  try {
-    if (pass) {
-      await commissionApi.approveApplication(row.applicationId!);
-    } else {
-      await commissionApi.rejectApplication(row.applicationId!);
-    }
-    ElMessage.success(`已${action}`);
-    getList();
-  } catch { /* 拦截器处理 */ }
-};
-
 // Excel 批量发起上传
 const handleBatchInitiateUpload = async (options: any) => {
   const period = queryParams.period || currentPeriod();
@@ -564,32 +533,11 @@ const viewDetail = async (row: CommissionContractVO) => {
   } catch { /* 错误已提示 */ }
 };
 
-// 工作流：通过
-const handleFlowPass = async () => {
-  const ok = await passTask(flowTaskId.value);
-  if (ok) {
-    showDetail.value = false;
-    getList();
-  }
-};
-
-// 工作流：驳回
-const handleFlowReject = async () => {
-  const ok = await rejectTask(flowTaskId.value);
-  if (ok) {
-    showDetail.value = false;
-    getList();
-  }
-};
-
-// 工作流跳转：根据 query 参数打开详情
+// 工作流跳转：根据 query 参数打开详情（查看态；审批办理已改为「我的待办」原地弹窗）
 const openFromWorkflow = async () => {
   const id = route.query.id as string;
   const type = route.query.type as string;
-  const taskId = route.query.taskId as string;
   if (!id || !type) return;
-  flowType.value = type;
-  flowTaskId.value = taskId || '';
   await loadEmployeeMap();
   try {
     const res: any = await commissionApi.getApplication(Number(id));

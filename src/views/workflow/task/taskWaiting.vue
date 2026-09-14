@@ -106,6 +106,8 @@
       :data="selectUserIds"
       @confirm-call-back="userSelectCallBack"
     ></UserSelect>
+    <!-- 原地弹窗办理：不跳转业务页，详情 + 通过/驳回都在当前页完成 -->
+    <WorkflowHandleDialog ref="workflowHandleRef" @handled="getWaitingList" />
   </div>
 </template>
 
@@ -114,9 +116,8 @@ import { ref } from 'vue';
 import { UserVO } from '@/api/system/user/types';
 import { pageByTaskWait } from '@/api/workflow/task';
 import { TaskQuery, FlowTaskVO } from '@/api/workflow/task/types';
-import workflowCommon from '@/api/workflow/workflowCommon';
-import { RouterJumpVo } from '@/api/workflow/workflowCommon/types';
 import UserSelect from '@/components/UserSelect/index.vue';
+import WorkflowHandleDialog from '@/components/WorkflowHandle/index.vue';
 import { useLoading } from '@/hooks/async/useLoading';
 import { useSearchReset } from '@/hooks/form/useSearchReset';
 import { useSearchToggle } from '@/hooks/form/useSearchToggle';
@@ -230,16 +231,10 @@ const getWaitingList = () => {
     total.value = resp.data?.total;
   });
 };
-//办理
-const handleOpen = async (row: Partial<FlowTaskVO>) => {
-  const routerJumpVo = reactive<RouterJumpVo>({
-    businessId: row.businessId,
-    taskId: row.id,
-    type: 'approval',
-    formCustom: row.formCustom,
-    formPath: row.formPath
-  });
-  workflowCommon.routerJump(routerJumpVo);
+//办理：原地弹出详情弹窗（通过/驳回走工作流任务接口，节点鉴权由引擎负责）
+const workflowHandleRef = ref<InstanceType<typeof WorkflowHandleDialog>>();
+const handleOpen = (row: Partial<FlowTaskVO>) => {
+  workflowHandleRef.value?.open(row);
 };
 //打开申请人选择
 const openUserSelect = () => {

@@ -68,13 +68,7 @@
       <template #header>
         <div class="flex items-center justify-between">
           <span>工资明细 — {{ currentBatch.period }}（{{ statusLabel(currentBatch.status) }}）</span>
-          <div class="flex items-center gap-2">
-            <template v-if="flowType === 'approval'">
-              <el-button type="success" size="small" :loading="taskOperating" @click="handleFlowPass">通过</el-button>
-              <el-button type="danger" size="small" :loading="taskOperating" @click="handleFlowReject">驳回</el-button>
-            </template>
-            <el-button text @click="closeDetail">关闭</el-button>
-          </div>
+          <el-button text @click="closeDetail">关闭</el-button>
         </div>
       </template>
       <el-table :data="details" stripe border max-height="600" :summary-method="summaryMethod" show-summary>
@@ -165,13 +159,9 @@ import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { payrollApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
 import { checkPermi } from '@/utils/permission';
-import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
 const route = useRoute();
-const { taskOperating, passTask, rejectTask } = useWorkflowTask();
-const flowType = ref<string>('');
-const flowTaskId = ref<string>('');
 
 const batches = ref<PayrollBatch[]>([]);
 const details = ref<PayrollDetail[]>([]);
@@ -250,32 +240,11 @@ const closeDetail = () => {
   details.value = [];
 };
 
-// 工作流：通过
-const handleFlowPass = async () => {
-  const ok = await passTask(flowTaskId.value);
-  if (ok) {
-    closeDetail();
-    loadBatches();
-  }
-};
-
-// 工作流：驳回
-const handleFlowReject = async () => {
-  const ok = await rejectTask(flowTaskId.value);
-  if (ok) {
-    closeDetail();
-    loadBatches();
-  }
-};
-
-// 工作流跳转
+// 工作流跳转：查看态加载批次与明细（审批办理已改为「我的待办」原地弹窗）
 const openFromWorkflow = async () => {
   const id = route.query.id as string;
   const type = route.query.type as string;
-  const taskId = route.query.taskId as string;
   if (!id || !type) return;
-  flowType.value = type;
-  flowTaskId.value = taskId || '';
   try {
     const res: any = await payrollApi.getBatch(Number(id));
     currentBatch.value = res.data;
