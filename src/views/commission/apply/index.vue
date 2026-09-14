@@ -138,8 +138,9 @@
             <el-button v-if="row.applicationId" link type="primary" @click="viewDetail(row)">详情</el-button>
             <el-button v-if="canOriginate(row)" link type="primary" @click="originate(row as CommissionContractVO)">发起</el-button>
             <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="submit(row)">提交</el-button>
-            <el-button v-if="row.status === 'SUBMITTED'" link type="success" @click="approve(row, true)">通过</el-button>
-            <el-button v-if="row.status === 'SUBMITTED'" link type="danger" @click="approve(row, false)">驳回</el-button>
+            <!-- 审批只走工作流：仅「我的待办 → 去处理」进入的审批态才显示通过/驳回 -->
+            <el-button v-if="flowType === 'approval' && row.status === 'SUBMITTED'" link type="success" @click="approve(row, true)">通过</el-button>
+            <el-button v-if="flowType === 'approval' && row.status === 'SUBMITTED'" link type="danger" @click="approve(row, false)">驳回</el-button>
             <el-button v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'" link type="info" @click="cancel(row)">作废</el-button>
           </template>
         </el-table-column>

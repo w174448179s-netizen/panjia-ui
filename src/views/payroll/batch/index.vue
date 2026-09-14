@@ -44,10 +44,12 @@
             <el-tooltip v-if="row.status === 'CALCULATED'" content="提交" placement="top">
               <el-button link type="primary" icon="Upload" @click="doAction(row, 'submit')"></el-button>
             </el-tooltip>
-            <el-tooltip v-if="row.status === 'REVIEWING'" content="通过" placement="top">
+            <!-- 审批/驳回按权限码收口：payroll:batch:approve / :reject 仅授予总监，
+                 财务与店长不显示入口（后端 @SaCheckPermission 同步拦截越权调用） -->
+            <el-tooltip v-if="row.status === 'REVIEWING' && checkPermi(['payroll:batch:approve'])" content="通过" placement="top">
               <el-button link type="success" icon="CircleCheck" @click="doAction(row, 'approve')"></el-button>
             </el-tooltip>
-            <el-tooltip v-if="row.status === 'REVIEWING'" content="驳回" placement="top">
+            <el-tooltip v-if="row.status === 'REVIEWING' && checkPermi(['payroll:batch:reject'])" content="驳回" placement="top">
               <el-button link type="danger" icon="CircleClose" @click="doAction(row, 'reject')"></el-button>
             </el-tooltip>
             <el-tooltip v-if="row.status === 'APPROVED'" content="锁定" placement="top">
@@ -162,6 +164,7 @@ import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { payrollApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
+import { checkPermi } from '@/utils/permission';
 import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 

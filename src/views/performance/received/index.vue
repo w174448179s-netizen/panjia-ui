@@ -127,8 +127,9 @@
           <template #default="{ row }">
             <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
             <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重新提交</el-button>
-            <el-button v-if="row.status === 'SUBMITTED'" link type="success" @click="approve(row)">通过</el-button>
-            <el-button v-if="row.status === 'SUBMITTED'" link type="danger" @click="reject(row)">驳回</el-button>
+            <!-- 审批只走工作流：仅「我的待办 → 去处理」进入的审批态才显示通过/驳回 -->
+            <el-button v-if="flowType === 'approval' && row.status === 'SUBMITTED'" link type="success" @click="approve(row)">通过</el-button>
+            <el-button v-if="flowType === 'approval' && row.status === 'SUBMITTED'" link type="danger" @click="reject(row)">驳回</el-button>
             <el-button v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'" link type="info" @click="cancel(row)">作废</el-button>
           </template>
         </el-table-column>
@@ -228,8 +229,8 @@
           <el-button @click="showDetail = false">取 消</el-button>
         </template>
         <template v-else>
-          <el-button v-if="detailApp?.status === 'SUBMITTED'" type="success" @click="approve(detailApp); showDetail = false">审批通过</el-button>
-          <el-button v-if="detailApp?.status === 'SUBMITTED'" type="danger" @click="reject(detailApp); showDetail = false">驳回</el-button>
+          <!-- 非审批态不再提供「业务直批」入口：审批统一由工作流驱动，
+               避免财务等角色绕过节点办理人校验审批他人节点的单据 -->
           <el-button @click="showDetail = false">关闭</el-button>
         </template>
       </template>
