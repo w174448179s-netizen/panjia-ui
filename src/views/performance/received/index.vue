@@ -107,7 +107,7 @@
         <el-table-column label="发起人" align="center" width="100">
           <template #default="{ row }">{{ applicantName(row.applicantName, row.applicantId) }}</template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="200" fixed="right">
+        <el-table-column label="操作" align="center" width="220" fixed="right">
           <template #default="{ row }">
             <!-- ≤3 个按钮平铺；nowrap 保证不折行重叠，超过 3 个才收「更多」下拉 -->
             <div class="table-actions">

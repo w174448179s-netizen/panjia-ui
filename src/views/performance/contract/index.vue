@@ -143,6 +143,10 @@
         <el-form-item label="合同号">
           <span>{{ adjustDialog.contractNo }}</span>
         </el-form-item>
+        <el-form-item label="应收金额">
+          <!-- 当前合同应收合计（performance_amount 之和），调整金额将按各明细 performance_amount 占比分摊 -->
+          <span class="amount-red">¥{{ formatAmount(adjustDialog.amount) }}</span>
+        </el-form-item>
         <el-form-item label="调整类型">
           <el-select v-model="adjustForm.adjustType" style="width: 100%">
             <el-option label="金额调整" value="AMOUNT" />
@@ -283,6 +287,10 @@
         </el-form-item>
         <el-form-item label="员工">
           <span>{{ detailAdjustDialog.employeeName }}</span>
+        </el-form-item>
+        <el-form-item label="应收金额">
+          <!-- 当前明细的应收业绩（performance_amount），调后应收 = 应收金额 + 调整金额 -->
+          <span class="amount-red">¥{{ formatAmount(detailAdjustDialog.amount) }}</span>
         </el-form-item>
         <el-form-item label="调整类型">
           <el-select v-model="detailAdjustForm.adjustType" style="width: 100%">
@@ -450,6 +458,7 @@ const detailAdjustDialog = reactive({
   factId: '',
   employeeId: '',
   employeeName: '',
+  amount: 0,                // 当前明细的应收金额（PerformanceManageRow.amount = performance_amount）
 });
 const detailAdjustForm = reactive({
   adjustType: 'AMOUNT',
@@ -489,6 +498,7 @@ const openDetailAdjustDialog = (row: PerformanceManageRow) => {
   detailAdjustDialog.factId = String(row.id);
   detailAdjustDialog.employeeId = String(row.employeeId);
   detailAdjustDialog.employeeName = row.employeeName || '—';
+  detailAdjustDialog.amount = row.amount ?? 0;
   detailAdjustForm.adjustType = 'AMOUNT';
   detailAdjustForm.deltaAmount = undefined;
   detailAdjustForm.targetDeptId = undefined;
@@ -629,6 +639,7 @@ const adjustSubmitting = ref(false);
 const adjustDialog = reactive({
   visible: false,
   contractNo: '',
+  amount: 0,                  // 当前合同应收合计（PerformanceManageContract.amount），分摊到各明细的基线
 });
 const adjustForm = reactive({
   adjustType: 'AMOUNT',
@@ -666,6 +677,7 @@ const adjustRules = {
 
 const openAdjustDialog = (row: PerformanceManageContract) => {
   adjustDialog.contractNo = row.contractNo || row.orderNo || '';
+  adjustDialog.amount = row.amount ?? 0;
   adjustForm.adjustType = 'AMOUNT';
   adjustForm.deltaAmount = undefined;
   adjustForm.targetDeptId = undefined;
@@ -864,6 +876,11 @@ onMounted(async () => {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   color: #909399;
+}
+.amount-red {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #f56c6c;
 }
 .amount-redink {
   color: #f56c6c;
