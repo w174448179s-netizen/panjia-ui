@@ -19,7 +19,7 @@
         <div class="detail-table-title">工资明细（{{ details.length }} 人）</div>
         <el-table :data="details" stripe border max-height="480" :summary-method="summaryMethod" show-summary>
           <el-table-column label="工号" width="120">
-            <template #default="{ row }">{{ employeeName(row.employeeId) }}</template>
+            <template #default="{ row }">{{ row.employeeName || employeeName(row.employeeId) }}</template>
           </el-table-column>
           <el-table-column label="职级" prop="levelCode" width="70" />
           <el-table-column label="角色" width="80">
@@ -138,9 +138,8 @@ const summaryMethod = ({ columns, data }: any) => {
 onMounted(async () => {
   loading.value = true;
   try {
-    await loadEmployees();
     const id = Number(props.businessId);
-    const [batchRes, detRes]: any[] = await Promise.all([payrollApi.getBatch(id), payrollApi.getDetails(id)]);
+    const [batchRes, detRes]: any[] = await Promise.all([payrollApi.getBatch(id), payrollApi.getDetails(id), loadEmployees()]);
     batch.value = batchRes.data ?? null;
     details.value = detRes.data ?? [];
     if (!batch.value) loadError.value = '未找到该算薪批次';

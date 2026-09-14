@@ -33,31 +33,31 @@
         </el-table-column>
         <el-table-column label="算薪次数" prop="attempt" width="80" align="center" />
         <el-table-column label="创建时间" prop="createTime" width="170" />
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="130" fixed="right">
           <template #default="{ row }">
             <el-tooltip content="明细" placement="top">
               <el-button link type="primary" icon="View" @click="viewDetail(row)"></el-button>
             </el-tooltip>
-            <el-tooltip v-if="canCalc(row.status)" content="算薪" placement="top">
-              <el-button link type="warning" icon="Calculator" @click="doAction(row, 'calculate')"></el-button>
-            </el-tooltip>
-            <el-tooltip v-if="row.status === 'CALCULATED'" content="提交" placement="top">
-              <el-button link type="primary" icon="Upload" @click="doAction(row, 'submit')"></el-button>
-            </el-tooltip>
-            <!-- 审批/驳回按权限码收口：payroll:batch:approve / :reject 仅授予总监，
-                 财务与店长不显示入口（后端 @SaCheckPermission 同步拦截越权调用） -->
-            <el-tooltip v-if="row.status === 'REVIEWING' && checkPermi(['payroll:batch:approve'])" content="通过" placement="top">
-              <el-button link type="success" icon="CircleCheck" @click="doAction(row, 'approve')"></el-button>
-            </el-tooltip>
-            <el-tooltip v-if="row.status === 'REVIEWING' && checkPermi(['payroll:batch:reject'])" content="驳回" placement="top">
-              <el-button link type="danger" icon="CircleClose" @click="doAction(row, 'reject')"></el-button>
-            </el-tooltip>
-            <el-tooltip v-if="row.status === 'APPROVED'" content="锁定" placement="top">
-              <el-button link type="success" icon="Lock" @click="doAction(row, 'lock')"></el-button>
-            </el-tooltip>
-            <el-tooltip v-if="row.status === 'LOCKED'" content="标记发放" placement="top">
-              <el-button link type="primary" icon="Money" @click="doAction(row, 'pay')"></el-button>
-            </el-tooltip>
+            <!-- 状态相关操作收进下拉，避免按钮过多换行重叠 -->
+            <el-dropdown
+              v-if="canCalc(row.status) || row.status === 'REVIEWING' || row.status === 'APPROVED' || row.status === 'LOCKED'"
+              trigger="click"
+              @command="(cmd: string) => handleRowAction(cmd, row)"
+            >
+              <el-button link type="primary">更多<el-icon><arrow-down /></el-icon></el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-if="canCalc(row.status)" command="calculate" icon="Calculator">算薪</el-dropdown-item>
+                  <el-dropdown-item v-if="row.status === 'CALCULATED'" command="submit" icon="Upload">提交审批</el-dropdown-item>
+                  <!-- 审批/驳回按权限码收口：payroll:batch:approve / :reject 仅授予总监，
+                       财务与店长不显示入口（后端 @SaCheckPermission 同步拦截越权调用） -->
+                  <el-dropdown-item v-if="row.status === 'REVIEWING' && checkPermi(['payroll:batch:approve'])" command="approve" icon="CircleCheck">通过</el-dropdown-item>
+                  <el-dropdown-item v-if="row.status === 'REVIEWING' && checkPermi(['payroll:batch:reject'])" command="reject" icon="CircleClose">驳回</el-dropdown-item>
+                  <el-dropdown-item v-if="row.status === 'APPROVED'" command="lock" icon="Lock">锁定</el-dropdown-item>
+                  <el-dropdown-item v-if="row.status === 'LOCKED'" command="pay" icon="Money">标记发放</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </template>
         </el-table-column>
       </el-table>
@@ -208,6 +208,9 @@ const createBatch = async () => {
     creating.value = false;
   }
 };
+
+// 操作列「更多」下拉分发
+const handleRowAction = (cmd: string, row: PayrollBatch) => doAction(row, cmd);
 
 const doAction = async (row: PayrollBatch, action: string) => {
   const labelMap: Record<string, string> = { calculate: '算薪', submit: '提交审核', approve: '审批通过', reject: '驳回', lock: '锁定', pay: '标记发放' };

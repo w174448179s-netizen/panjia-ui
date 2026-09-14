@@ -98,7 +98,7 @@
           <template #default="scope">{{ scope.row.detailCount ?? 0 }}</template>
         </el-table-column>
         <!-- 操作列：详情 + 合同级业绩调整（经纪人无调整权限） -->
-        <el-table-column label="操作" align="center" width="100" fixed="right">
+        <el-table-column label="操作" align="center" width="120" fixed="right">
           <template #default="scope">
             <el-button link type="primary" @click="goDetail(scope.row)">详情</el-button>
             <el-button v-if="!isBroker" link type="warning" @click="openAdjustDialog(scope.row)">调整</el-button>

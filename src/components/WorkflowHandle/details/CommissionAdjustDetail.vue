@@ -15,7 +15,7 @@
       <el-descriptions-item label="状态">
         <el-tag :type="statusTagType(detail.status)" size="small">{{ statusLabel(detail.status) }}</el-tag>
       </el-descriptions-item>
-      <el-descriptions-item label="发起人ID">{{ detail.applicantId || '—' }}</el-descriptions-item>
+      <el-descriptions-item label="发起人">{{ detail.applicantName || detail.applicantId || '—' }}</el-descriptions-item>
       <el-descriptions-item label="创建时间" :span="2">{{ detail.createTime || '—' }}</el-descriptions-item>
       <el-descriptions-item label="原因" :span="2">{{ detail.reason || '—' }}</el-descriptions-item>
     </el-descriptions>

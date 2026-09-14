@@ -138,10 +138,13 @@
         </el-table-column>
         <el-table-column label="操作" align="center" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="row.applicationId" link type="primary" @click="viewDetail(row)">详情</el-button>
-            <el-button v-if="canOriginate(row)" link type="primary" @click="originate(row as CommissionContractVO)">发起</el-button>
-            <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="submit(row)">提交</el-button>
-            <el-button v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'" link type="info" @click="cancel(row)">作废</el-button>
+            <!-- ≤3 个按钮平铺（发起与详情互斥）；nowrap 保证不折行重叠，超过 3 个才收「更多」下拉 -->
+            <div class="table-actions">
+              <el-button v-if="row.applicationId" link type="primary" @click="viewDetail(row)">详情</el-button>
+              <el-button v-if="canOriginate(row)" link type="primary" @click="originate(row as CommissionContractVO)">发起</el-button>
+              <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="submit(row)">提交</el-button>
+              <el-button v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'" link type="info" @click="cancel(row)">作废</el-button>
+            </div>
           </template>
         </el-table-column>
         <template #empty>
@@ -398,8 +401,7 @@ const resetQuery = () => {
 };
 
 // 单个合同发起
-const originate = async (row: CommissionContractVO) => {
-  const no = contractOrOrderNo(row);
+const originate = async (row: CommissionContractVO) => {  const no = contractOrOrderNo(row);
   try {
     await ElMessageBox.confirm(
       `确认为合同「${no}」${row.period} 月发起结佣？将按该合同当月实收业绩生成申请单（草稿）。`,
@@ -628,6 +630,12 @@ onMounted(() => {
   .contract-link {
     font-weight: 600;
     padding: 0;
+  }
+
+  .table-actions {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
   }
 
   .contract-text {

@@ -20,7 +20,7 @@
         <el-descriptions-item label="应收合计">¥{{ formatAmount(detail.expectedAmount) }}</el-descriptions-item>
         <el-descriptions-item label="当前节点">{{ detail.currentNode ? nodeLabel(detail.currentNode) : '—' }}</el-descriptions-item>
         <el-descriptions-item label="实收对齐应收">{{ detail.aligned ? '已对齐' : '未对齐' }}</el-descriptions-item>
-        <el-descriptions-item label="发起人">{{ detail.applicantId === 0 ? '系统自动' : employeeName(detail.applicantId) }}</el-descriptions-item>
+        <el-descriptions-item label="发起人">{{ detail.applicantName || (detail.applicantId === 0 ? '系统自动' : employeeName(detail.applicantId)) }}</el-descriptions-item>
         <el-descriptions-item label="审批通过月">{{ detail.approvedMonth || '—' }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ formatDateTime(detail.createTime) }}</el-descriptions-item>
       </el-descriptions>
@@ -30,7 +30,7 @@
         <el-table :data="items" border size="small" max-height="450" class="detail-table">
           <el-table-column label="序号" type="index" width="55" align="center" />
           <el-table-column label="员工" min-width="120">
-            <template #default="{ row }">{{ employeeName(row.employeeId) }}</template>
+            <template #default="{ row }">{{ row.employeeName || employeeName(row.employeeId) }}</template>
           </el-table-column>
           <el-table-column label="业务类型" align="center" width="110">
             <template #default="{ row }">{{ row.bizType || '—' }}</template>

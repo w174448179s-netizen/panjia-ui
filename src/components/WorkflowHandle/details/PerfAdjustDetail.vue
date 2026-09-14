@@ -79,9 +79,8 @@ const formatOrigin = (val: number | string | undefined | null): string => {
 onMounted(async () => {
   loading.value = true;
   try {
-    await loadEmployees();
-    const res: any = await performanceApi.getAdjust(props.businessId);
-    detail.value = res.data ?? null;
+    const [res] = await Promise.all([performanceApi.getAdjust(props.businessId), loadEmployees()]);
+    detail.value = (res as any).data ?? null;
     if (!detail.value) loadError.value = '未找到该业绩调整单';
   } catch {
     loadError.value = '加载业绩调整单详情失败';

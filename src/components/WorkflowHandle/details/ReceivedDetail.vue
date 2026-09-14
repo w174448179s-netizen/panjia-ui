@@ -130,10 +130,9 @@ const applicantName = (name?: string | null, userId?: number | string | null) =>
 onMounted(async () => {
   loading.value = true;
   try {
-    await loadEmployees();
-    const res: any = await receivedApi.getDetail(props.businessId);
-    detail.value = res.data?.apply ?? null;
-    facts.value = res.data?.facts ?? [];
+    const [res] = await Promise.all([receivedApi.getDetail(props.businessId), loadEmployees()]);
+    detail.value = (res as any).data?.apply ?? null;
+    facts.value = (res as any).data?.facts ?? [];
     if (!detail.value) loadError.value = '未找到该实收审批单';
   } catch {
     loadError.value = '加载实收审批单详情失败';

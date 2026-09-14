@@ -62,9 +62,8 @@ const amountClass = (n: number | undefined) => {
 onMounted(async () => {
   loading.value = true;
   try {
-    await loadEmployees();
-    const res: any = await payrollApi.getAdjust(Number(props.businessId));
-    detail.value = res.data ?? null;
+    const [res] = await Promise.all([payrollApi.getAdjust(Number(props.businessId)), loadEmployees()]);
+    detail.value = (res as any).data ?? null;
     if (!detail.value) loadError.value = '未找到该调整/补发单';
   } catch {
     loadError.value = '加载调整/补发单详情失败';

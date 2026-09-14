@@ -45,9 +45,8 @@ const statusTagType = (s: string) => {
 onMounted(async () => {
   loading.value = true;
   try {
-    await loadEmployees();
-    const res: any = await payrollApi.getManual(Number(props.businessId));
-    detail.value = res.data ?? null;
+    const [res] = await Promise.all([payrollApi.getManual(Number(props.businessId)), loadEmployees()]);
+    detail.value = (res as any).data ?? null;
     if (!detail.value) loadError.value = '未找到该奖金记录';
   } catch {
     loadError.value = '加载奖金详情失败';
