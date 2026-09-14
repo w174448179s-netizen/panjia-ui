@@ -89,10 +89,10 @@
       <el-table border class="data-table" :data="contractList">
         <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="{ row }">
-            <el-button v-if="row.applicationId" type="primary" link class="contract-link" @click="viewDetail(row)">
+            <!-- 无论是否已发起单据，都允许点击：未发起 → 跳合同业绩详情；已发起 → 打开结佣申请详情 -->
+            <el-button type="primary" link class="contract-link" @click="viewDetail(row)">
               {{ contractOrOrderNo(row) }}
             </el-button>
-            <span v-else class="contract-text">{{ contractOrOrderNo(row) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="实收(结佣)" align="right" width="120" fixed="left">
@@ -136,15 +136,19 @@
         <el-table-column label="发起人" align="center" width="100">
           <template #default="{ row }">{{ row.applicantId === 0 ? '系统' : (applicantName(row.applicantId) || '—') }}</template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="240" fixed="right">
+        <el-table-column label="操作" align="center" width="220" fixed="right">
           <template #default="{ row }">
             <!-- ≤3 个按钮平铺；white-space:nowrap 防重叠，超过 3 个才收「更多」下拉 -->
             <div class="table-actions">
-              <el-button v-if="row.applicationId" link type="primary" @click="viewDetail(row)">详情</el-button>
-              <!-- 发起 → 提交 两步合并为一步：未发起合同按当月实收拉取明细后立即送审 -->
-              <el-button v-if="canOriginate(row)" link type="warning" :loading="submittingMap[row.contractNo]" @click="originateAndSubmit(row as CommissionContractVO)">发起并提交</el-button>
-              <el-button v-else-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" :loading="submittingMap[row.applicationId]" @click="submit(row)">提交</el-button>
-              <el-button v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'" link type="info" @click="cancel(row)">作废</el-button>
+              <!-- 详情：未发起跳合同业绩详情页；已发起打开结佣申请详情对话框 -->
+              <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
+              <!-- 提交：未发起 = 发起并提交（一步）；草稿/驳回 = 送审，3 字统称 -->
+              <el-button
+                v-if="canOriginate(row) || row.status === 'DRAFT' || row.status === 'REJECTED'"
+                link type="warning"
+                :loading="submittingMap[row.applicationId || row.contractNo]"
+                @click="onSubmit(row as CommissionContractVO)">提交</el-button>
+              <el-button v-if="(row.status === 'DRAFT' || row.status === 'SUBMITTED') && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
             </div>
           </template>
         </el-table-column>
@@ -168,62 +172,10 @@
       </div>
     </el-card>
 
-    <!-- 详情弹窗 -->
-    <el-dialog v-model="showDetail" title="结佣明细详情" width="1000px" top="5vh">
-      <el-descriptions v-if="detailApp" :column="3" border size="small" class="detail-desc">
-        <el-descriptions-item label="申请单号">{{ detailApp.applyNo }}</el-descriptions-item>
-        <el-descriptions-item label="期间">{{ detailApp.period }}</el-descriptions-item>
-        <el-descriptions-item label="状态">
-          <el-tag :type="statusTagType(detailApp.status)" size="small">{{ statusLabel(detailApp.status) }}</el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="合同号">{{ detailApp.contractNo || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="订单号">{{ detailApp.orderNo || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="签约时间">{{ formatDateTime(detailApp.businessDate) }}</el-descriptions-item>
-        <el-descriptions-item label="房源地址" :span="3">{{ detailApp.propertyAddress || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="归属门店">{{ detailApp.deptId ? deptName(detailApp.deptId) : '跨门店合作' }}</el-descriptions-item>
-        <el-descriptions-item label="明细数">{{ detailApp.itemCount }}</el-descriptions-item>
-        <el-descriptions-item label="实收合计">
-          <span class="amount amount-red">¥{{ formatAmount(detailApp.totalAmount) }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="应收合计">¥{{ formatAmount(detailApp.expectedAmount) }}</el-descriptions-item>
-        <el-descriptions-item label="当前节点">{{ detailApp.currentNode ? nodeLabel(detailApp.currentNode) : '—' }}</el-descriptions-item>
-        <el-descriptions-item label="实收对齐应收">{{ detailApp.aligned ? '已对齐' : '未对齐' }}</el-descriptions-item>
-        <el-descriptions-item label="发起人">{{ detailApp.applicantId === 0 ? '系统自动' : (applicantName(detailApp.applicantId) || '—') }}</el-descriptions-item>
-        <el-descriptions-item label="审批通过月">{{ detailApp.approvedMonth || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ detailApp.createTime }}</el-descriptions-item>
-      </el-descriptions>
-
-      <div class="detail-table-wrap">
-        <div class="detail-table-title">结佣明细（{{ detailItems.length }} 条）</div>
-        <el-table :data="detailItems" border size="small" max-height="450" class="detail-table">
-          <el-table-column label="序号" type="index" width="55" align="center" />
-          <el-table-column label="员工" min-width="120">
-            <template #default="{ row }">{{ employeeName(row.employeeId) }}</template>
-          </el-table-column>
-          <el-table-column label="业务类型" align="center" width="110">
-            <template #default="{ row }">{{ row.bizType || '—' }}</template>
-          </el-table-column>
-          <el-table-column label="角色类型" align="center" width="110">
-            <template #default="{ row }">{{ row.roleType || '—' }}</template>
-          </el-table-column>
-          <el-table-column label="费用项" align="center" min-width="100">
-            <template #default="{ row }">{{ row.feeItem || '—' }}</template>
-          </el-table-column>
-          <el-table-column label="金额" align="right" width="120">
-            <template #default="{ row }">
-              <span class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="状态" align="center" width="90">
-            <template #default="{ row }">
-              <el-tag :type="itemStatusTagType(row.status)" size="small">{{ itemStatusLabel(row.status) }}</el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-
+    <!-- 详情弹窗：复用 WorkflowHandle/details/CommissionApplyDetail（与实收详情同款容器、字段、样式） -->
+    <el-dialog v-model="showDetail" title="结佣明细详情" width="1100px" top="5vh" append-to-body destroy-on-close>
+      <CommissionApplyDetail v-if="showDetail" :business-id="detailApplicationId!" />
       <template #footer>
-        <!-- 审批统一由「我的待办」弹窗办理（工作流任务接口），本页只提供查看；不提供业务直批入口 -->
         <el-button @click="showDetail = false">关闭</el-button>
       </template>
     </el-dialog>
@@ -232,15 +184,25 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { commissionApi, type CommissionApplication, type CommissionContractVO, type CommissionItem } from '@/api/panjia/commission';
+import { commissionApi, type CommissionContractVO } from '@/api/panjia/commission';
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { checkPermi } from '@/utils/permission';
+import { useUserStore } from '@/store/modules/user';
+import CommissionApplyDetail from '@/components/WorkflowHandle/details/CommissionApplyDetail.vue';
 
 const route = useRoute();
+const router = useRouter();
+const userStore = useUserStore();
+
+/** 是否可以作废：超管全部可操作，普通用户只能操作自己发起的单据 */
+const canCancel = (row: CommissionContractVO): boolean => {
+  if (userStore.roles.includes('admin') || userStore.roles.includes('superadmin')) return true;
+  return String(row.applicantId) === String(userStore.userId);
+};
 
 const loading = ref(false);
 const contractList = ref<CommissionContractVO[]>([]);
@@ -293,28 +255,14 @@ const contractOrOrderNo = (row: CommissionContractVO): string => {
   return row.contractNo || row.orderNo || '—';
 };
 
-// 部门树
+// 部门树（用于顶部门店筛选；详情弹窗的归属门店翻译在 CommissionApplyDetail 内自处理）
 const deptTreeData = ref<DeptNode[]>([]);
-const deptMap = new Map<number, string>();
 
 const loadDeptTree = async () => {
   try {
     const res: any = await employeeApi.deptTree();
     deptTreeData.value = res.data ?? [];
-    buildDeptMap(deptTreeData.value);
   } catch { /* ignore */ }
-};
-
-const buildDeptMap = (nodes: DeptNode[]) => {
-  for (const n of nodes) {
-    if (n.deptId != null) deptMap.set(Number(n.deptId), n.deptName);
-    if (n.children?.length) buildDeptMap(n.children);
-  }
-};
-
-const deptName = (deptId: number | undefined) => {
-  if (deptId == null) return '—';
-  return deptMap.get(deptId) ?? String(deptId);
 };
 
 // 员工姓名映射
@@ -356,15 +304,6 @@ const statusTagType = (s: string) => {
 // 可发起：未发起 / 已作废（作废时明细已冲销，事实释放可重新发起）；净额为 0 的合同无可入账事实
 const canOriginate = (row: CommissionContractVO) =>
   (row.status === 'NONE' || row.status === 'CANCELLED') && num(row.amount) !== 0;
-
-const ITEM_STATUS_MAP: Record<string, string> = {
-  DRAFT: '待提交', PENDING: '待审批', APPROVED: '已通过', REVERSED: '已冲销',
-};
-const itemStatusLabel = (s: string) => ITEM_STATUS_MAP[s] || s || '—';
-const itemStatusTagType = (s: string) => {
-  const map: Record<string, string> = { DRAFT: 'info', PENDING: 'warning', APPROVED: 'success', REVERSED: 'danger' };
-  return (map as any)[s] || 'info';
-};
 
 // 列表
 const getList = async () => {
@@ -533,20 +472,30 @@ const cancel = async (row: CommissionContractVO) => {
 
 // 详情
 const showDetail = ref(false);
-const detailApp = ref<CommissionApplication | null>(null);
-const detailItems = ref<CommissionItem[]>([]);
+// 传给 CommissionApplyDetail 的业务 ID（已发起行才设；未发起行走 router 跳转合同业绩详情）
+const detailApplicationId = ref<number | string | null>(null);
 
 const viewDetail = async (row: CommissionContractVO) => {
-  if (!row.applicationId) return;
-  detailItems.value = [];
+  // 未发起：跳合同业绩详情页，看合同金额/累计结佣/业绩构成
+  if (!row.applicationId) {
+    router.push({
+      name: 'PerformanceContractDetail',
+      query: { contractNo: row.contractNo, period: row.period }
+    }).catch(() => { /* 重复跳转忽略 */ });
+    return;
+  }
+  // 已发起：打开结佣申请详情对话框（复用 WorkflowHandle/details/CommissionApplyDetail，与实收详情同款）
+  detailApplicationId.value = row.applicationId;
   showDetail.value = true;
-  await loadEmployeeMap();
-  try {
-    const res: any = await commissionApi.getApplication(row.applicationId);
-    const data = res.data ?? {};
-    detailApp.value = data.application ?? null;
-    detailItems.value = data.items ?? [];
-  } catch { /* 错误已提示 */ }
+};
+
+// 提交按钮统一入口：未发起 = 发起并提交；草稿/驳回 = 送审；统一 3 字「提交」文案
+const onSubmit = async (row: CommissionContractVO) => {
+  if (canOriginate(row)) {
+    await originateAndSubmit(row);
+  } else {
+    await submit(row);
+  }
 };
 
 // 工作流跳转：根据 query 参数打开详情（查看态；审批办理已改为「我的待办」原地弹窗）
@@ -554,16 +503,9 @@ const openFromWorkflow = async () => {
   const id = route.query.id as string;
   const type = route.query.type as string;
   if (!id || !type) return;
-  await loadEmployeeMap();
-  try {
-    const res: any = await commissionApi.getApplication(Number(id));
-    const data = res.data ?? {};
-    detailApp.value = data.application;
-    detailItems.value = data.items ?? [];
-    showDetail.value = true;
-  } catch {
-    ElMessage.error('加载单据失败');
-  }
+  // 复用 CommissionApplyDetail，详情数据由组件内部按 businessId 自取
+  detailApplicationId.value = id;
+  showDetail.value = true;
 };
 
 const formatDateTime = (val?: string | null): string => {
@@ -670,25 +612,5 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 12px;
-}
-
-.detail-table-wrap {
-  margin-top: 16px;
-}
-
-.detail-table-title {
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 8px;
-}
-
-.detail-table {
-  .amount {
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
-  }
-  .amount-red {
-    color: #f56c6c;
-  }
 }
 </style>

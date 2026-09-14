@@ -113,7 +113,7 @@
             <div class="table-actions">
               <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
               <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重新提交</el-button>
-              <el-button v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'" link type="info" @click="cancel(row)">作废</el-button>
+              <el-button v-if="(row.status === 'DRAFT' || row.status === 'SUBMITTED') && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
             </div>
           </template>
         </el-table-column>
@@ -237,8 +237,16 @@ import { receivedApi, type ReceivedApply, type ReceivedFact } from '@/api/panjia
 import { employeeApi } from '@/api/panjia/employee';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { checkPermi } from '@/utils/permission';
+import { useUserStore } from '@/store/modules/user';
 
 const route = useRoute();
+const userStore = useUserStore();
+
+/** 是否可以作废：超管全部可操作，普通用户只能操作自己发起的单据 */
+const canCancel = (row: ReceivedApply): boolean => {
+  if (userStore.roles.includes('admin') || userStore.roles.includes('superadmin')) return true;
+  return String(row.applicantId) === String(userStore.userId);
+};
 
 const loading = ref(false);
 const applyList = ref<ReceivedApply[]>([]);

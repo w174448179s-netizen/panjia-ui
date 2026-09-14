@@ -81,6 +81,27 @@ export interface CommissionItem {
   createTime: string;
 }
 
+/** 结佣申请单详情·每人明细行（列口径对齐实收明细详情） */
+export interface CommissionItemDetail {
+  itemId: number;
+  factId?: number;
+  employeeId?: number;
+  employeeCode?: string;
+  employeeName?: string;
+  /** 门店/组别（「集团-门店-组别」） */
+  deptPath?: string;
+  roleType?: string;
+  roleName?: string;
+  /** 角色占比 */
+  shareRatio?: number;
+  /** 应收金额（同 sourceKey 的 PERF_EXPECT 事实金额） */
+  expectedAmount?: number;
+  /** 结佣金额 */
+  amount: number;
+  feeItem?: string;
+  status: string;        // DRAFT / PENDING / APPROVED / REVERSED
+}
+
 export interface CommissionApplyQuery extends PageQuery {
   period?: string;
   deptId?: number;
@@ -130,7 +151,7 @@ export const commissionApi = {
   listContracts: (params: CommissionApplyQuery) =>
     panjiaRequest.get<PageResult<CommissionContractVO>>('/commission/apply/contract-list', params),
   getApplication: (id: number) =>
-    panjiaRequest.get<{ application: CommissionApplication; items: CommissionItem[] }>(`/commission/apply/${id}`),
+    panjiaRequest.get<{ application: CommissionApplication; items: CommissionItemDetail[] }>(`/commission/apply/${id}`),
   createApplication: (data: CommissionApplyCreateDTO) =>
     panjiaRequest.post<number>('/commission/apply', data),
   batchCreateApplications: (data: CommissionApplyCreateDTO) =>
