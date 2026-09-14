@@ -163,6 +163,7 @@ import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { payrollApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
 import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
+import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
 const route = useRoute();
 const { taskOperating, passTask, rejectTask } = useWorkflowTask();
@@ -301,9 +302,11 @@ const summaryMethod = ({ columns, data }: any) => {
   return sums;
 };
 
+// 页签缓存复用场景下补开单据（详见 useWorkflowRouteOpen 注释）
+useWorkflowRouteOpen('/payroll/batch', openFromWorkflow);
+
 onMounted(() => {
   loadBatches();
-  openFromWorkflow();
 });
 </script>
 

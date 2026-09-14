@@ -101,12 +101,10 @@
             :show-overflow-tooltip="true"
             label="任务名称"
           ></el-table-column>
-          <el-table-column
-            align="center"
-            prop="createByName"
-            :show-overflow-tooltip="true"
-            label="申请人"
-          ></el-table-column>
+          <!-- 申请人为空 = 系统自动发起（如导入归档自动建单），不留空白 -->
+          <el-table-column align="center" :show-overflow-tooltip="true" label="申请人">
+            <template #default="scope">{{ scope.row.createByName || '系统自动' }}</template>
+          </el-table-column>
           <el-table-column align="center" label="办理人" min-width="180">
             <template #default="scope">
               <template v-if="tab === 'waiting'">

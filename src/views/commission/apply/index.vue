@@ -236,6 +236,7 @@ import { commissionApi, type CommissionApplication, type CommissionContractVO, t
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
 import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
+import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
 const route = useRoute();
 const { taskOperating, passTask, rejectTask } = useWorkflowTask();
@@ -601,11 +602,13 @@ const formatDateTime = (val?: string | null): string => {
   return val.replace('T', ' ').substring(0, 19);
 };
 
+// 页签缓存复用场景下补开单据（详见 useWorkflowRouteOpen 注释）
+useWorkflowRouteOpen('/performance/apply', openFromWorkflow);
+
 onMounted(() => {
   loadDeptTree();
   loadEmployeeMap();
   getList();
-  openFromWorkflow();
 });
 </script>
 

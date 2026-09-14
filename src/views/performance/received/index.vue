@@ -121,7 +121,7 @@
           <template #default="{ row }">{{ row.currentNode ? nodeLabel(row.currentNode) : '—' }}</template>
         </el-table-column>
         <el-table-column label="发起人" align="center" width="100">
-          <template #default="{ row }">{{ row.applicantId ? applicantName(row.applicantId) : '系统自动' }}</template>
+          <template #default="{ row }">{{ applicantName(row.applicantName, row.applicantId) }}</template>
         </el-table-column>
         <el-table-column label="操作" align="center" width="200" fixed="right">
           <template #default="{ row }">
@@ -164,10 +164,10 @@
         <el-descriptions-item label="订单号">{{ detailApp.orderNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="当前节点">{{ detailApp.currentNode ? nodeLabel(detailApp.currentNode) : '—' }}</el-descriptions-item>
         <el-descriptions-item label="发起人">
-          {{ detailApp.applicantId ? applicantName(detailApp.applicantId) : '系统自动' }}
+          {{ applicantName(detailApp.applicantName, detailApp.applicantId) }}
         </el-descriptions-item>
         <el-descriptions-item label="审批人">
-          {{ detailApp.approverId ? applicantName(detailApp.approverId) : '—' }}
+          {{ detailApp.approverName || '—' }}
         </el-descriptions-item>
         <el-descriptions-item label="审批时间">{{ formatDateTime(detailApp.approveTime) }}</el-descriptions-item>
         <el-descriptions-item label="实收合计">
@@ -260,6 +260,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { receivedApi, type ReceivedApply, type ReceivedFact } from '@/api/panjia/received';
 import { employeeApi } from '@/api/panjia/employee';
 import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
+import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
 const route = useRoute();
 const { taskOperating, passTask, rejectTask } = useWorkflowTask();
@@ -334,13 +335,12 @@ const statusTagType = (s: string) => {
 };
 const nodeLabel = (node?: string) => node === 'FINANCE' ? '财务审批' : node === 'DIRECTOR' ? '总监审批' : (node || '—');
 
-// 发起人姓名
+// 员工姓名（明细表里给的是员工 ID，走员工档案表）
 const employeeMap = new Map<number, string>();
 const employeeName = (empId: number | string | undefined) => {
   if (empId == null) return '';
   return employeeMap.get(Number(empId)) ?? '';
 };
-const applicantName = (applicantId: number | string | undefined) => employeeName(applicantId) || `用户#${applicantId}`;
 
 const loadEmployeeMap = async () => {
   try {
@@ -349,6 +349,18 @@ const loadEmployeeMap = async () => {
       if (e.employeeId != null) employeeMap.set(Number(e.employeeId), e.employeeName || `员工#${e.employeeId}`);
     }
   } catch { /* ignore */ }
+};
+
+/**
+ * 发起人/审批人姓名由后端统一翻译（ReceivedApply.applicantName / approverName，
+ * 基于 @Translation 按 userId 取昵称）。
+ * 不在前端查用户表：业务角色（店长/财务/人事/经纪人）没有 system:user:query 权限，直查会 403。
+ * 空值即「系统自动」——导入归档等无人值守发起，不留空白。
+ */
+const applicantName = (name?: string | null, userId?: number | string | null) => {
+  if (name) return name;
+  if (userId === null || userId === undefined || String(userId).trim() === '') return '系统自动';
+  return `用户#${userId}`;
 };
 
 const getList = async () => {
@@ -540,10 +552,12 @@ const openFromWorkflow = async () => {
   }
 };
 
+// 本页会被 keep-alive 缓存复用，跳转进来时 onMounted 不一定触发 → 由该 Hook 兜住（含原因说明）
+useWorkflowRouteOpen('/performance/received', openFromWorkflow);
+
 onMounted(() => {
   loadEmployeeMap();
   getList();
-  openFromWorkflow();
 });
 </script>
 

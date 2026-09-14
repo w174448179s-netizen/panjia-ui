@@ -175,6 +175,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import { commissionApi, type CommissionAdjust } from '@/api/panjia/commission';
 import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
+import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
 const route = useRoute();
 const { taskOperating, passTask, rejectTask } = useWorkflowTask();
@@ -391,9 +392,11 @@ const openFromWorkflow = async () => {
   }
 };
 
+// 页签缓存复用场景下补开单据（详见 useWorkflowRouteOpen 注释）
+useWorkflowRouteOpen('/performance/adjust', openFromWorkflow);
+
 onMounted(() => {
   getList();
-  openFromWorkflow();
 });
 </script>
 

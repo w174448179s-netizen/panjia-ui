@@ -329,6 +329,7 @@ import type { DeptNode, Employee } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
 import { useRoute } from 'vue-router';
 import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
+import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
 const route = useRoute();
 const { taskOperating, passTask, rejectTask } = useWorkflowTask();
@@ -695,10 +696,12 @@ const openFromWorkflow = async () => {
   }
 };
 
+// 页签缓存复用场景下补开单据（详见 useWorkflowRouteOpen 注释）
+useWorkflowRouteOpen('/performance/adjustment', openFromWorkflow);
+
 onMounted(() => {
   loadDeptTree();
   getList();
-  openFromWorkflow();
 });
 </script>
 

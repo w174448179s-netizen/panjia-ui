@@ -23,7 +23,11 @@ export interface ReceivedApply {
   currentNode?: string;       // FINANCE / DIRECTOR
   processInstanceId?: string;
   applicantId?: string;
+  /** 发起人昵称（后端 @Translation 按 applicantId 翻译；为空表示系统自动发起） */
+  applicantName?: string;
   approverId?: string;
+  /** 终审人昵称（后端按 approverId 翻译） */
+  approverName?: string;
   approveTime?: string;
   createTime: string;
 }

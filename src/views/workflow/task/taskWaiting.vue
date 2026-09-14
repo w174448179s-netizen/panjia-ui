@@ -79,7 +79,10 @@
           </template>
         </el-table-column>
 
-        <el-table-column align="center" prop="createByName" label="申请人" width="100"></el-table-column>
+        <!-- 申请人为空 = 系统自动发起（如导入归档自动建单），不留空白 -->
+        <el-table-column align="center" label="申请人" width="100">
+          <template #default="scope">{{ scope.row.createByName || '系统自动' }}</template>
+        </el-table-column>
         <el-table-column align="center" label="待办时间" prop="createTime" width="160"></el-table-column>
 
         <el-table-column label="操作" align="center" width="130" fixed="right">
