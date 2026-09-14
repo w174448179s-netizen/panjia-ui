@@ -136,13 +136,14 @@
         <el-table-column label="发起人" align="center" width="100">
           <template #default="{ row }">{{ row.applicantId === 0 ? '系统' : (applicantName(row.applicantId) || '—') }}</template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="200" fixed="right">
+        <el-table-column label="操作" align="center" width="240" fixed="right">
           <template #default="{ row }">
-            <!-- ≤3 个按钮平铺（发起与详情互斥）；nowrap 保证不折行重叠，超过 3 个才收「更多」下拉 -->
+            <!-- ≤3 个按钮平铺；white-space:nowrap 防重叠，超过 3 个才收「更多」下拉 -->
             <div class="table-actions">
               <el-button v-if="row.applicationId" link type="primary" @click="viewDetail(row)">详情</el-button>
-              <el-button v-if="canOriginate(row)" link type="primary" @click="originate(row as CommissionContractVO)">发起</el-button>
-              <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="submit(row)">提交</el-button>
+              <!-- 发起 → 提交 两步合并为一步：未发起合同按当月实收拉取明细后立即送审 -->
+              <el-button v-if="canOriginate(row)" link type="warning" :loading="submittingMap[row.contractNo]" @click="originateAndSubmit(row as CommissionContractVO)">发起并提交</el-button>
+              <el-button v-else-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" :loading="submittingMap[row.applicationId]" @click="submit(row)">提交</el-button>
               <el-button v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'" link type="info" @click="cancel(row)">作废</el-button>
             </div>
           </template>
@@ -400,21 +401,31 @@ const resetQuery = () => {
   getList();
 };
 
-// 单个合同发起
-const originate = async (row: CommissionContractVO) => {  const no = contractOrOrderNo(row);
+// 发起 → 提交一步到位：按合同当月实收拉取明细生成草稿后立即送审
+// 后端契约不变：先 commissionApi.createApplication 拿到 applicationId，再 submitApplication(id) 走工作流
+// 若 submit 失败最坏后果是单据停在草稿，用户重试/单独点提交即可兜底（与 Excel 批量发起同款路径）
+const submittingMap = reactive<Record<string, boolean>>({});
+const originateAndSubmit = async (row: CommissionContractVO) => {
+  const no = contractOrOrderNo(row);
   try {
     await ElMessageBox.confirm(
-      `确认为合同「${no}」${row.period} 月发起结佣？将按该合同当月实收业绩生成申请单（草稿）。`,
-      '发起结佣', { type: 'info' },
+      `确认为合同「${no}」${row.period} 月发起结佣并提交审批？将按该合同当月实收业绩生成明细并直接进入审批流。`,
+      '发起并提交', { type: 'info' },
     );
   } catch {
     return;
   }
+  submittingMap[row.contractNo] = true;
   try {
-    await commissionApi.createApplication({ period: row.period, contractNo: row.contractNo });
-    ElMessage.success('发起成功');
+    const applicationId = await commissionApi.createApplication({ period: row.period, contractNo: row.contractNo });
+    if (applicationId) {
+      await commissionApi.submitApplication(applicationId);
+    }
+    ElMessage.success('发起并提交成功');
     getList();
-  } catch { /* 拦截器处理 */ }
+  } catch { /* 拦截器处理（含部分失败提示） */ } finally {
+    submittingMap[row.contractNo] = false;
+  }
 };
 
 // 批量发起
@@ -443,18 +454,21 @@ const openBatchCreate = async () => {
   }
 };
 
-// 提交
+// 提交（草稿/驳回后送审）
 const submit = async (row: CommissionContractVO) => {
   try {
     await ElMessageBox.confirm(`确认提交申请单「${row.applyNo}」？提交后进入审批流程。`, '提示', { type: 'warning' });
   } catch {
     return;
   }
+  submittingMap[row.applicationId] = true;
   try {
     await commissionApi.submitApplication(row.applicationId);
     ElMessage.success('已提交');
     getList();
-  } catch { /* 拦截器处理 */ }
+  } catch { /* 拦截器处理 */ } finally {
+    submittingMap[row.applicationId] = false;
+  }
 };
 
 // 审批节点中文名
