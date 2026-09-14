@@ -39,29 +39,11 @@
             <el-option v-for="t in bizTypeOptions" :key="t" :label="t" :value="t" />
           </el-select>
         </el-form-item>
-        <el-form-item label="结算状态">
-          <el-select
-            v-model="queryParams.settled"
-            placeholder="全部"
-            clearable
-            style="width: 120px"
-            @change="handleQuery"
-          >
-            <el-option label="已结算" :value="true" />
-            <el-option label="未结算" :value="false" />
-          </el-select>
-        </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
           <el-button icon="Refresh" @click="resetQuery">重置</el-button>
         </el-form-item>
       </el-form>
-
-      <!-- 双 Tab：新签业绩 / 结佣业绩 -->
-      <el-tabs v-model="activeTab" class="fact-tabs" @tab-change="onTabChange">
-        <el-tab-pane label="新签业绩（当月应收）" name="PERF_EXPECT" />
-        <el-tab-pane label="结佣业绩（当月实收）" name="PERF_REAL" />
-      </el-tabs>
 
       <!-- 汇总条 -->
       <div class="summary-bar">
@@ -78,8 +60,7 @@
           <span class="summary-text">
             共 <b>{{ summary.contractCount }}</b> 个合同 ·
             涉及 <b>{{ summary.employeeCount }}</b> 人 ·
-            <b>{{ summary.detailCount }}</b> 条明细 ·
-            未结算 <b class="unsettled">{{ summary.unsettledCount }}</b> 条
+            <b>{{ summary.detailCount }}</b> 条明细
           </span>
         </div>
         <div class="summary-right">
@@ -116,21 +97,11 @@
         <el-table-column label="明细条数" align="center" width="80">
           <template #default="scope">{{ scope.row.detailCount ?? 0 }}</template>
         </el-table-column>
-        <el-table-column label="未结算" align="center" width="80">
-          <template #default="scope">
-            <el-tag v-if="(scope.row.unsettledCount ?? 0) > 0" type="warning" size="small">{{ scope.row.unsettledCount }}</el-tag>
-            <span v-else>—</span>
-          </template>
-        </el-table-column>
         <!-- 操作列：详情 + 合同级业绩调整（经纪人无调整权限） -->
-        <el-table-column label="操作" align="center" width="110" fixed="right">
+        <el-table-column label="操作" align="center" width="140" fixed="right">
           <template #default="scope">
-            <el-tooltip content="详情" placement="top">
-              <el-button link type="primary" icon="View" @click="goDetail(scope.row)"></el-button>
-            </el-tooltip>
-            <el-tooltip v-if="!isBroker" content="调整" placement="top">
-              <el-button link type="warning" icon="Edit" @click="openAdjustDialog(scope.row)"></el-button>
-            </el-tooltip>
+            <el-button link type="primary" @click="goDetail(scope.row)">详情</el-button>
+            <el-button v-if="!isBroker" link type="warning" @click="openAdjustDialog(scope.row)">调整</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -236,7 +207,7 @@
         <el-descriptions-item label="签约时间">{{ formatDateTime(detailDialog.businessDate) }}</el-descriptions-item>
         <el-descriptions-item label="期间">{{ detailDialog.period }}</el-descriptions-item>
         <el-descriptions-item label="口径">
-          {{ detailDialog.factType === 'PERF_EXPECT' ? '新签业绩（应收）' : '结佣业绩（实收）' }}
+          新签业绩（应收）
         </el-descriptions-item>
       </el-descriptions>
 
@@ -244,11 +215,10 @@
       <div class="detail-summary-bar">
         <span class="summary-text">
           涉及 <b>{{ detailSummary.employeeCount }}</b> 人 ·
-          <b>{{ detailList.length }}</b> 条明细 ·
-          未结算 <b class="unsettled">{{ detailSummary.unsettledCount }}</b> 条
+          <b>{{ detailList.length }}</b> 条明细
         </span>
         <span class="summary-amount">
-          {{ detailDialog.factType === 'PERF_EXPECT' ? '应收' : '实收' }}合计：
+          应收合计：
           <b :class="{ 'amount-negative': detailSummary.totalAmount < 0 }">{{ formatAmount(detailSummary.totalAmount) }}</b>
         </span>
       </div>
@@ -272,21 +242,11 @@
         <el-table-column label="角色占比" align="center" width="90">
           <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
         </el-table-column>
-        <el-table-column :label="detailDialog.factType === 'PERF_EXPECT' ? '应收金额' : '实收金额'" align="right" width="120">
+        <el-table-column :label="'应收金额'" align="right" width="120">
           <template #default="scope">
             <span class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
             <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
           </template>
-        </el-table-column>
-        <el-table-column label="是否结算" align="center" width="90">
-          <template #default="scope">
-            <el-tag :type="scope.row.settled ? 'success' : 'info'" size="small" effect="light">
-              {{ scope.row.settled ? '已结算' : '未结算' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="结算日期" align="center" width="110">
-          <template #default="scope">{{ formatDate(scope.row.settleDate) }}</template>
         </el-table-column>
         <el-table-column v-if="!isBroker" label="操作" align="center" width="100" fixed="right">
           <template #default="scope">
@@ -377,20 +337,17 @@ import { useUserStore } from '@/store/modules/user';
 const userStore = useUserStore();
 const isBroker = computed(() => userStore.roles.includes('agent'));
 
-// ==================== Tab & 筛选 ====================
-const activeTab = ref<'PERF_EXPECT' | 'PERF_REAL'>('PERF_EXPECT');
-const amountLabel = computed(() => activeTab.value === 'PERF_EXPECT' ? '新签业绩' : '结佣业绩');
+// ==================== 筛选 ====================
+const amountLabel = '新签业绩';
 
 const queryParams = reactive<{
   period: string;
   deptId: string | number | undefined;
   bizType: string;
-  settled: boolean | undefined;
 }>({
   period: '',
   deptId: undefined,
   bizType: '',
-  settled: undefined
 });
 
 const deptTreeData = ref<DeptNode[]>([]);
@@ -404,7 +361,7 @@ const keyword = ref('');
 const pageNum = ref(1);
 const pageSize = ref(20);
 
-const emptySummary = () => ({ employeeCount: 0, contractCount: 0, detailCount: 0, unsettledCount: 0, totalAmount: 0 });
+const emptySummary = () => ({ employeeCount: 0, contractCount: 0, detailCount: 0, totalAmount: 0 });
 const summary = ref(emptySummary());
 
 // ==================== 工具 ====================
@@ -445,7 +402,6 @@ const detailSummary = computed(() => {
   const list = detailList.value;
   return {
     employeeCount: new Set(list.map(r => r.employeeId)).size,
-    unsettledCount: list.filter(r => !r.settled).length,
     totalAmount: list.reduce((sum, r) => sum + num(r.amount), 0),
   };
 });
@@ -457,7 +413,7 @@ const goDetail = async (row: PerformanceManageContract) => {
   detailDialog.propertyAddress = row.propertyAddress || '';
   detailDialog.businessDate = row.businessDate ? String(row.businessDate) : '';
   detailDialog.period = queryParams.period;
-  detailDialog.factType = activeTab.value;
+  detailDialog.factType = 'PERF_EXPECT';
   detailList.value = [];
   detailDialog.visible = true;
   await loadDetailList();
@@ -574,10 +530,7 @@ const formatRatio = (val: number | string | undefined | null): string => {
   return `${Number.isInteger(pct) ? pct : pct.toFixed(2)}%`;
 };
 
-const formatDate = (val?: string | null): string => {
-  if (!val) return '—';
-  return val.length >= 10 ? val.substring(0, 10) : val;
-};
+
 
 // ==================== 关键字搜索（防抖） ====================
 const bizTypeOptions = ref<string[]>([]);
@@ -614,10 +567,9 @@ const getList = async () => {
   try {
     const res = await performanceApi.listManageByContract({
       period: queryParams.period,
-      factType: activeTab.value,
+      factType: 'PERF_EXPECT',
       deptId: queryParams.deptId ? String(queryParams.deptId) : undefined,
       bizType: queryParams.bizType || undefined,
-      settled: queryParams.settled,
       keyword: keyword.value.trim() || undefined,
       pageNum: pageNum.value,
       pageSize: pageSize.value
@@ -637,10 +589,6 @@ const onSizeChange = () => {
   pageNum.value = 1;
   getList();
 };
-const onTabChange = () => {
-  pageNum.value = 1;
-  getList();
-};
 const handleQuery = () => {
   pageNum.value = 1;
   getList();
@@ -648,7 +596,6 @@ const handleQuery = () => {
 const resetQuery = () => {
   queryParams.deptId = undefined;
   queryParams.bizType = '';
-  queryParams.settled = undefined;
   suppressKeywordWatch = true;
   keyword.value = '';
   pageNum.value = 1;
@@ -717,7 +664,7 @@ const submitAdjust = async () => {
       adjustType: adjustForm.adjustType,
       adjustScope: 'CONTRACT',
       contractNo: adjustDialog.contractNo,
-      factType: activeTab.value,
+      factType: 'PERF_EXPECT',
       deltaAmount: adjustForm.deltaAmount,
       targetDeptId: adjustForm.targetDeptId,
       reason: adjustForm.reason.trim(),

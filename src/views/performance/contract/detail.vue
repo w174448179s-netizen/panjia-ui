@@ -13,7 +13,7 @@
         </div>
         <div class="header-right">
           <span class="info-item">期间：<b>{{ period }}</b></span>
-          <span class="info-item">口径：<b>{{ factType === 'PERF_EXPECT' ? '新签业绩（应收）' : '结佣业绩（实收）' }}</b></span>
+          <span class="info-item">口径：<b>新签业绩（应收）</b></span>
           <span class="info-item">签约时间：<b>{{ formatDateTime(contractInfo.businessDate) }}</b></span>
           <span class="info-item">房源地址：<b>{{ contractInfo.propertyAddress || '—' }}</b></span>
         </div>
@@ -23,11 +23,10 @@
       <div class="summary-bar">
         <span class="summary-text">
           涉及 <b>{{ employeeCount }}</b> 人 ·
-          <b>{{ detailList.length }}</b> 条明细 ·
-          未结算 <b class="unsettled">{{ unsettledCount }}</b> 条
+          <b>{{ detailList.length }}</b> 条明细
         </span>
         <span class="summary-amount">
-          {{ factType === 'PERF_EXPECT' ? '应收' : '实收' }}合计：
+          应收合计：
           <b :class="{ 'amount-negative': totalAmount < 0 }">{{ formatAmount(totalAmount) }}</b>
         </span>
       </div>
@@ -51,21 +50,11 @@
         <el-table-column label="角色占比" align="center" width="90">
           <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
         </el-table-column>
-        <el-table-column :label="factType === 'PERF_EXPECT' ? '应收金额' : '实收金额'" align="right" width="120">
+        <el-table-column :label="'应收金额'" align="right" width="120">
           <template #default="scope">
             <span class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
             <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
           </template>
-        </el-table-column>
-        <el-table-column label="是否结算" align="center" width="90">
-          <template #default="scope">
-            <el-tag :type="scope.row.settled ? 'success' : 'info'" size="small" effect="light">
-              {{ scope.row.settled ? '已结算' : '未结算' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="结算日期" align="center" width="110">
-          <template #default="scope">{{ formatDate(scope.row.settleDate) }}</template>
         </el-table-column>
         <!-- 操作列：明细级业绩调整（经纪人无权限） -->
         <el-table-column v-if="!isBroker" label="操作" align="center" width="100" fixed="right">
@@ -163,7 +152,6 @@ const isBroker = computed(() => userStore.roles.includes('agent'));
 // ==================== 路由参数 ====================
 const contractNo = ref(String(route.query.contractNo || ''));
 const period = ref(String(route.query.period || ''));
-const factType = ref(String(route.query.factType || 'PERF_EXPECT'));
 
 // ==================== 数据 ====================
 const loading = ref(false);
@@ -182,7 +170,6 @@ const contractInfo = computed(() => {
 
 // 统计
 const employeeCount = computed(() => new Set(detailList.value.map(r => r.employeeId)).size);
-const unsettledCount = computed(() => detailList.value.filter(r => !r.settled).length);
 const totalAmount = computed(() => detailList.value.reduce((sum, r) => sum + num(r.amount), 0));
 
 // ==================== 工具 ====================
@@ -211,11 +198,6 @@ const formatDateTime = (val?: string | null): string => {
   return val.replace('T', ' ').substring(0, 19);
 };
 
-const formatDate = (val?: string | null): string => {
-  if (!val) return '—';
-  return val.length >= 10 ? val.substring(0, 10) : val;
-};
-
 // ==================== 返回 ====================
 const goBack = () => {
   router.back();
@@ -231,7 +213,7 @@ const loadDetails = async () => {
   try {
     const res = await performanceApi.listManageContractDetails({
       period: period.value,
-      factType: factType.value,
+      factType: 'PERF_EXPECT',
       contractNos: contractNo.value,
     });
     detailList.value = res.data ?? [];
@@ -315,7 +297,7 @@ const submitAdjust = async () => {
       employeeId: adjustDialog.employeeId,
       adjustType: adjustForm.adjustType,
       adjustScope: 'DETAIL',
-      factType: factType.value,
+      factType: 'PERF_EXPECT',
       deltaAmount: adjustForm.deltaAmount,
       targetDeptId: adjustForm.targetDeptId,
       reason: adjustForm.reason.trim(),
