@@ -82,13 +82,10 @@
 
       <!-- 审批单表格 -->
       <el-table border class="data-table" :data="applyList">
-        <el-table-column label="审批单号" align="center" width="180" show-overflow-tooltip fixed="left">
+        <el-table-column label="合同号/订单号" align="center" min-width="180" fixed="left">
           <template #default="{ row }">
-            <el-button type="primary" link class="contract-link" @click="viewDetail(row)">{{ row.applyNo }}</el-button>
+            <el-button type="primary" link class="contract-link" @click="viewDetail(row)">{{ row.contractNo || row.orderNo || '—' }}</el-button>
           </template>
-        </el-table-column>
-        <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.contractNo || row.orderNo || '—' }}</template>
         </el-table-column>
         <el-table-column label="实收金额" align="right" width="130">
           <template #default="{ row }">
