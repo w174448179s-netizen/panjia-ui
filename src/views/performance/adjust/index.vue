@@ -120,6 +120,11 @@
               {{ adjustTypeMap[scope.row.adjustType] ?? scope.row.adjustType }}
             </template>
           </el-table-column>
+          <el-table-column label="原始金额" align="center" prop="originAmount" width="120">
+            <template #default="scope">
+              <span class="origin-amount">{{ formatOrigin(scope.row.originAmount) }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="变动金额" align="center" prop="deltaAmount" width="120">
             <template #default="scope">
               <span :class="getAmountClass(scope.row.deltaAmount)">
@@ -285,6 +290,10 @@
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="调整单号">{{ detailData.adjustNo }}</el-descriptions-item>
+          <el-descriptions-item label="原始金额">{{ formatOrigin(detailData.originAmount) }}</el-descriptions-item>
+          <el-descriptions-item label="变动金额">
+            <span :class="getAmountClass(detailData.deltaAmount)">{{ formatAmount(detailData.deltaAmount) }}</span>
+          </el-descriptions-item>
           <el-descriptions-item label="申请人">{{ detailData.applicantName || '—' }}</el-descriptions-item>
           <el-descriptions-item label="审批人">{{ detailData.approverName || '—' }}</el-descriptions-item>
           <el-descriptions-item label="审批时间">{{ detailData.approveTime || '—' }}</el-descriptions-item>
@@ -470,6 +479,14 @@ const getAmountClass = (val: number | undefined): string => {
   if (val > 0) return 'amount-positive';
   if (val < 0) return 'amount-negative';
   return '';
+};
+
+/** 原始金额：绝对值口径，无 +/- 前缀；缺失显示 — */
+const formatOrigin = (val: number | string | undefined | null): string => {
+  if (val === undefined || val === null || val === '') return '—';
+  const n = Number(val);
+  if (Number.isNaN(n)) return String(val);
+  return `¥${n.toFixed(2)}`;
 };
 
 // ==================== 操作：取消（审批/执行由 RuoYi 工作流驱动） ====================
@@ -723,6 +740,12 @@ onMounted(() => {
     color: var(--el-color-danger);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
+  }
+
+  .origin-amount {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--el-text-color-primary);
   }
 
   .transfer-arrow {

@@ -13,8 +13,12 @@ export interface ReceivedApply {
   deptId?: string;
   batchId?: string;
   receivedAmount: number;     // 实收合计
-  expectedAmount?: number;    // 应收合计
+  expectedAmount?: number;    // 应收合计（列表「新签业绩」列展示）
   itemCount: number;
+  /** 业务类型（列表接口按 (期间,合同号) 从 ACTIVE PERF_REAL 事实回填） */
+  bizType?: string;
+  /** 涉及人数（列表接口回填：该合同本期间实收事实去重员工数） */
+  employeeCount?: number;
   status: string;             // DRAFT / SUBMITTED / APPROVED / REJECTED / CANCELLED
   currentNode?: string;       // FINANCE / DIRECTOR
   processInstanceId?: string;

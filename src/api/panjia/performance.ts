@@ -51,6 +51,7 @@ export interface PerformanceAdjust {
   adjustType: string;         // AMOUNT / VOID / TRANSFER
   adjustTypeName?: string;
   deltaAmount?: number;
+  originAmount?: number;     // 调整标的原始金额（后端列表回填）
   targetDeptId?: string;
   targetDeptName?: string;
   reason: string;

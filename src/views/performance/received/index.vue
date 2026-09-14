@@ -87,17 +87,29 @@
             <el-button type="primary" link class="contract-link" @click="viewDetail(row)">{{ row.contractNo || row.orderNo || '—' }}</el-button>
           </template>
         </el-table-column>
-        <el-table-column label="实收金额" align="right" width="130">
-          <template #default="{ row }">
-            <span class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="应收金额" align="right" width="130">
+        <el-table-column label="新签业绩" align="right" width="120">
           <template #default="{ row }">
             <span class="amount">¥{{ formatAmount(row.expectedAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="明细数" align="center" width="80">
+        <el-table-column label="实收业绩" align="right" width="120">
+          <template #default="{ row }">
+            <span class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="类型" align="center" width="100">
+          <template #default="{ row }">{{ row.bizType || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="房源地址" align="left" min-width="200" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.propertyAddress || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="签约/认购时间" align="center" width="170">
+          <template #default="{ row }">{{ formatDateTime(row.businessDate) }}</template>
+        </el-table-column>
+        <el-table-column label="涉及人数" align="center" width="90">
+          <template #default="{ row }">{{ row.employeeCount ?? 0 }}</template>
+        </el-table-column>
+        <el-table-column label="明细条数" align="center" width="90">
           <template #default="{ row }">{{ row.itemCount ?? 0 }}</template>
         </el-table-column>
         <el-table-column label="状态" align="center" width="100">
