@@ -48,7 +48,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, defineAsyncComponent, h } from 'vue';
+import { ref, computed, defineAsyncComponent } from 'vue';
 import type { Component } from 'vue';
 import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
 
@@ -60,11 +60,6 @@ import { useWorkflowTask } from '@/hooks/workflow/useWorkflowTask';
  *   是否有权办理该节点由工作流引擎按 flow_user 名单判权，前端不做本地判断；
  * - 不调用任何业务模块的 approve/reject 接口（业务直批 = 越权入口）；
  * - 业务详情体按 flowCode 从注册表懒加载，新增流程只需在 details/ 下补一个组件并登记。
- *
- * 打开性能三件套（点击零等待）：
- * - detail 组件按 flowCode 缓存组件定义，不重复创建 defineAsyncComponent；
- * - 弹窗挂载后空闲时预热全部明细 chunk（首次点击也无需现场下载/编译）；
- * - 异步体加载期间渲染骨架屏，避免弹窗先空白再弹出内容。
  */
 const emit = defineEmits<{
   /** 任务办理完成（通过或驳回），父组件应刷新待办列表 */
@@ -88,32 +83,6 @@ const visible = ref(false);
 const task = ref<any>(null);
 const bodyComponent = ref<Component | null>(null);
 
-/** 异步体加载期间的骨架屏（避免弹窗先空白） */
-const BodySkeleton: Component = {
-  name: 'BodySkeleton',
-  render: () =>
-    h('div', { class: 'body-skeleton' }, [
-      h('div', { class: 'body-skeleton-line', style: 'width: 38%' }),
-      h('div', { class: 'body-skeleton-line', style: 'width: 72%' }),
-      h('div', { class: 'body-skeleton-line', style: 'width: 55%' }),
-      h('div', { class: 'body-skeleton-line', style: 'width: 88%' })
-    ])
-};
-
-/** flowCode → 组件定义缓存：同一流程类型只创建一次，二次打开即挂即渲染 */
-const componentCache = new Map<string, Component>();
-const getDetailComponent = (flowCode: string): Component | null => {
-  const loader = DETAIL_LOADERS[flowCode];
-  if (!loader) return null;
-  if (!componentCache.has(flowCode)) {
-    componentCache.set(
-      flowCode,
-      defineAsyncComponent({ loader, loadingComponent: BodySkeleton, delay: 0, timeout: 15000 })
-    );
-  }
-  return componentCache.get(flowCode)!;
-};
-
 /** 业务扩展标题由后端按「类型｜明细…」格式拼装，这里取类型做标题 */
 const bizTypeLabel = computed(() => {
   const title = String(task.value?.businessTitle ?? '');
@@ -123,20 +92,13 @@ const bizTypeLabel = computed(() => {
 
 const dialogTitle = computed(() => `办理：${bizTypeLabel.value}`);
 
-/** 打开弹窗办理一条待办（同步打开，详情体异步装载、骨架屏兜底） */
+/** 打开弹窗办理一条待办 */
 const open = (row: any) => {
   task.value = row;
-  bodyComponent.value = getDetailComponent(row?.flowCode as string);
+  const loader = DETAIL_LOADERS[row?.flowCode as string];
+  bodyComponent.value = loader ? defineAsyncComponent(loader) : null;
   visible.value = true;
 };
-
-/** 挂载后空闲时预热全部明细 chunk，首次点击也无需现场下载/编译 */
-onMounted(() => {
-  const warm = () => Object.values(DETAIL_LOADERS).forEach(loader => loader().catch(() => {}));
-  const ric = (window as any).requestIdleCallback;
-  if (typeof ric === 'function') ric(warm);
-  else setTimeout(warm, 800);
-});
 
 const onPass = async () => {
   const ok = await passTask(task.value?.id);
@@ -187,34 +149,6 @@ defineExpose({ open });
 .unsupported {
   .fallback-desc {
     margin-top: 14px;
-  }
-}
-
-/* 异步明细体加载骨架屏 */
-:global(.workflow-handle-dialog) .body-skeleton {
-  padding: 18px 6px;
-
-  .body-skeleton-line {
-    height: 14px;
-    margin-bottom: 14px;
-    border-radius: 4px;
-    background: linear-gradient(
-      90deg,
-      var(--el-fill-color-light) 25%,
-      var(--el-fill-color) 37%,
-      var(--el-fill-color-light) 63%
-    );
-    background-size: 400% 100%;
-    animation: wf-skeleton-wave 1.2s ease infinite;
-  }
-}
-
-@keyframes wf-skeleton-wave {
-  0% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0 50%;
   }
 }
 </style>

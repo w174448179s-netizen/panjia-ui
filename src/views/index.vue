@@ -18,7 +18,7 @@
       </div>
     </el-card>
 
-    <!-- 待办任务列表 -->
+    <!-- 待办任务列表：与「我的待办」(taskWaiting.vue) 同构呈现 -->
     <el-card shadow="hover" class="task-card">
       <template #header>
         <div class="card-header">
@@ -26,22 +26,41 @@
         </div>
       </template>
 
-      <el-table v-loading="loading" border :data="taskList" stripe>
-        <el-table-column type="index" label="序号" width="60" align="center" />
-        <el-table-column label="业务标题" min-width="260" show-overflow-tooltip>
+      <el-table v-loading="loading" border :data="taskList" class="home-task-table">
+        <el-table-column align="center" type="index" label="序号" width="58" />
+
+        <!-- 核心列：这是什么单、单号是多少 -->
+        <el-table-column label="待办事项" min-width="330">
           <template #default="scope">
-            {{ scope.row.businessTitle || `${scope.row.flowName || '业务单据'}（业务ID ${scope.row.businessId}）` }}
+            <div class="biz-cell">
+              <el-tag :type="flowTagType(scope.row.flowCode)" effect="dark" size="small" class="biz-tag">
+                {{ bizType(scope.row) }}
+              </el-tag>
+              <div class="biz-body">
+                <div class="biz-detail" :title="bizDetail(scope.row)">{{ bizDetail(scope.row) }}</div>
+                <div class="biz-no">单号 {{ scope.row.businessCode || scope.row.businessId }}</div>
+              </div>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column prop="flowName" label="流程名称" width="140" align="center" show-overflow-tooltip />
-        <el-table-column prop="nodeName" label="当前节点" width="120" align="center" />
-        <el-table-column prop="createByName" label="申请人" width="110" align="center" />
-        <el-table-column prop="createTime" label="创建时间" width="160" align="center" />
-        <el-table-column label="操作" width="100" align="center" fixed="right">
+
+        <!-- 核心列：我现在要做什么 -->
+        <el-table-column label="当前环节" align="center" width="150">
           <template #default="scope">
-            <el-tooltip content="办理" placement="top">
-              <el-button link type="primary" icon="Edit" @click="handleOpen(scope.row)"></el-button>
-            </el-tooltip>
+            <el-tag type="primary" effect="plain">{{ scope.row.nodeName }}</el-tag>
+            <div class="biz-no">{{ scope.row.flowName }}</div>
+          </template>
+        </el-table-column>
+
+        <!-- 申请人为空 = 系统自动发起（如导入归档自动建单），不留空白 -->
+        <el-table-column align="center" label="申请人" width="100">
+          <template #default="scope">{{ scope.row.createByName || '系统自动' }}</template>
+        </el-table-column>
+        <el-table-column align="center" label="待办时间" prop="createTime" width="160" />
+
+        <el-table-column label="操作" align="center" width="130" fixed="right">
+          <template #default="scope">
+            <el-button type="primary" size="small" icon="EditPen" @click="handleOpen(scope.row)">去处理</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -52,9 +71,8 @@
       <div v-show="total > 0" class="pager-bar">
         <el-pagination
           background
-          layout="total, prev, pager, next, jumper"
+          layout="total, prev, pager, next"
           :total="total"
-          :page-sizes="[10, 20, 50]"
           v-model:current-page="queryParams.pageNum"
           v-model:page-size="queryParams.pageSize"
           @current-change="getList"
@@ -62,6 +80,9 @@
         />
       </div>
     </el-card>
+
+    <!-- 原地弹窗办理：不跳转业务页，详情 + 通过/驳回都在当前页完成 -->
+    <WorkflowHandleDialog ref="workflowHandleRef" @handled="getList" />
   </div>
 </template>
 
@@ -70,8 +91,7 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { pageByTaskWait } from '@/api/workflow/task';
 import type { FlowTaskVO, TaskQuery } from '@/api/workflow/task/types';
-import workflowCommon from '@/api/workflow/workflowCommon';
-import type { RouterJumpVo } from '@/api/workflow/workflowCommon/types';
+import WorkflowHandleDialog from '@/components/WorkflowHandle/index.vue';
 import { useUserStore } from '@/store/modules/user';
 
 const router = useRouter();
@@ -99,15 +119,47 @@ const getList = () => {
     });
 };
 
+/** 以下展示逻辑与 taskWaiting.vue 保持一致（两处表现同步维护） */
+
+/** 流程类型 -> 标签配色 */
+const TAG_TYPE_MAP: Record<string, string> = {
+  commission_apply: 'primary',
+  commission_adjust: 'warning',
+  perf_adjust: 'warning',
+  perf_received: 'success',
+  bonus_apply: 'info',
+  payroll_batch: 'danger',
+  payroll_supplement: 'danger'
+};
+const flowTagType = (flowCode: string) => TAG_TYPE_MAP[flowCode] || 'info';
+
+/**
+ * 业务扩展标题由后端按「类型｜明细…」格式拼装（见 bizExt.buildBizExt），
+ * 这里拆成"类型标签 + 明细"，避免整行糊在一起。
+ */
+const splitTitle = (row: any): { type: string; detail: string } => {
+  const title = row?.businessTitle as string | undefined;
+  if (title && title.includes('｜')) {
+    const [head, ...rest] = title.split('｜');
+    return { type: head.trim(), detail: rest.join(' · ').trim() };
+  }
+  return { type: '', detail: title ? title.trim() : '' };
+};
+
+/** 第一列主标签：业务标题里的类型，缺省回退流程定义名 */
+const bizType = (row: any) => splitTitle(row).type || row.flowName || '待办';
+
+/** 第一列副文本：业务标题里的明细，缺省时至少让人看到流程名+业务ID，不留空白 */
+const bizDetail = (row: any) => {
+  const { detail } = splitTitle(row);
+  if (detail) return detail;
+  return `${row.flowName || '业务单据'}（业务ID ${row.businessId}）`;
+};
+
+//办理：原地弹出详情弹窗（通过/驳回走工作流任务接口，节点鉴权由引擎负责）
+const workflowHandleRef = ref<InstanceType<typeof WorkflowHandleDialog>>();
 const handleOpen = (row: Partial<FlowTaskVO>) => {
-  const routerJumpVo: RouterJumpVo = {
-    businessId: row.businessId as string,
-    taskId: row.id as string | number,
-    type: 'approval',
-    formCustom: row.formCustom as string,
-    formPath: row.formPath as string
-  };
-  workflowCommon.routerJump(routerJumpVo);
+  workflowHandleRef.value?.open(row);
 };
 
 const goTaskList = () => {
@@ -182,7 +234,7 @@ onMounted(() => {
   }
 
   :deep(.el-card__body) {
-    padding: 0;
+    padding: 12px 16px 0;
   }
 }
 
@@ -198,9 +250,38 @@ onMounted(() => {
   color: var(--el-text-color-primary);
 }
 
+/* 待办表格单元格样式：与 taskWaiting.vue 一致 */
+.biz-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 2px 0;
+}
+.biz-tag {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.biz-body {
+  min-width: 0;
+}
+.biz-detail {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.biz-no {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.2;
+}
+
 .pager-bar {
   display: flex;
   justify-content: flex-end;
-  padding: 16px 20px;
+  padding: 14px 0 2px;
 }
 </style>
