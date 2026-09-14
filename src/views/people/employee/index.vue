@@ -460,7 +460,7 @@
 
     <!-- 员工导入 -->
     <el-dialog v-model="importDialog.visible" title="员工导入" width="680px" append-to-body @closed="resetImport">
-      <div v-loading="importDialog.loading" element-loading-text="正在导入，请稍候..." class="import-dialog-body">
+      <div v-loading="importDialog.loading" element-loading-text="正在上传文件，请稍候..." class="import-dialog-body">
       <!-- 上传区 -->
       <el-upload
         v-if="!importDialog.batchId"
@@ -502,11 +502,28 @@
         </el-button>
       </div>
 
-      <!-- 导入结果 -->
-      <div v-if="importDialog.batchId" class="import-result">
+      <!-- 导入进度（PARSING/VALIDATING/IMPORTING） -->
+      <div v-if="importDialog.batchId && needPolling(importDialog.batchStatus)" class="import-progress">
         <el-result
-          :icon="importDialog.batchStatus === 'SUCCESS' ? 'success' : importDialog.batchStatus === 'FAILED' ? 'error' : 'info'"
-          :title="importDialog.batchStatus === 'SUCCESS' ? '导入成功' : importDialog.batchStatus === 'FAILED' ? '导入失败' : '导入完成'"
+          icon="info"
+          :title="importStatusText(importDialog.batchStatus)"
+          :sub-title="`批次号: ${importDialog.batchNo} | 总行数: ${importDialog.totalRows}`"
+        />
+        <div class="progress-bar-wrap">
+          <el-progress
+            :percentage="importDialog.totalRows ? Math.round(importDialog.successRows / importDialog.totalRows * 100) : 0"
+            :stroke-width="10"
+            :indeterminate="importDialog.successRows === 0"
+          />
+          <p class="progress-text">已处理 {{ importDialog.successRows }} / {{ importDialog.totalRows }} 行</p>
+        </div>
+      </div>
+
+      <!-- 导入结果（SUCCESS/FAILED） -->
+      <div v-if="importDialog.batchId && (importDialog.batchStatus === 'SUCCESS' || importDialog.batchStatus === 'FAILED')" class="import-result">
+        <el-result
+          :icon="importDialog.batchStatus === 'SUCCESS' ? 'success' : 'error'"
+          :title="importDialog.batchStatus === 'SUCCESS' ? '导入成功' : '导入失败'"
           :sub-title="`批次号: ${importDialog.batchNo} | 总行数: ${importDialog.totalRows} | 成功: ${importDialog.successRows} | 失败: ${importDialog.failedRows}`"
         />
         <div v-if="importDialog.batchStatus === 'FAILED' && importDialog.issues.length" class="issue-list">
@@ -533,6 +550,7 @@
 </template>
 
 <script setup name="PeopleEmployee" lang="ts">
+import { onUnmounted } from 'vue';
 import { employeeApi } from '@/api/panjia/employee';
 import type {
   DeptNode,
@@ -774,8 +792,19 @@ const importDialog = reactive({
   failedRows: 0,
   issues: [] as PeopleImportIssue[]
 });
+const importPollingTimer = ref<ReturnType<typeof setInterval> | null>(null);
+
+const stopImportPolling = () => {
+  if (importPollingTimer.value) {
+    clearInterval(importPollingTimer.value);
+    importPollingTimer.value = null;
+  }
+};
+
+onUnmounted(() => stopImportPolling());
 
 const resetImport = () => {
+  stopImportPolling();
   importDialog.loading = false;
   importDialog.file = null;
   importDialog.batchId = '';
@@ -807,28 +836,58 @@ const doImportUpload = async () => {
     const res = await employeeApi.importEmployees(importDialog.file);
     const batchId = res.data;
     importDialog.batchId = batchId;
-    // 查批次详情
-    const batchRes = await employeeApi.importBatches();
-    const batch = (batchRes.data ?? []).find((b: PeopleImportBatch) => b.id === batchId);
-    if (batch) {
-      importDialog.batchNo = batch.batchNo;
-      importDialog.batchStatus = batch.status;
-      importDialog.totalRows = batch.totalRows;
-      importDialog.successRows = batch.successRows;
-      importDialog.failedRows = batch.failedRows;
-      // 失败时自动加载问题清单
-      if (batch.status === 'FAILED') {
-        await showIssues();
-      } else if (batch.status === 'SUCCESS') {
-        modal.msgSuccess(`导入成功，共 ${batch.successRows} 名员工已落地`);
-        await getList();
-      }
+    importDialog.loading = false;
+    await pollImportStatus(batchId);
+    if (needPolling(importDialog.batchStatus)) {
+      startImportPolling(batchId);
     }
   } catch (e: any) {
     modal.msgError('导入失败: ' + (e?.message || '未知错误'));
-  } finally {
     importDialog.loading = false;
   }
+};
+
+const needPolling = (status: string) =>
+  status === 'PARSING' || status === 'VALIDATING' || status === 'IMPORTING';
+
+const importStatusText = (status: string) => {
+  switch (status) {
+    case 'PARSING': return '正在解析文件...';
+    case 'VALIDATING': return '正在校验数据...';
+    case 'IMPORTING': return '正在导入员工...';
+    default: return '正在处理...';
+  }
+};
+
+const pollImportStatus = async (batchId: string) => {
+  const res = await employeeApi.importBatch(batchId);
+  const batch = res.data;
+  if (!batch) return;
+  importDialog.batchNo = batch.batchNo;
+  importDialog.batchStatus = batch.status;
+  importDialog.totalRows = batch.totalRows;
+  importDialog.successRows = batch.successRows;
+  importDialog.failedRows = batch.failedRows;
+  if (batch.status === 'FAILED') {
+    stopImportPolling();
+    await showIssues();
+  } else if (batch.status === 'SUCCESS') {
+    stopImportPolling();
+    modal.msgSuccess(`导入成功，共 ${batch.successRows} 名员工已落地`);
+    await getList();
+  }
+};
+
+const startImportPolling = (batchId: string) => {
+  stopImportPolling();
+  importPollingTimer.value = setInterval(async () => {
+    try {
+      await pollImportStatus(batchId);
+    } catch (e) {
+      stopImportPolling();
+      modal.msgError('轮询导入状态失败');
+    }
+  }, 2000);
 };
 
 const showIssues = async () => {
@@ -942,6 +1001,19 @@ onMounted(() => {
   .import-actions {
     margin-top: 16px;
     text-align: center;
+  }
+
+  .import-progress {
+    .progress-bar-wrap {
+      margin-top: 16px;
+
+      .progress-text {
+        margin-top: 8px;
+        text-align: center;
+        font-size: 13px;
+        color: var(--el-text-color-secondary);
+      }
+    }
   }
 
   .import-result {

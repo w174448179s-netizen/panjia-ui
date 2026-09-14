@@ -51,11 +51,15 @@ export const employeeApi = {
     return panjiaRequest.post<ReconcileResult>('/people/reconcile/run');
   },
   // ==================== V6.0 员工导入 ====================
-  /** 上传文件导入员工（两阶段：诊断 + 单一大事务落地） */
+  /** 上传文件导入员工（阶段A同步诊断，阶段B异步落地，返回 batchId 供轮询） */
   importEmployees(file: File) {
     const formData = new FormData();
     formData.append('file', file);
     return panjiaRequest.post<string>('/people/employee/import', formData);
+  },
+  /** 员工导入批次详情（轮询进度用） */
+  importBatch(batchId: string | number) {
+    return panjiaRequest.get<PeopleImportBatch>(`/people/employee/import/batches/${batchId}`);
   },
   /** 员工导入批次列表 */
   importBatches() {
