@@ -114,7 +114,7 @@
         <el-table-column label="发起人" align="center" width="100">
           <template #default="{ row }">{{ row.applicantId ? applicantName(row.applicantId) : '系统自动' }}</template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="280" fixed="right">
+        <el-table-column label="操作" align="center" width="200" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
             <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重新提交</el-button>
@@ -170,19 +170,44 @@
 
       <div class="detail-table-wrap">
         <div class="detail-table-title">每人实收明细（{{ detailFacts.length }} 条）</div>
-        <el-table :data="detailFacts" border size="small" max-height="420">
+        <el-table :data="detailFacts" border max-height="420" class="detail-facts-table">
           <el-table-column label="序号" type="index" width="55" align="center" />
-          <el-table-column label="员工" min-width="120">
-            <template #default="{ row }">{{ employeeName(row.employeeId) || row.employeeName || row.employeeCode || '—' }}</template>
-          </el-table-column>
-          <el-table-column label="角色类型" align="center" width="110">
-            <template #default="{ row }">{{ row.roleType || '—' }}</template>
-          </el-table-column>
-          <el-table-column label="实收金额" align="right" width="130">
-            <template #default="{ row }">
-              <span class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
+          <el-table-column label="门店/组别" align="left" min-width="150">
+            <template #default="scope">
+              <span v-if="scope.row.deptPath" class="dept-wrap" :title="scope.row.deptPath">
+                <span class="dept-store">{{ deptStore(scope.row.deptPath) }}</span>
+                <span v-if="deptGroup(scope.row.deptPath)" class="dept-group"> · {{ deptGroup(scope.row.deptPath) }}</span>
+              </span>
+              <span v-else>—</span>
             </template>
           </el-table-column>
+          <el-table-column label="工号" align="center" width="100">
+            <template #default="scope">{{ scope.row.employeeCode || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="姓名" align="center" min-width="110">
+            <template #default="scope">
+              <span class="person-name">{{ scope.row.employeeName || employeeName(scope.row.employeeId) || '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="所属角色" align="center" min-width="100">
+            <template #default="scope">{{ scope.row.roleType || scope.row.roleName || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="角色占比" align="center" width="90">
+            <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
+          </el-table-column>
+          <el-table-column label="应收金额" align="right" width="120">
+            <template #default="scope">
+              <span class="amount">{{ formatAmount(scope.row.expectedAmount) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="实收金额" align="right" width="120">
+            <template #default="scope">
+              <span class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
+            </template>
+          </el-table-column>
+          <template #empty>
+            <el-empty description="该合同暂无实收明细" />
+          </template>
         </el-table>
       </div>
 
@@ -263,6 +288,26 @@ const formatAmount = (n: number | string | null | undefined) =>
 const formatDateTime = (val?: string | null): string => {
   if (!val) return '—';
   return val.replace('T', ' ').substring(0, 19);
+};
+
+// ==================== 门店/组别 拆分展示（与合同业绩明细同口径） ====================
+// deptPath 形如「集团-门店-组别」（2~3 段）：门店取倒数第二段（无上级时取首段），组别取最后一段
+const deptParts = (path: string): string[] => path.split('-').map((s) => s.trim()).filter(Boolean);
+const deptStore = (path: string): string => {
+  const parts = deptParts(path);
+  return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] ?? '—');
+};
+const deptGroup = (path: string): string => {
+  const parts = deptParts(path);
+  return parts.length >= 2 ? parts[parts.length - 1] : '';
+};
+
+const formatRatio = (val: number | string | undefined | null): string => {
+  if (val === undefined || val === null || val === '') return '—';
+  const n = Number(val);
+  if (Number.isNaN(n)) return String(val);
+  const pct = n * 100;
+  return `${Number.isInteger(pct) ? pct : pct.toFixed(2)}%`;
 };
 
 const summaryAmount = computed(() => applyList.value.reduce((s, r) => s + num(r.receivedAmount), 0));
@@ -589,6 +634,33 @@ onMounted(() => {
   }
   .amount-red {
     color: #f56c6c;
+  }
+}
+
+.detail-facts-table {
+  .person-name {
+    font-weight: 600;
+    color: #303133;
+  }
+
+  .dept-wrap {
+    line-height: 1.5;
+    word-break: break-word;
+  }
+
+  .dept-store {
+    font-weight: 600;
+    color: #303133;
+  }
+
+  .dept-group {
+    color: #909399;
+  }
+
+  .amount {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: #909399;
   }
 }
 </style>

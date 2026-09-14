@@ -133,26 +133,14 @@
         <el-table-column label="发起人" align="center" width="100">
           <template #default="{ row }">{{ row.applicantId === 0 ? '系统' : (applicantName(row.applicantId) || '—') }}</template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="220" fixed="right">
+        <el-table-column label="操作" align="center" width="200" fixed="right">
           <template #default="{ row }">
-            <el-tooltip v-if="row.applicationId" content="详情" placement="top">
-              <el-button link type="primary" icon="View" @click="viewDetail(row)"></el-button>
-            </el-tooltip>
-            <el-tooltip v-if="canOriginate(row)" content="发起" placement="top">
-              <el-button link type="primary" icon="Plus" @click="originate(row as CommissionContractVO)"></el-button>
-            </el-tooltip>
-            <el-tooltip v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" content="提交" placement="top">
-              <el-button link type="warning" icon="Upload" @click="submit(row)"></el-button>
-            </el-tooltip>
-            <el-tooltip v-if="row.status === 'SUBMITTED'" content="通过" placement="top">
-              <el-button link type="success" icon="CircleCheck" @click="approve(row, true)"></el-button>
-            </el-tooltip>
-            <el-tooltip v-if="row.status === 'SUBMITTED'" content="驳回" placement="top">
-              <el-button link type="danger" icon="CircleClose" @click="approve(row, false)"></el-button>
-            </el-tooltip>
-            <el-tooltip v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'" content="作废" placement="top">
-              <el-button link type="info" icon="Delete" @click="cancel(row)"></el-button>
-            </el-tooltip>
+            <el-button v-if="row.applicationId" link type="primary" @click="viewDetail(row)">详情</el-button>
+            <el-button v-if="canOriginate(row)" link type="primary" @click="originate(row as CommissionContractVO)">发起</el-button>
+            <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="submit(row)">提交</el-button>
+            <el-button v-if="row.status === 'SUBMITTED'" link type="success" @click="approve(row, true)">通过</el-button>
+            <el-button v-if="row.status === 'SUBMITTED'" link type="danger" @click="approve(row, false)">驳回</el-button>
+            <el-button v-if="row.status === 'DRAFT' || row.status === 'SUBMITTED'" link type="info" @click="cancel(row)">作废</el-button>
           </template>
         </el-table-column>
         <template #empty>

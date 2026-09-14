@@ -24,21 +24,22 @@ export interface ReceivedApply {
   createTime: string;
 }
 
-/** 审批单内每人实收明细（PerformanceFactSummaryDTO 子集） */
+/** 审批单内每人实收明细（ReceivedFactDetailDTO，列口径对齐合同业绩明细） */
 export interface ReceivedFact {
   factId: string;
-  period: string;
-  contractNo?: string;
-  orderNo?: string;
-  propertyAddress?: string;
   employeeId?: string;
   employeeCode?: string;
   employeeName?: string;
-  deptId?: string;
+  /** 门店/组别（「集团-门店-组别」） */
+  deptPath?: string;
   roleType?: string;
+  roleName?: string;
+  /** 角色占比 */
+  shareRatio?: number;
+  /** 应收金额（同 sourceKey 的 PERF_EXPECT 事实金额） */
+  expectedAmount?: number;
+  /** 实收金额（PERF_REAL 事实金额） */
   amount: number;
-  receivedApplyId?: string;
-  receivedStatus?: string;
 }
 
 export interface ReceivedQuery extends PageQuery {

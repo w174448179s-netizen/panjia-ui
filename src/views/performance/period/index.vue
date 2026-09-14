@@ -42,7 +42,7 @@
             <template #default="scope">{{ scope.row.closeTime || '—' }}</template>
           </el-table-column>
           <el-table-column label="创建时间" align="center" prop="createTime" width="170" sortable />
-          <el-table-column label="操作" align="center" width="120" class-name="small-padding fixed-width">
+          <el-table-column label="操作" align="center" width="80" class-name="small-padding fixed-width">
             <template #default="scope">
               <el-button v-if="scope.row.status === 'OPEN'" link type="danger" @click="handleClose(scope.row)">封账</el-button>
               <el-button v-else-if="scope.row.status === 'CLOSED'" link type="primary" @click="handleReopen(scope.row)">反结账</el-button>

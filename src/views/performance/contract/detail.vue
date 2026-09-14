@@ -33,18 +33,24 @@
 
       <!-- 明细列表（扁平表格，无展开） -->
       <el-table border class="data-table" :data="detailList">
-        <el-table-column label="门店/组别" align="left" min-width="120" show-overflow-tooltip>
-          <template #default="scope">{{ scope.row.deptPath || '—' }}</template>
+        <el-table-column label="门店/组别" align="left" min-width="150">
+          <template #default="scope">
+            <span v-if="scope.row.deptPath" class="dept-wrap" :title="scope.row.deptPath">
+              <span class="dept-store">{{ deptStore(scope.row.deptPath) }}</span>
+              <span v-if="deptGroup(scope.row.deptPath)" class="dept-group"> · {{ deptGroup(scope.row.deptPath) }}</span>
+            </span>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="工号" align="center" width="100">
           <template #default="scope">{{ scope.row.employeeCode || '—' }}</template>
         </el-table-column>
-        <el-table-column label="姓名" align="center" width="120">
+        <el-table-column label="姓名" align="center" min-width="110">
           <template #default="scope">
             <span class="person-name">{{ scope.row.employeeName || '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="所属角色" align="center" width="110">
+        <el-table-column label="所属角色" align="center" min-width="100">
           <template #default="scope">{{ scope.row.roleType || scope.row.roleName || '—' }}</template>
         </el-table-column>
         <el-table-column label="角色占比" align="center" width="90">
@@ -57,9 +63,9 @@
           </template>
         </el-table-column>
         <!-- 操作列：明细级业绩调整（经纪人无权限） -->
-        <el-table-column v-if="!isBroker" label="操作" align="center" width="100" fixed="right">
+        <el-table-column v-if="!isBroker" label="操作" align="center" width="80" fixed="right">
           <template #default="scope">
-            <el-button type="primary" link size="small" @click="openAdjustDialog(scope.row)">调整</el-button>
+            <el-button type="primary" link @click="openAdjustDialog(scope.row)">调整</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -196,6 +202,18 @@ const formatRatio = (val: number | string | undefined | null): string => {
 const formatDateTime = (val?: string | null): string => {
   if (!val) return '—';
   return val.replace('T', ' ').substring(0, 19);
+};
+
+// ==================== 门店/组别 拆分展示 ====================
+// deptPath 形如「集团-门店-组别」（2~3 段）：门店取倒数第二段（无上级时取首段），组别取最后一段
+const deptParts = (path: string): string[] => path.split('-').map((s) => s.trim()).filter(Boolean);
+const deptStore = (path: string): string => {
+  const parts = deptParts(path);
+  return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] ?? '—');
+};
+const deptGroup = (path: string): string => {
+  const parts = deptParts(path);
+  return parts.length >= 2 ? parts[parts.length - 1] : '';
 };
 
 // ==================== 返回 ====================
@@ -429,6 +447,20 @@ onMounted(async () => {
   .person-name {
     font-weight: 600;
     color: #303133;
+  }
+
+  .dept-wrap {
+    line-height: 1.5;
+    word-break: break-word;
+  }
+
+  .dept-store {
+    font-weight: 600;
+    color: #303133;
+  }
+
+  .dept-group {
+    color: #909399;
   }
 
   .amount {

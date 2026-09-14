@@ -76,14 +76,10 @@
           </template>
         </el-table-column>
         <el-table-column label="创建时间" prop="createTime" width="170" />
-        <el-table-column label="操作" width="110" fixed="right">
+        <el-table-column label="操作" align="center" width="100" fixed="right">
           <template #default="{ row }">
-            <el-tooltip content="详情" placement="top">
-              <el-button link type="primary" icon="View" @click="viewDetail(row)"></el-button>
-            </el-tooltip>
-            <el-tooltip v-if="row.status === 'SUBMITTED'" content="取消" placement="top">
-              <el-button link type="warning" icon="Close" @click="cancel(row)"></el-button>
-            </el-tooltip>
+            <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
+            <el-button v-if="row.status === 'SUBMITTED'" link type="info" @click="cancel(row)">取消</el-button>
           </template>
         </el-table-column>
         <template #empty><el-empty description="暂无调整单" /></template>
