@@ -17,7 +17,10 @@
         <el-descriptions-item label="实收合计">
           <span class="amount amount-red">¥{{ formatAmount(detail.receivedAmount) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="应收合计" :span="2">¥{{ formatAmount(detail.expectedAmount) }}</el-descriptions-item>
+        <el-descriptions-item label="应收合计" :span="2">
+          ¥{{ formatAmount(detail.expectedAmount) }}
+          <el-tag v-if="detail.expectedAdjusted" type="warning" size="small" effect="plain" style="margin-left: 6px">已调整</el-tag>
+        </el-descriptions-item>
         <el-descriptions-item label="房源地址" :span="3">{{ detail.propertyAddress || '—' }}</el-descriptions-item>
       </el-descriptions>
 

@@ -13,7 +13,9 @@ export interface ReceivedApply {
   deptId?: string;
   batchId?: string;
   receivedAmount: number;     // 实收合计
-  expectedAmount?: number;    // 应收合计（列表「新签业绩」列展示）
+  expectedAmount?: number;    // 应收合计（展示实时值：ACTIVE PERF_EXPECT 含已生效调整）
+  /** 应收已被调整（当前应收 ≠ 提交时快照，展示「已调整」标记） */
+  expectedAdjusted?: boolean;
   itemCount: number;
   /** 业务类型（列表接口按 (期间,合同号) 从 ACTIVE PERF_REAL 事实回填） */
   bizType?: string;

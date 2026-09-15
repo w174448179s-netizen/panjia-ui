@@ -71,9 +71,10 @@
             <el-button type="primary" link class="contract-link" @click="viewDetail(row)">{{ row.contractNo || row.orderNo || '—' }}</el-button>
           </template>
         </el-table-column>
-        <el-table-column label="新签业绩" align="right" width="120">
+        <el-table-column label="新签业绩" align="right" width="130">
           <template #default="{ row }">
             <span class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
+            <el-tag v-if="row.expectedAdjusted" type="warning" size="small" effect="plain" class="adj-tag">已调整</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="实收业绩" align="right" width="120">
@@ -158,7 +159,10 @@
         <el-descriptions-item label="实收合计">
           <span class="amount amount-red">¥{{ formatAmount(detailApp.receivedAmount) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="应收合计" :span="2"><span class="amount amount-expected">¥{{ formatAmount(detailApp.expectedAmount) }}</span></el-descriptions-item>
+        <el-descriptions-item label="应收合计" :span="2">
+          <span class="amount amount-expected">¥{{ formatAmount(detailApp.expectedAmount) }}</span>
+          <el-tag v-if="detailApp.expectedAdjusted" type="warning" size="small" effect="plain" style="margin-left: 6px">已调整</el-tag>
+        </el-descriptions-item>
         <el-descriptions-item label="房源地址" :span="3">{{ detailApp.propertyAddress || '—' }}</el-descriptions-item>
       </el-descriptions>
 
@@ -555,6 +559,9 @@ onMounted(() => {
   }
   .amount-expected {
     color: #909399;
+  }
+  .adj-tag {
+    margin-left: 4px;
   }
 }
 
