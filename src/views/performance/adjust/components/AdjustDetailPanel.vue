@@ -45,10 +45,10 @@
           <el-descriptions-item label="签约时间">{{ detail.businessDate || '—' }}</el-descriptions-item>
           <el-descriptions-item label="明细条数">{{ detail.detailCount ?? 0 }} 条</el-descriptions-item>
           <el-descriptions-item label="合同金额">
-            <span class="amount">{{ formatYuan(contractAmount) }}</span>
+            <span class="amount">{{ formatYuan(detail.originalAmount) }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="调整后金额">
-            <span class="amount amount-red">{{ formatYuan(contractAfterAmount) }}</span>
+            <span class="amount amount-red">{{ formatYuan(detail.targetAmount) }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="房源地址" :span="2">{{ detail.propertyAddress || '—' }}</el-descriptions-item>
         </el-descriptions>
@@ -109,7 +109,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { performanceApi, type AdjustDetailVO } from '@/api/panjia/performance';
 import { useEmployeeMap } from '@/components/WorkflowHandle/useEmployeeMap';
 
@@ -153,12 +153,6 @@ const statusTagType = (s: string) => {
   return (map as any)[s] || 'info';
 };
 
-const num = (v: number | string | undefined | null): number => {
-  if (v === undefined || v === null || v === '') return 0;
-  const n = Number(v);
-  return Number.isNaN(n) ? 0 : n;
-};
-
 /** 金额：两位小数，带 ¥ 前缀 */
 const formatYuan = (val: number | string | undefined | null): string => {
   if (val === undefined || val === null || val === '') return '—';
@@ -199,32 +193,9 @@ const formatRatio = (val: number | string | undefined | null): string => {
 
 const rowClassName = ({ row }: { row: any }) => (row.target ? 'target-row' : '');
 
-/** 安全四舍五入到两位小数，规避浮点累加误差 */
-const round2 = (v: number): number => Math.round(v * 100) / 100;
-
-/**
- * 合同金额：合同下全部有效明细的应收合计。
- * 后端 expectedTotal 已是该口径，缺失时按明细行兜底累加。
- */
-const contractAmount = computed<number>(() => {
-  const d = detail.value;
-  if (!d) return 0;
-  if (d.expectedTotal !== undefined && d.expectedTotal !== null) return num(d.expectedTotal);
-  return round2((d.details ?? []).reduce((sum, r) => sum + num(r.amount), 0));
-});
-
-/**
- * 调整后金额：合同级口径 = 合同金额 + 本次调整变动。
- * 明细级调整时单据上的 targetAmount 只是单条明细的目标值，不能代表合同，
- * 故优先按明细行的 afterAmount 汇总（合同级调整分摊后与该值一致）。
- */
-const contractAfterAmount = computed<number>(() => {
-  const d = detail.value;
-  if (!d) return 0;
-  const rows = d.details ?? [];
-  if (rows.length) return round2(rows.reduce((sum, r) => sum + num(r.afterAmount), 0));
-  return num(d.targetAmount);
-});
+// 「合同金额」与「调整后金额」直接取调整单的 originalAmount / targetAmount，
+// 不再按 details 累加：调整单执行后 details 查的是新 ACTIVE 事实，amount 已是
+// 调整后的值，再累加会与单据头部的 originalAmount/targetAmount 不一致。
 
 onMounted(async () => {
   loading.value = true;
