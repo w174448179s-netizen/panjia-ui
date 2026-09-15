@@ -164,7 +164,8 @@ export interface PerformanceManageRow {
   roleType?: string;         // 所属角色
   roleName?: string;         // 角色名
   shareRatio?: number;       // 角色占比
-  amount: number;            // 业绩金额（PERF_EXPECT=应收 / PERF_REAL=实收）
+  amount: number;            // 业绩金额（调整后，PERF_EXPECT=应收 / PERF_REAL=实收）
+  originalAmount: number;    // 原始金额（调整前，未调整时 = amount）
   settled: boolean;          // 是否已结算
   settleDate?: string;       // 结算日期
   sourceKey: string;
@@ -188,7 +189,8 @@ export interface PerformanceManageEmployee {
   employeeCode?: string;     // 工号
   employeeName?: string;     // 签约人
   deptPath?: string;         // 门店/组别全路径：大区-门店-组（组与门店同名时只到两级）
-  amount: number;            // 金额合计（PERF_EXPECT=应收 / PERF_REAL=实收）
+  amount: number;            // 金额合计（调整后，PERF_EXPECT=应收 / PERF_REAL=实收）
+  originalAmount: number;    // 原始金额合计（调整前，未调整时 = amount）
   contractCount: number;     // 合同数
   detailCount: number;       // 明细条数
   unsettledCount: number;    // 未结算条数
@@ -223,7 +225,8 @@ export interface PerformanceManageContract {
   bizType?: string;          // 业务类型
   propertyAddress?: string;  // 房源地址
   businessDate?: string;     // 签约/认购日期
-  amount: number;            // 合同金额合计（PERF_EXPECT=应收 / PERF_REAL=实收）
+  amount: number;            // 合同金额合计（调整后，PERF_EXPECT=应收 / PERF_REAL=实收）
+  originalAmount: number;    // 原始金额合计（调整前，未调整时 = amount）
   employeeCount: number;     // 涉及签约人数
   detailCount: number;       // 明细条数
   unsettledCount: number;    // 未结算条数

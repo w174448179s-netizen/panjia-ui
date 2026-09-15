@@ -77,9 +77,15 @@
             </el-button>
           </template>
         </el-table-column>
-        <el-table-column :label="amountLabel" align="right" width="100" fixed="left">
+        <el-table-column label="原始金额" align="right" width="110" fixed="left">
+          <template #default="scope">
+            <span class="amount-original">{{ formatAmount(scope.row.originalAmount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="amountLabel" align="right" width="110" fixed="left">
           <template #default="scope">
             <span class="amount amount-contract">{{ formatAmount(scope.row.amount) }}</span>
+            <el-tag v-if="scope.row.amount !== scope.row.originalAmount" type="primary" size="small" effect="plain" class="adjust-tag">已调</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="类型" align="center" width="100">
@@ -225,6 +231,9 @@
           <b>{{ detailList.length }}</b> 条明细
         </span>
         <span class="summary-amount">
+          原始合计：
+          <b :class="{ 'amount-negative': detailSummary.totalOriginalAmount < 0 }">{{ formatAmount(detailSummary.totalOriginalAmount) }}</b>
+          <span class="summary-sep">|</span>
           应收合计：
           <b :class="{ 'amount-negative': detailSummary.totalAmount < 0 }">{{ formatAmount(detailSummary.totalAmount) }}</b>
         </span>
@@ -255,10 +264,18 @@
         <el-table-column label="角色占比" align="center" width="90">
           <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
         </el-table-column>
-        <el-table-column :label="'应收金额'" align="right" width="120">
+        <el-table-column label="原始金额" align="right" width="120">
+          <template #default="scope">
+            <span class="amount-original">{{ formatAmount(scope.row.originalAmount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="'应收金额'" align="right" width="130">
           <template #default="scope">
             <span class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
-            <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
+            <div class="amount-tags">
+              <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
+              <el-tag v-if="scope.row.amount !== scope.row.originalAmount" type="primary" size="small" effect="plain" class="adjust-tag">已调</el-tag>
+            </div>
           </template>
         </el-table-column>
         <el-table-column v-if="!isBroker" label="操作" align="center" width="100" fixed="right">
@@ -423,6 +440,7 @@ const detailSummary = computed(() => {
   return {
     employeeCount: new Set(list.map(r => r.employeeId)).size,
     totalAmount: list.reduce((sum, r) => sum + num(r.amount), 0),
+    totalOriginalAmount: list.reduce((sum, r) => sum + num(r.originalAmount), 0),
   };
 });
 
@@ -823,6 +841,16 @@ onMounted(async () => {
   .amount-contract {
     color: #f56c6c;
   }
+  .amount-original {
+    font-variant-numeric: tabular-nums;
+    color: #c0c4cc;
+    font-size: 13px;
+  }
+  .adjust-tag {
+    margin-left: 4px;
+    transform: scale(0.85);
+    transform-origin: left center;
+  }
 }
 
 .pager-bar {
@@ -870,6 +898,10 @@ onMounted(async () => {
     .amount-negative {
       color: #67c23a;
     }
+  }
+  .summary-sep {
+    color: #dcdfe6;
+    margin: 0 8px;
   }
 }
 

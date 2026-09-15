@@ -26,6 +26,9 @@
           <b>{{ detailList.length }}</b> 条明细
         </span>
         <span class="summary-amount">
+          原始合计：
+          <b :class="{ 'amount-negative': totalOriginalAmount < 0 }">{{ formatAmount(totalOriginalAmount) }}</b>
+          <span class="summary-sep">|</span>
           应收合计：
           <b :class="{ 'amount-negative': totalAmount < 0 }">{{ formatAmount(totalAmount) }}</b>
         </span>
@@ -56,10 +59,18 @@
         <el-table-column label="角色占比" align="center" width="90">
           <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
         </el-table-column>
-        <el-table-column :label="'应收金额'" align="right" width="120">
+        <el-table-column label="原始金额" align="right" width="120">
+          <template #default="scope">
+            <span class="amount-original">{{ formatAmount(scope.row.originalAmount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="'应收金额'" align="right" width="130">
           <template #default="scope">
             <span class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
-            <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
+            <div class="amount-tags">
+              <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
+              <el-tag v-if="scope.row.amount !== scope.row.originalAmount" type="primary" size="small" effect="plain" class="adjust-tag">已调</el-tag>
+            </div>
           </template>
         </el-table-column>
         <!-- 操作列：明细级业绩调整（经纪人无权限） -->
@@ -180,6 +191,7 @@ const contractInfo = computed(() => {
 // 统计
 const employeeCount = computed(() => new Set(detailList.value.map(r => r.employeeId)).size);
 const totalAmount = computed(() => detailList.value.reduce((sum, r) => sum + num(r.amount), 0));
+const totalOriginalAmount = computed(() => detailList.value.reduce((sum, r) => sum + num(r.originalAmount), 0));
 
 // ==================== 工具 ====================
 const num = (v: number | string | undefined | null): number => {
@@ -443,6 +455,10 @@ onMounted(async () => {
       color: #67c23a;
     }
   }
+  .summary-sep {
+    color: #dcdfe6;
+    margin: 0 8px;
+  }
 }
 
 .data-table {
@@ -472,13 +488,28 @@ onMounted(async () => {
     font-weight: 600;
     color: #909399;
   }
+  .amount-original {
+    font-variant-numeric: tabular-nums;
+    color: #c0c4cc;
+    font-size: 13px;
+  }
   .amount-redink {
     color: #f56c6c;
   }
+  .amount-tags {
+    display: flex;
+    gap: 4px;
+    margin-top: 2px;
+    justify-content: flex-end;
+  }
   .redink-tag {
-    margin-left: 4px;
+    margin-left: 0;
     transform: scale(0.85);
-    transform-origin: left center;
+    transform-origin: right center;
+  }
+  .adjust-tag {
+    transform: scale(0.85);
+    transform-origin: right center;
   }
 }
 
