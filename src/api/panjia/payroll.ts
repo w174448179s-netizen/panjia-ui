@@ -113,15 +113,6 @@ export const payrollApi = {
   submit(id: number) {
     return panjiaRequest.post<PayrollBatch>(`/payroll/batch/${id}/submit`);
   },
-  approve(id: number) {
-    return panjiaRequest.post<PayrollBatch>(`/payroll/batch/${id}/approve`);
-  },
-  reject(id: number) {
-    return panjiaRequest.post<PayrollBatch>(`/payroll/batch/${id}/reject`);
-  },
-  lock(id: number) {
-    return panjiaRequest.post<PayrollBatch>(`/payroll/batch/${id}/lock`);
-  },
   pay(id: number) {
     return panjiaRequest.post<PayrollBatch>(`/payroll/batch/${id}/pay`);
   },

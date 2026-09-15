@@ -38,9 +38,11 @@
             <el-tooltip content="明细" placement="top">
               <el-button link type="primary" icon="View" @click="viewDetail(row)"></el-button>
             </el-tooltip>
-            <!-- 状态相关操作收进下拉，避免按钮过多换行重叠 -->
+            <!-- 状态相关操作收进下拉，避免按钮过多换行重叠。
+                 审批通过/驳回/锁定已收敛到「我的待办」（payroll_batch 工作流节点办理），
+                 业务页不再提供直批入口 -->
             <el-dropdown
-              v-if="canCalc(row.status) || row.status === 'REVIEWING' || row.status === 'APPROVED' || row.status === 'LOCKED'"
+              v-if="canCalc(row.status) || row.status === 'LOCKED'"
               trigger="click"
               @command="(cmd: string) => handleRowAction(cmd, row)"
             >
@@ -49,11 +51,6 @@
                 <el-dropdown-menu>
                   <el-dropdown-item v-if="canCalc(row.status)" command="calculate" icon="Calculator">算薪</el-dropdown-item>
                   <el-dropdown-item v-if="row.status === 'CALCULATED'" command="submit" icon="Upload">提交审批</el-dropdown-item>
-                  <!-- 审批/驳回按权限码收口：payroll:batch:approve / :reject 仅授予总监，
-                       财务与店长不显示入口（后端 @SaCheckPermission 同步拦截越权调用） -->
-                  <el-dropdown-item v-if="row.status === 'REVIEWING' && checkPermi(['payroll:batch:approve'])" command="approve" icon="CircleCheck">通过</el-dropdown-item>
-                  <el-dropdown-item v-if="row.status === 'REVIEWING' && checkPermi(['payroll:batch:reject'])" command="reject" icon="CircleClose">驳回</el-dropdown-item>
-                  <el-dropdown-item v-if="row.status === 'APPROVED'" command="lock" icon="Lock">锁定</el-dropdown-item>
                   <el-dropdown-item v-if="row.status === 'LOCKED'" command="pay" icon="Money">标记发放</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -158,7 +155,6 @@ import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { payrollApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
-import { checkPermi } from '@/utils/permission';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
 const route = useRoute();
@@ -213,9 +209,9 @@ const createBatch = async () => {
 const handleRowAction = (cmd: string, row: PayrollBatch) => doAction(row, cmd);
 
 const doAction = async (row: PayrollBatch, action: string) => {
-  const labelMap: Record<string, string> = { calculate: '算薪', submit: '提交审核', approve: '审批通过', reject: '驳回', lock: '锁定', pay: '标记发放' };
+  const labelMap: Record<string, string> = { calculate: '算薪', submit: '提交审核', pay: '标记发放' };
   const label = labelMap[action];
-  if (['approve', 'lock', 'pay'].includes(action)) {
+  if (action === 'pay') {
     try {
       await ElMessageBox.confirm(`确认${label}批次「${row.period}」？`, '提示', { type: 'warning' });
     } catch {

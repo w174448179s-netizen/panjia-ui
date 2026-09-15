@@ -78,8 +78,6 @@ export const receivedApi = {
   /** 驳回后重新提交 */
   resubmit: (id: string | number) =>
     panjiaRequest.post<void>(`/performance/received/${id}/resubmit`),
-  approve: (id: string | number) =>
-    panjiaRequest.post<void>(`/performance/received/${id}/approve`),
   cancel: (id: string | number) =>
     panjiaRequest.post<void>(`/performance/received/${id}/cancel`),
   /** Excel 批量审批（匹配合同号+实收金额，§2.3） */
