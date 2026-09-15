@@ -16,7 +16,7 @@
         <el-descriptions-item label="结佣合计">
           <span class="amount amount-red">¥{{ formatAmount(detail.totalAmount) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="应收合计">¥{{ formatAmount(detail.expectedAmount) }}</el-descriptions-item>
+        <el-descriptions-item label="应收合计"><span class="amount amount-expected">¥{{ formatAmount(detail.expectedAmount) }}</span></el-descriptions-item>
         <el-descriptions-item label="当前节点">{{ detail.currentNode ? nodeLabel(detail.currentNode) : '—' }}</el-descriptions-item>
         <el-descriptions-item label="实收对齐应收">{{ detail.aligned ? '已对齐' : '未对齐' }}</el-descriptions-item>
         <el-descriptions-item label="发起人">{{ applicantName(detail) }}</el-descriptions-item>
@@ -54,7 +54,7 @@
           </el-table-column>
           <el-table-column label="应收金额" align="right" width="120">
             <template #default="scope">
-              <span class="amount">{{ formatAmount(scope.row.expectedAmount) }}</span>
+              <span class="amount amount-expected">{{ formatAmount(scope.row.expectedAmount) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="结佣金额" align="right" width="120">
@@ -93,7 +93,7 @@ const items = ref<CommissionItemDetail[]>([]);
 const { load: loadEmployees, name: employeeName } = useEmployeeMap();
 
 const formatAmount = (n: number | string | null | undefined) =>
-  n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  n == null ? '0.00' : Number(n).toFixed(2);
 const formatDateTime = (val?: string | null): string => (val ? val.replace('T', ' ').substring(0, 19) : '—');
 
 // 门店/组别 拆分展示（与实收详情同口径）
@@ -179,6 +179,9 @@ onMounted(async () => {
 }
 .amount-red {
   color: #f56c6c;
+}
+.amount-expected {
+  color: #909399;
 }
 .detail-table-wrap {
   margin-top: 16px;

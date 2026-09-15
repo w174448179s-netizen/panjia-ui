@@ -102,7 +102,7 @@
         </el-table-column>
         <el-table-column label="应收" align="right" width="120">
           <template #default="{ row }">
-            <span class="amount">¥{{ formatAmount(row.expectedAmount) }}</span>
+            <span class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="差异/节点" align="center" width="110">
@@ -605,6 +605,9 @@ onMounted(() => {
   }
   .amount-red {
     color: #f56c6c;
+  }
+  .amount-expected {
+    color: #909399;
   }
 }
 

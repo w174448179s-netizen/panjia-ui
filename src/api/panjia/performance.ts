@@ -18,9 +18,8 @@ export interface PerformanceFact {
   deptName?: string;
   roleType?: string;
   shareRatio: number;
-  originAmount: number;
-  conversionRate: number;
   performanceAmount: number;
+  amount?: number;            // 兼容字段：同 performanceAmount
   factStatus: string;         // ACTIVE / REVERSED
   factStatusName?: string;
   source: string;             // IMPORT / MANUAL
@@ -50,8 +49,10 @@ export interface PerformanceAdjust {
   deptName?: string;
   adjustType: string;         // AMOUNT / VOID / TRANSFER
   adjustTypeName?: string;
-  deltaAmount?: number;
-  originAmount?: number;     // 调整标的原始金额（后端列表回填）
+  adjustScope?: string;      // CONTRACT / DETAIL
+  contractNo?: string;
+  originalAmount?: number;    // 调整前原始金额（创建时快照）
+  targetAmount?: number;      // 调整后目标金额（用户录入的最终金额）
   targetDeptId?: string;
   targetDeptName?: string;
   reason: string;
@@ -64,6 +65,36 @@ export interface PerformanceAdjust {
   approveTime?: string;
   executeTime?: string;
   createTime: string;
+}
+
+/** 调整单完整详情（审批办理页用） */
+export interface AdjustDetailVO extends PerformanceAdjust {
+  orderNo?: string;
+  propertyAddress?: string;
+  businessDate?: string;
+  detailCount?: number;
+  expectedTotal?: number;
+  receivedTotal?: number;
+  targetAmount?: number;
+  details?: AdjustFactDetailVO[];
+}
+
+/** 调整单·受影响的明细行 */
+export interface AdjustFactDetailVO {
+  factId: string;
+  employeeId?: string;
+  employeeCode?: string;
+  employeeName?: string;
+  deptPath?: string;
+  roleType?: string;
+  roleName?: string;
+  shareRatio?: number;
+  expectedAmount?: number;     // 对侧口径金额（应收调整时=实收，实收调整时=应收）
+  amount?: number;             // 当前口径金额（调整前的 performance_amount）
+  afterAmount?: number;
+  deltaAmount?: number;
+  target?: boolean;
+  factStatus?: string;
 }
 
 export interface AdjustQuery extends PageQuery {
@@ -83,7 +114,7 @@ export interface AdjustCreateForm {
   adjustScope?: string;      // CONTRACT / DETAIL
   contractNo?: string;       // 合同级调整时填
   factType?: string;         // PERF_REAL / PERF_EXPECT
-  deltaAmount?: number;
+  targetAmount?: number;     // 调整后目标金额
   targetDeptId?: string;
   reason: string;
   payloadJson?: string;
@@ -112,7 +143,7 @@ export interface ManualFactForm {
   bizType?: string;
   sourceKey: string;
   shareRatio?: number;
-  originAmount: number;
+  performanceAmount: number;
   reason?: string;
 }
 
@@ -245,6 +276,8 @@ export const performanceApi = {
     panjiaRequest.get<PageResult<PerformanceAdjust>>('/perf/adjust/list', params),
   getAdjust: (id: string | number) =>
     panjiaRequest.get<PerformanceAdjust>(`/perf/adjust/${id}`),
+  getAdjustDetail: (id: string | number) =>
+    panjiaRequest.get<AdjustDetailVO>(`/perf/adjust/${id}/detail`),
   createAdjust: (data: AdjustCreateForm) =>
     panjiaRequest.post<string>('/perf/adjust', data),
   cancelAdjust: (id: string | number) =>

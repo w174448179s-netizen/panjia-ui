@@ -154,15 +154,18 @@
             <el-option label="部门划转" value="TRANSFER" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整金额" prop="deltaAmount">
+        <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整后金额" prop="targetAmount">
           <el-input-number
-            v-model="adjustForm.deltaAmount"
+            v-model="adjustForm.targetAmount"
             :precision="2"
             :step="100"
+            :min="0"
             style="width: 100%"
-            placeholder="正数调增，负数调减"
+            placeholder="请输入调整后的目标金额"
           />
-          <div class="form-tip">正数调增业绩，负数调减业绩</div>
+          <div class="form-tip">
+            当前：¥{{ formatAmount(adjustDialog.amount) }} → 调整后：¥{{ formatAmount(adjustForm.targetAmount ?? 0) }}
+          </div>
         </el-form-item>
         <el-form-item v-if="adjustForm.adjustType === 'TRANSFER'" label="目标部门">
           <el-tree-select
@@ -229,7 +232,7 @@
 
       <!-- 明细列表 -->
       <el-table border :data="detailList" v-loading="detailLoading">
-        <el-table-column label="门店/组别" align="left" min-width="150">
+        <el-table-column label="门店/组别" align="left" min-width="100">
           <template #default="scope">
             <span v-if="scope.row.deptPath" class="dept-wrap" :title="scope.row.deptPath">
               <span class="dept-store">{{ deptStore(scope.row.deptPath) }}</span>
@@ -238,7 +241,7 @@
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="工号" align="center" width="100">
+        <el-table-column label="工号" align="center" width="150">
           <template #default="scope">{{ scope.row.employeeCode || '—' }}</template>
         </el-table-column>
         <el-table-column label="姓名" align="center" min-width="110">
@@ -299,15 +302,18 @@
             <el-option label="部门划转" value="TRANSFER" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="detailAdjustForm.adjustType === 'AMOUNT'" label="调整金额" prop="deltaAmount">
+        <el-form-item v-if="detailAdjustForm.adjustType === 'AMOUNT'" label="调整后金额" prop="targetAmount">
           <el-input-number
-            v-model="detailAdjustForm.deltaAmount"
+            v-model="detailAdjustForm.targetAmount"
             :precision="2"
             :step="100"
+            :min="0"
             style="width: 100%"
-            placeholder="正数调增，负数调减"
+            placeholder="请输入调整后的目标金额"
           />
-          <div class="form-tip">正数调增业绩，负数调减业绩</div>
+          <div class="form-tip">
+            当前：¥{{ formatAmount(detailAdjustDialog.amount) }} → 调整后：¥{{ formatAmount(detailAdjustForm.targetAmount ?? 0) }}
+          </div>
         </el-form-item>
         <el-form-item v-if="detailAdjustForm.adjustType === 'TRANSFER'" label="目标部门">
           <el-tree-select
@@ -387,7 +393,7 @@ const formatDateTime = (val: string | undefined | null): string => {
 const formatAmount = (val: number | string | undefined | null): string => {
   if (val === undefined || val === null || val === '') return '—';
   const n = Number(val);
-  return Number.isNaN(n) ? String(val) : n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return Number.isNaN(n) ? String(val) : n.toFixed(2);
 };
 
 // 合同号/订单号合并展示：业务类型为「一手房」时展示订单号，其它展示合同号
@@ -462,17 +468,17 @@ const detailAdjustDialog = reactive({
 });
 const detailAdjustForm = reactive({
   adjustType: 'AMOUNT',
-  deltaAmount: undefined as number | undefined,
+  targetAmount: undefined as number | undefined,
   targetDeptId: undefined as string | undefined,
   reason: '',
 });
 const detailAdjustRules = {
   reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
-  deltaAmount: [
+  targetAmount: [
     {
       validator: (_rule: unknown, value: number | undefined, callback: (err?: Error) => void) => {
         if (detailAdjustForm.adjustType === 'AMOUNT' && (value === undefined || value === null)) {
-          callback(new Error('请输入调整金额'));
+          callback(new Error('请输入调整后金额'));
         } else {
           callback();
         }
@@ -500,7 +506,7 @@ const openDetailAdjustDialog = (row: PerformanceManageRow) => {
   detailAdjustDialog.employeeName = row.employeeName || '—';
   detailAdjustDialog.amount = row.amount ?? 0;
   detailAdjustForm.adjustType = 'AMOUNT';
-  detailAdjustForm.deltaAmount = undefined;
+  detailAdjustForm.targetAmount = undefined;
   detailAdjustForm.targetDeptId = undefined;
   detailAdjustForm.reason = '';
   detailAdjustDialog.visible = true;
@@ -517,7 +523,7 @@ const submitDetailAdjust = async () => {
       adjustType: detailAdjustForm.adjustType,
       adjustScope: 'DETAIL',
       factType: detailDialog.factType,
-      deltaAmount: detailAdjustForm.deltaAmount,
+      targetAmount: detailAdjustForm.targetAmount,
       targetDeptId: detailAdjustForm.targetDeptId,
       reason: detailAdjustForm.reason.trim(),
     } as any);
@@ -643,17 +649,17 @@ const adjustDialog = reactive({
 });
 const adjustForm = reactive({
   adjustType: 'AMOUNT',
-  deltaAmount: undefined as number | undefined,
+  targetAmount: undefined as number | undefined,
   targetDeptId: undefined as string | undefined,
   reason: '',
 });
 const adjustRules = {
   reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
-  deltaAmount: [
+  targetAmount: [
     {
       validator: (_rule: unknown, value: number | undefined, callback: (err?: Error) => void) => {
         if (adjustForm.adjustType === 'AMOUNT' && (value === undefined || value === null)) {
-          callback(new Error('请输入调整金额'));
+          callback(new Error('请输入调整后金额'));
         } else {
           callback();
         }
@@ -679,7 +685,7 @@ const openAdjustDialog = (row: PerformanceManageContract) => {
   adjustDialog.contractNo = row.contractNo || row.orderNo || '';
   adjustDialog.amount = row.amount ?? 0;
   adjustForm.adjustType = 'AMOUNT';
-  adjustForm.deltaAmount = undefined;
+  adjustForm.targetAmount = undefined;
   adjustForm.targetDeptId = undefined;
   adjustForm.reason = '';
   adjustDialog.visible = true;
@@ -695,7 +701,7 @@ const submitAdjust = async () => {
       adjustScope: 'CONTRACT',
       contractNo: adjustDialog.contractNo,
       factType: 'PERF_EXPECT',
-      deltaAmount: adjustForm.deltaAmount,
+      targetAmount: adjustForm.targetAmount,
       targetDeptId: adjustForm.targetDeptId,
       reason: adjustForm.reason.trim(),
     } as any);

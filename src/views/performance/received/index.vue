@@ -73,7 +73,7 @@
         </el-table-column>
         <el-table-column label="新签业绩" align="right" width="120">
           <template #default="{ row }">
-            <span class="amount">¥{{ formatAmount(row.expectedAmount) }}</span>
+            <span class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="实收业绩" align="right" width="120">
@@ -158,14 +158,14 @@
         <el-descriptions-item label="实收合计">
           <span class="amount amount-red">¥{{ formatAmount(detailApp.receivedAmount) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="应收合计" :span="2">¥{{ formatAmount(detailApp.expectedAmount) }}</el-descriptions-item>
+        <el-descriptions-item label="应收合计" :span="2"><span class="amount amount-expected">¥{{ formatAmount(detailApp.expectedAmount) }}</span></el-descriptions-item>
         <el-descriptions-item label="房源地址" :span="3">{{ detailApp.propertyAddress || '—' }}</el-descriptions-item>
       </el-descriptions>
 
       <div class="detail-table-wrap">
         <div class="detail-table-title">每人实收明细（{{ detailFacts.length }} 条）</div>
         <el-table :data="detailFacts" border max-height="420" class="detail-facts-table">
-          <el-table-column label="序号" type="index" width="55" align="center" />
+
           <el-table-column label="门店/组别" align="left" min-width="150">
             <template #default="scope">
               <span v-if="scope.row.deptPath" class="dept-wrap" :title="scope.row.deptPath">
@@ -175,10 +175,10 @@
               <span v-else>—</span>
             </template>
           </el-table-column>
-          <el-table-column label="工号" align="center" width="100">
+          <el-table-column label="工号" align="center" width="120">
             <template #default="scope">{{ scope.row.employeeCode || '—' }}</template>
           </el-table-column>
-          <el-table-column label="姓名" align="center" min-width="110">
+          <el-table-column label="姓名" align="center" min-width="80">
             <template #default="scope">
               <span class="person-name">{{ scope.row.employeeName || employeeName(scope.row.employeeId) || '—' }}</span>
             </template>
@@ -191,7 +191,7 @@
           </el-table-column>
           <el-table-column label="应收金额" align="right" width="120">
             <template #default="scope">
-              <span class="amount">{{ formatAmount(scope.row.expectedAmount) }}</span>
+              <span class="amount amount-expected">{{ formatAmount(scope.row.expectedAmount) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="实收金额" align="right" width="120">
@@ -272,7 +272,7 @@ const num = (v: number | string | null | undefined): number => {
   return Number.isNaN(n) ? 0 : n;
 };
 const formatAmount = (n: number | string | null | undefined) =>
-  n == null ? '0.00' : num(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  n == null ? '0.00' : num(n).toFixed(2);
 
 const formatDateTime = (val?: string | null): string => {
   if (!val) return '—';
@@ -527,6 +527,9 @@ onMounted(() => {
   .amount-red {
     color: #f56c6c;
   }
+  .amount-expected {
+    color: #909399;
+  }
 }
 
 .data-table {
@@ -549,6 +552,9 @@ onMounted(() => {
   }
   .amount-red {
     color: #f56c6c;
+  }
+  .amount-expected {
+    color: #909399;
   }
 }
 

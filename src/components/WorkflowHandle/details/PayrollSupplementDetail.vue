@@ -51,7 +51,7 @@ const statusTagType = (s: string) => {
 };
 
 const fmt = (n: number | null | undefined) =>
-  n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  n == null ? '0.00' : Number(n).toFixed(2);
 const amountClass = (n: number | undefined) => {
   if (n == null) return '';
   if (n > 0) return 'text-success';

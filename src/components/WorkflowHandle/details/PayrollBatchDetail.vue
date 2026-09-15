@@ -109,7 +109,7 @@ const statusTag = (s: string) => STATUS_TAG[s] || 'info';
 const roleLabel = (r: string) => (({ AGENT: '经纪人', MANAGER: '店长', DIRECTOR: '总监' } as Record<string, string>)[r] || r);
 
 const fmt = (n: number | null | undefined) =>
-  n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  n == null ? '0.00' : Number(n).toFixed(2);
 
 const MONEY_PROPS = [
   'commissionIncome', 'teamIncome', 'guaranteeFill', 'storeIncome', 'baseSalary', 'mentorBonus', 'bonus',

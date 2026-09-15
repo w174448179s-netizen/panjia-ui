@@ -87,7 +87,7 @@ const num = (v: number | string | null | undefined): number => {
   return Number.isNaN(n) ? 0 : n;
 };
 const formatAmount = (n: number | string | null | undefined) =>
-  n == null ? '0.00' : num(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  n == null ? '0.00' : num(n).toFixed(2);
 const formatDateTime = (val?: string | null): string => (val ? val.replace('T', ' ').substring(0, 19) : '—');
 const formatRatio = (val: number | string | undefined | null): string => {
   if (val === undefined || val === null || val === '') return '—';

@@ -33,7 +33,7 @@ const loadError = ref('');
 const detail = ref<CommissionAdjust | null>(null);
 
 const fmt = (n: number | null | undefined) =>
-  n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  n == null ? '0.00' : Number(n).toFixed(2);
 
 const TYPE_MAP: Record<string, string> = { DISCOUNT: '折扣', DIFF: '差额补发', VOID: '作废' };
 const typeLabel = (t: string) => TYPE_MAP[t] || t || '—';

@@ -100,15 +100,18 @@
             <el-option label="部门划转" value="TRANSFER" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整金额" prop="deltaAmount">
+        <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整后金额" prop="targetAmount">
           <el-input-number
-            v-model="adjustForm.deltaAmount"
+            v-model="adjustForm.targetAmount"
             :precision="2"
             :step="100"
+            :min="0"
             style="width: 100%"
-            placeholder="正数调增，负数调减"
+            placeholder="请输入调整后的目标金额"
           />
-          <div class="form-tip">正数调增业绩，负数调减业绩</div>
+          <div class="form-tip">
+            当前：¥{{ formatAmount(adjustDialog.amount) }} → 调整后：¥{{ formatAmount(adjustForm.targetAmount ?? 0) }}
+          </div>
         </el-form-item>
         <el-form-item v-if="adjustForm.adjustType === 'TRANSFER'" label="目标部门">
           <el-tree-select
@@ -188,7 +191,7 @@ const num = (v: number | string | undefined | null): number => {
 const formatAmount = (val: number | string | undefined | null): string => {
   if (val === undefined || val === null || val === '') return '—';
   const n = Number(val);
-  return Number.isNaN(n) ? String(val) : n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return Number.isNaN(n) ? String(val) : n.toFixed(2);
 };
 
 const formatRatio = (val: number | string | undefined | null): string => {
@@ -262,17 +265,17 @@ const adjustDialog = reactive({
 });
 const adjustForm = reactive({
   adjustType: 'AMOUNT',
-  deltaAmount: undefined as number | undefined,
+  targetAmount: undefined as number | undefined,
   targetDeptId: undefined as string | undefined,
   reason: '',
 });
 const adjustRules = {
   reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
-  deltaAmount: [
+  targetAmount: [
     {
       validator: (_rule: unknown, value: number | undefined, callback: (err?: Error) => void) => {
         if (adjustForm.adjustType === 'AMOUNT' && (value === undefined || value === null)) {
-          callback(new Error('请输入调整金额'));
+          callback(new Error('请输入调整后金额'));
         } else {
           callback();
         }
@@ -298,8 +301,9 @@ const openAdjustDialog = (row: PerformanceManageRow) => {
   adjustDialog.factId = String(row.id);
   adjustDialog.employeeId = String(row.employeeId);
   adjustDialog.employeeName = row.employeeName || '—';
+  adjustDialog.amount = row.amount ?? 0;
   adjustForm.adjustType = 'AMOUNT';
-  adjustForm.deltaAmount = undefined;
+  adjustForm.targetAmount = undefined;
   adjustForm.targetDeptId = undefined;
   adjustForm.reason = '';
   adjustDialog.visible = true;
@@ -316,7 +320,7 @@ const submitAdjust = async () => {
       adjustType: adjustForm.adjustType,
       adjustScope: 'DETAIL',
       factType: 'PERF_EXPECT',
-      deltaAmount: adjustForm.deltaAmount,
+      targetAmount: adjustForm.targetAmount,
       targetDeptId: adjustForm.targetDeptId,
       reason: adjustForm.reason.trim(),
     } as any);

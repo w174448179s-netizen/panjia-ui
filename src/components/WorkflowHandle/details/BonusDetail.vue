@@ -29,7 +29,7 @@ const detail = ref<any>(null);
 const { load: loadEmployees, name: employeeName } = useEmployeeMap();
 
 const fmt = (n: number | null | undefined) =>
-  n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  n == null ? '0.00' : Number(n).toFixed(2);
 
 const STATUS_MAP: Record<string, string> = {
   PENDING: '待审批', APPROVED: '已审批', REJECTED: '已驳回', ACTIVE: '生效', CANCELLED: '已取消',
