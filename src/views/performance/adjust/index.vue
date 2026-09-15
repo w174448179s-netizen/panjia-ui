@@ -111,10 +111,14 @@
           <el-table-column label="调整对象" align="center" min-width="160" show-overflow-tooltip>
             <template #default="scope">
               <template v-if="scope.row.adjustScope === 'CONTRACT'">
-                <span class="contract-no">{{ scope.row.contractNo || '—' }}</span>
+                <el-button link type="primary" class="adjust-object-link" @click="handleDetail(scope.row)">
+                  {{ scope.row.contractNo || '—' }}
+                </el-button>
               </template>
               <template v-else>
-                {{ scope.row.employeeName || scope.row.employeeId || '—' }}
+                <el-button link type="primary" class="adjust-object-link" @click="handleDetail(scope.row)">
+                  {{ scope.row.employeeName || scope.row.employeeId || '—' }}
+                </el-button>
               </template>
             </template>
           </el-table-column>
