@@ -100,7 +100,6 @@
           :data="adjustList"
           :default-sort="{ prop: 'createTime', order: 'descending' }"
         >
-          <el-table-column label="调整单号" align="center" prop="adjustNo" min-width="180" show-overflow-tooltip />
           <el-table-column label="期间" align="center" prop="period" width="100" />
           <el-table-column label="调整范围" align="center" width="100">
             <template #default="scope">
@@ -152,11 +151,11 @@
             </template>
           </el-table-column>
           <el-table-column label="申请时间" align="center" prop="createTime" width="170" sortable />
-          <el-table-column label="操作" align="center" width="100" class-name="small-padding fixed-width">
+          <el-table-column label="操作" align="center" width="80" class-name="small-padding fixed-width">
             <template #default="scope">
               <el-button link type="primary" @click="handleDetail(scope.row)">详情</el-button>
-              <!-- 审批走 RuoYi 工作流（perf_adjust），不在本页直接通过/拒绝；提交后仅可取消 -->
-              <el-button v-if="scope.row.status === 'SUBMITTED'" link type="info" @click="handleCancel(scope.row)">取消</el-button>
+              <!-- 撤销操作统一在「我发起的」中通过流程实例撤销入口完成（鉴权更严格：仅申请人本人可撤）；
+                   业绩调整列表仅做业务维度的查询与详情展示，不承担流程操作职责 -->
             </template>
           </el-table-column>
         </el-table>
@@ -182,7 +181,7 @@
       </div>
     </el-card>
 
-    <!-- 新增/详情弹窗 -->
+    <!-- 新增弹窗 -->
     <el-dialog
       v-model="formDialog.visible"
       :title="formDialog.title"
@@ -293,116 +292,6 @@
         </el-form-item>
       </el-form>
 
-      <template v-if="formDialog.mode === 'detail'">
-        <div v-loading="detailLoading" class="adjust-detail-content">
-          <el-alert v-if="detailLoadError" type="error" :title="detailLoadError" :closable="false" show-icon />
-
-          <template v-if="detailFull">
-            <!-- 调整单基础信息 -->
-            <el-descriptions :column="2" border size="small">
-              <el-descriptions-item label="调整单号">{{ detailFull.adjustNo || '—' }}</el-descriptions-item>
-              <el-descriptions-item label="状态">
-                <el-tag :type="statusTagType(detailFull.status)" size="small">
-                  {{ statusMap[detailFull.status] ?? detailFull.status }}
-                </el-tag>
-              </el-descriptions-item>
-              <el-descriptions-item label="调整类型">{{ adjustTypeMap[detailFull.adjustType] ?? detailFull.adjustType }}</el-descriptions-item>
-              <el-descriptions-item label="调整范围">
-                <el-tag :type="detailFull.adjustScope === 'CONTRACT' ? 'warning' : 'info'" size="small" effect="plain">
-                  {{ detailFull.adjustScope === 'CONTRACT' ? '合同级' : '明细级' }}
-                </el-tag>
-              </el-descriptions-item>
-              <el-descriptions-item label="期间">{{ detailFull.period || '—' }}</el-descriptions-item>
-              <el-descriptions-item v-if="detailFull.adjustScope !== 'CONTRACT'" label="员工">
-                {{ detailFull.employeeName || '—' }}
-              </el-descriptions-item>
-              <el-descriptions-item label="门店/组别">
-                <span>{{ detailFull.deptName || '—' }}</span>
-                <span v-if="detailFull.adjustType === 'TRANSFER' && detailFull.targetDeptName" class="transfer-arrow">
-                  → {{ detailFull.targetDeptName }}
-                </span>
-              </el-descriptions-item>
-              <el-descriptions-item label="原始金额">{{ formatOrigin(detailFull.originalAmount) }}</el-descriptions-item>
-              <el-descriptions-item label="调整后金额">
-                <span class="amount-red">{{ formatOrigin(detailFull.targetAmount) }}</span>
-              </el-descriptions-item>
-              <el-descriptions-item label="申请人">{{ detailFull.applicantName || '—' }}</el-descriptions-item>
-              <el-descriptions-item label="创建时间">{{ detailFull.createTime || '—' }}</el-descriptions-item>
-              <el-descriptions-item label="调整原因" :span="2">{{ detailFull.reason || '—' }}</el-descriptions-item>
-            </el-descriptions>
-
-            <!-- 合同信息 -->
-            <div v-if="detailFull.contractNo" class="contract-block">
-              <div class="block-title">合同信息</div>
-              <el-descriptions :column="2" border size="small">
-                <el-descriptions-item label="合同号">{{ detailFull.contractNo }}</el-descriptions-item>
-                <el-descriptions-item label="订单号">{{ detailFull.orderNo || '—' }}</el-descriptions-item>
-                <el-descriptions-item label="签约时间">{{ detailFull.businessDate || '—' }}</el-descriptions-item>
-                <el-descriptions-item label="明细条数">{{ detailFull.detailCount ?? 0 }} 条</el-descriptions-item>
-                <el-descriptions-item label="应收合计">
-                  <span class="amount amount-expected">¥{{ formatNumber(detailFull.expectedTotal) }}</span>
-                </el-descriptions-item>
-                <el-descriptions-item label="实收合计">
-                  <span class="amount amount-real">¥{{ formatNumber(detailFull.receivedTotal) }}</span>
-                </el-descriptions-item>
-                <el-descriptions-item label="房源地址" :span="2">{{ detailFull.propertyAddress || '—' }}</el-descriptions-item>
-              </el-descriptions>
-            </div>
-
-            <!-- 受影响明细 -->
-            <div v-if="detailFull.details && detailFull.details.length > 0" class="fact-block">
-              <div class="block-title">受影响明细</div>
-              <span class="block-subtitle">
-                （{{ detailFull.adjustScope === 'CONTRACT' ? '合同级调整：调整金额按各明细占比分摊' : '明细级调整：仅调整单条明细' }}）
-              </span>
-              <el-table :data="detailFull.details" border size="small" stripe>
-                <el-table-column label="序号" type="index" width="55" align="center" />
-                <el-table-column label="门店/组别" min-width="140" show-overflow-tooltip>
-                  <template #default="scope">
-                    {{ scope.row.deptPath || '—' }}
-                  </template>
-                </el-table-column>
-                <el-table-column label="工号" width="100">
-                  <template #default="scope">{{ scope.row.employeeCode || '—' }}</template>
-                </el-table-column>
-                <el-table-column label="姓名" width="90">
-                  <template #default="scope">{{ scope.row.employeeName || '—' }}</template>
-                </el-table-column>
-                <el-table-column label="所属角色" width="100">
-                  <template #default="scope">{{ scope.row.roleName || '—' }}</template>
-                </el-table-column>
-                <el-table-column label="角色占比" width="100" align="right">
-                  <template #default="scope">
-                    {{ formatRatio(scope.row.shareRatio) }}
-                  </template>
-                </el-table-column>
-                <el-table-column label="应收金额" width="120" align="right">
-                  <template #default="scope">
-                    <span class="amount amount-expected">{{ formatNumber(scope.row.amount) }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="变动" width="110" align="right">
-                  <template #default="scope">
-                    <span :class="getAmountClass(scope.row.deltaAmount)">{{ formatDelta(scope.row.deltaAmount) }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="调整后" width="120" align="right">
-                  <template #default="scope">
-                    <span class="amount" :class="getAmountClass(scope.row.deltaAmount)">{{ formatNumber(scope.row.afterAmount) }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="状态" width="80" align="center">
-                  <template #default="scope">
-                    <el-tag v-if="scope.row.target" type="danger" size="small" effect="dark">调整行</el-tag>
-                    <el-tag v-else type="info" size="small" effect="plain">参考行</el-tag>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </div>
-          </template>
-        </div>
-      </template>
-
       <template #footer>
         <el-button @click="formDialog.visible = false">关 闭</el-button>
         <el-button
@@ -415,12 +304,28 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 详情弹窗：与「我的待办 → 业绩调整审批」共用同一份模板，避免两处口径漂移 -->
+    <el-dialog
+      v-model="detailDialog.visible"
+      title="调整单详情"
+      width="1100px"
+      top="5vh"
+      append-to-body
+      destroy-on-close
+    >
+      <AdjustDetailPanel v-if="detailDialog.visible" :business-id="detailDialog.businessId" />
+      <template #footer>
+        <el-button @click="detailDialog.visible = false">关 闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { performanceApi } from '@/api/panjia/performance';
-import type { PerformanceAdjust, AdjustQuery, AdjustCreateForm, PerformanceFact, AdjustDetailVO } from '@/api/panjia/performance';
+import type { PerformanceAdjust, AdjustQuery, AdjustCreateForm, PerformanceFact } from '@/api/panjia/performance';
+import AdjustDetailPanel from './components/AdjustDetailPanel.vue';
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode, Employee } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
@@ -554,10 +459,12 @@ const resetQuery = () => {
 };
 
 // ==================== 工具方法 ====================
-const num = (v: number | string | null | undefined): number => {
-  if (v === null || v === undefined || v === '') return 0;
-  const n = Number(v);
-  return Number.isNaN(n) ? 0 : n;
+/** 普通金额格式化：两位小数，无 ¥ 前缀 */
+const formatNumber = (val: number | string | undefined | null): string => {
+  if (val === undefined || val === null || val === '') return '0.00';
+  const n = Number(val);
+  if (Number.isNaN(n)) return '0.00';
+  return n.toFixed(2);
 };
 
 /** 原始金额：绝对值口径，带 ¥ 前缀；缺失显示 — */
@@ -568,62 +475,6 @@ const formatOrigin = (val: number | string | undefined | null): string => {
   return `¥${n.toFixed(2)}`;
 };
 
-/** 普通金额格式化：两位小数，无 ¥ 前缀 */
-const formatNumber = (val: number | string | undefined | null): string => {
-  if (val === undefined || val === null || val === '') return '0.00';
-  const n = Number(val);
-  if (Number.isNaN(n)) return '0.00';
-  return n.toFixed(2);
-};
-
-/** 安全金额相加：避免浮点精度问题，返回两位小数的数字 */
-const addAmounts = (a: number | string | undefined | null, b: number | string | undefined | null): number => {
-  const na = Number(a ?? 0) || 0;
-  const nb = Number(b ?? 0) || 0;
-  return Math.round((na + nb) * 100) / 100;
-};
-
-/** 比例格式化：0.45 → 45.00%，空值显示 — */
-const formatRatio = (val: number | string | undefined | null): string => {
-  if (val === undefined || val === null || val === '') return '—';
-  const n = Number(val);
-  if (Number.isNaN(n)) return '—';
-  return `${(n * 100).toFixed(2)}%`;
-};
-
-/** 变动金额格式化：带 +/- 前缀 */
-const formatDelta = (val: number | string | undefined | null): string => {
-  if (val === undefined || val === null || val === '') return '0.00';
-  const n = Number(val);
-  if (Number.isNaN(n)) return String(val);
-  const prefix = n > 0 ? '+' : '';
-  return prefix + n.toFixed(2);
-};
-
-/** 变动金额颜色类 */
-const getAmountClass = (val: number | undefined | null): string => {
-  if (val === undefined || val === null) return '';
-  if (val > 0) return 'amount-positive';
-  if (val < 0) return 'amount-negative';
-  return '';
-};
-
-// ==================== 操作：取消（审批/执行由 RuoYi 工作流驱动） ====================
-const handleCancel = async (row: any) => {
-  try {
-    await modal.confirm(`确认取消调整单「${row.adjustNo}」？`);
-  } catch {
-    return;
-  }
-  try {
-    await performanceApi.cancelAdjust(row.id);
-    modal.msgSuccess('已取消');
-    getList();
-  } catch {
-    /* 拦截器已处理 */
-  }
-};
-
 // ==================== 新增 / 详情弹窗 ====================
 const formDialog = reactive({
   visible: false,
@@ -632,10 +483,12 @@ const formDialog = reactive({
 });
 const formRef = ref();
 const submitLoading = ref(false);
-const detailData = ref<PerformanceAdjust | null>(null);
-const detailFull = ref<AdjustDetailVO | null>(null);
-const detailLoading = ref(false);
-const detailLoadError = ref('');
+
+/** 详情弹窗：与「我的待办 → 业绩调整审批」共用 AdjustDetailPanel，仅传 businessId */
+const detailDialog = reactive({
+  visible: false,
+  businessId: '' as string | number
+});
 
 // 关联业绩事实下拉
 const factOptions = ref<PerformanceFact[]>([]);
@@ -660,6 +513,12 @@ const defaultFormData = (): AdjustCreateForm & { factId: string } => ({
 });
 
 const formData = reactive(defaultFormData());
+
+/** 门店/组别只读回显：优先取员工主档，其次取所选业绩明细所在部门 */
+const selectedEmployeeDept = computed(() => {
+  const emp = formEmployeeOptions.value.find((e) => String(e.employeeId) === String(formData.employeeId));
+  return emp?.deptName || selectedFact.value?.deptName || '';
+});
 
 const formRules = {
   adjustType: [{ required: true, message: '请选择调整类型', trigger: 'change' }],
@@ -701,27 +560,14 @@ const loadFactOptions = async () => {
 const handleCreate = () => {
   Object.assign(formData, defaultFormData());
   factOptions.value = [];
-  detailData.value = null;
   formDialog.mode = 'create';
   formDialog.title = '新增调整单';
   formDialog.visible = true;
 };
 
-const handleDetail = async (row: any) => {
-  detailFull.value = null;
-  detailLoadError.value = '';
-  detailLoading.value = true;
-  formDialog.mode = 'detail';
-  formDialog.title = '调整单详情';
-  formDialog.visible = true;
-  try {
-    const res = await performanceApi.getAdjustDetail(row.id);
-    detailFull.value = res.data;
-  } catch (e: any) {
-    detailLoadError.value = e?.message || '加载详情失败';
-  } finally {
-    detailLoading.value = false;
-  }
+const handleDetail = (row: any) => {
+  detailDialog.businessId = row.id;
+  detailDialog.visible = true;
 };
 
 const handleSubmit = async () => {
@@ -753,30 +599,13 @@ const handleSubmit = async () => {
 };
 
 // 工作流跳转：查看态打开详情（审批办理已改为「我的待办」原地弹窗）
-const openFromWorkflow = async () => {
+const openFromWorkflow = () => {
   const id = route.query.id as string;
   const type = route.query.type as string;
   if (!id || !type) return;
-  try {
-    const res = await performanceApi.getAdjust(Number(id));
-    const d = res.data;
-    detailData.value = d;
-    Object.assign(formData, defaultFormData(), {
-      factId: d.factId || '',
-      period: d.period,
-      employeeId: d.employeeId,
-      deptId: d.deptId,
-      adjustType: d.adjustType,
-      targetAmount: num(d.targetAmount),
-      targetDeptId: d.targetDeptId || '',
-      reason: d.reason
-    });
-    formDialog.mode = 'detail';
-    formDialog.title = '调整单详情';
-    formDialog.visible = true;
-  } catch {
-    modal.msgError('加载单据失败');
-  }
+  // 与「详情」按钮走同一个面板，只是额外带了 type/taskId
+  detailDialog.businessId = id;
+  detailDialog.visible = true;
 };
 
 // 页签缓存复用场景下补开单据（详见 useWorkflowRouteOpen 注释）
@@ -864,42 +693,6 @@ onMounted(() => {
 
   .detail-desc {
     margin-top: 12px;
-  }
-
-  .adjust-detail-content {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-
-    .contract-block, .fact-block {
-      .block-title {
-        font-size: 15px;
-        font-weight: 600;
-        margin-bottom: 8px;
-        color: var(--el-text-color-primary);
-      }
-      .block-subtitle {
-        font-size: 12px;
-        color: var(--el-text-color-secondary);
-        margin-bottom: 8px;
-      }
-    }
-
-    .amount {
-      font-variant-numeric: tabular-nums;
-      font-weight: 600;
-    }
-    .amount-expected {
-      color: var(--el-text-color-secondary);
-    }
-    .amount-real {
-      color: var(--el-color-danger);
-    }
-    .amount-red {
-      color: var(--el-color-danger);
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-    }
   }
 }
 </style>

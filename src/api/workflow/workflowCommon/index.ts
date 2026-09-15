@@ -11,7 +11,7 @@ export default {
    * 跳转到业务表单页处理流程任务。
    * <p>
    * 原实现直接 router.push，formPath 为空或目标路由未注册时会「静默无反应」，
-   * 用户表现为「点【去处理】没反应」。此处显式校验并给出可见提示。
+   * 用户表现为「点【审批】没反应」。此处显式校验并给出可见提示。
    */
   async routerJump(routerJumpVo: RouterJumpVo) {
     const { formPath, businessId, taskId, type } = routerJumpVo;
