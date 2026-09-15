@@ -38,23 +38,34 @@ export function useWorkflowTask() {
   };
 
   /**
-   * 驳回任务
+   * 驳回任务（弹出意见输入框，可留空；意见记入审批历史）
    * @param taskId 任务 ID
-   * @param message 驳回意见
+   * @param message 驳回意见（显式传入时跳过输入框，供程序化调用）
    */
-  const rejectTask = async (taskId: string | number, message = ''): Promise<boolean> => {
+  const rejectTask = async (taskId: string | number, message?: string): Promise<boolean> => {
     if (!taskId) {
       ElMessage.warning('缺少任务 ID');
       return false;
     }
-    try {
-      await ElMessageBox.confirm('确认驳回该审批？', '提示', { type: 'warning' });
-    } catch {
-      return false;
+    let comment = message ?? '';
+    if (message === undefined) {
+      try {
+        const { value } = await ElMessageBox.prompt('请填写驳回意见（可留空）', '确认驳回该审批？', {
+          confirmButtonText: '确认驳回',
+          cancelButtonText: '取消',
+          type: 'warning',
+          inputType: 'textarea',
+          inputPlaceholder: '驳回原因将记入审批历史',
+          inputValidator: () => true
+        });
+        comment = value?.trim() ?? '';
+      } catch {
+        return false;
+      }
     }
     taskOperating.value = true;
     try {
-      await backProcess({ taskId, message, messageType: ['1'], variables: {} });
+      await backProcess({ taskId, message: comment, messageType: ['1'], variables: {} });
       ElMessage.success('已驳回');
       return true;
     } catch {

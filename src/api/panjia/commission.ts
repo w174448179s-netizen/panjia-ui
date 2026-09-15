@@ -161,9 +161,6 @@ export const commissionApi = {
   /** 单个审批通过（按当前节点：总监/财务，§3.3） */
   approveApplication: (id: number) =>
     panjiaRequest.post<void>(`/commission/apply/${id}/approve`),
-  /** 单个驳回 */
-  rejectApplication: (id: number, message?: string) =>
-    panjiaRequest.post<void>(`/commission/apply/${id}/reject`, { approve: false, message }),
   cancelApplication: (id: number) =>
     panjiaRequest.post<void>(`/commission/apply/${id}/cancel`),
   /** Excel 批量发起（§3.2，按合同号自动发起+提交） */

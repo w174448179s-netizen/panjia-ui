@@ -419,8 +419,7 @@ const handleCancelImport = async (row: ImportBatch) => {
   rowCancellingId.value = row.id;
   try {
     const res = await importApi.cancelImport(row.id);
-    const count = res.data ?? 0;
-    modal.msgSuccess(`撤销成功，已冲销 ${count} 条业绩事实`);
+    modal.msgSuccess('撤销成功');
     await loadBatches();
   } catch (e: any) {
     modal.msgError(e?.message || '撤销失败');
