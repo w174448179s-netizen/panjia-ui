@@ -94,6 +94,16 @@
               <div class="action-row">
                 <!-- 终态（ARCHIVED）：仅保留"下载"做合规留档 -->
                 <template v-if="scope.row.status === 'ARCHIVED'">
+                  <el-tooltip content="撤销导入（冲销该批次业绩数据，不可逆）" placement="top">
+                    <a
+                      class="action-btn action-btn-danger"
+                      :class="{ 'is-loading': rowCancellingId === scope.row.id }"
+                      @click="handleCancelImport(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="rowCancellingId !== scope.row.id"><CircleClose /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
                   <el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
                     <a
                       class="action-btn"
@@ -205,7 +215,7 @@
 import { importApi } from '@/api/panjia/import';
 import type { ImportBatch, ImportIssue } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
-import { InfoFilled, Warning, Download, Refresh, Loading, Box } from '@element-plus/icons-vue';
+import { InfoFilled, Warning, Download, Refresh, Loading, Box, CircleClose } from '@element-plus/icons-vue';
 
 /** 业绩单据唯一来源：贝壳·经纪人业绩明细表（一张表同时携当月应收+当月实收） */
 const SOURCE_TYPE = 'KE_SIGNED';
@@ -285,6 +295,8 @@ const statusTagType = (status: string): 'info' | 'warning' | 'success' | 'danger
       return 'success';
     case 'FAILED':
       return 'danger';
+    case 'CANCELLED':
+      return 'info';
     default:
       return 'info';
   }
@@ -302,6 +314,8 @@ const statusLabel = (status: string): string => {
       return '已归档';
     case 'FAILED':
       return '失败';
+    case 'CANCELLED':
+      return '已撤销';
     default:
       return status;
   }
@@ -386,6 +400,32 @@ const handleArchive = async (row: ImportBatch) => {
     await loadBatches();
   } finally {
     rowLoadingId.value = '';
+  }
+};
+
+// ==================== 操作：撤销导入 ====================
+const rowCancellingId = ref<string>('');
+
+const handleCancelImport = async (row: ImportBatch) => {
+  try {
+    await modal.confirm(
+      `确认撤销批次「${row.batchNo}」？\n` +
+      `将冲销该批次所有业绩事实（已调整/已审批事实不受影响），操作不可逆。\n` +
+      `撤销后可重新导入到正确的归属月。`
+    );
+  } catch {
+    return;
+  }
+  rowCancellingId.value = row.id;
+  try {
+    const res = await importApi.cancelImport(row.id);
+    const count = res.data ?? 0;
+    modal.msgSuccess(`撤销成功，已冲销 ${count} 条业绩事实`);
+    await loadBatches();
+  } catch (e: any) {
+    modal.msgError(e?.message || '撤销失败');
+  } finally {
+    rowCancellingId.value = '';
   }
 };
 
@@ -512,6 +552,18 @@ onMounted(() => {
     &.is-loading {
       cursor: wait;
       opacity: 0.7;
+    }
+
+    &.action-btn-danger {
+      color: var(--el-color-danger);
+
+      &:hover {
+        background-color: var(--el-color-danger-light-9);
+      }
+
+      &:active {
+        background-color: var(--el-color-danger-light-8);
+      }
     }
 
     .el-icon {

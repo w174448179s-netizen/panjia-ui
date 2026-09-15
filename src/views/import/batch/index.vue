@@ -84,6 +84,16 @@
               <div class="action-row">
                 <!-- 终态（ARCHIVED）：仅保留"下载"做合规留档入口，"问题/重归一化/归档"全部收起 -->
                 <template v-if="scope.row.status === 'ARCHIVED'">
+                  <el-tooltip content="撤销导入（冲销该批次业绩数据）" placement="top">
+                    <a
+                      class="action-btn action-btn-danger"
+                      :class="{ 'is-loading': cancellingId === scope.row.id }"
+                      @click="handleCancelImport(scope.row as ImportBatch)"
+                    >
+                      <el-icon v-if="cancellingId !== scope.row.id"><CircleClose /></el-icon>
+                      <el-icon v-else class="is-loading"><Loading /></el-icon>
+                    </a>
+                  </el-tooltip>
                   <el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
                     <a
                       class="action-btn"
@@ -197,7 +207,7 @@
 import { importApi } from '@/api/panjia/import';
 import type { ImportBatch, ImportIssue } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
-import { Warning, Download, Refresh, Loading, Box } from '@element-plus/icons-vue';
+import { Warning, Download, Refresh, Loading, Box, CircleClose } from '@element-plus/icons-vue';
 
 // 单据类型映射（跨所有单据类型；业绩来源唯一：贝壳业绩明细表）
 const sourceTypeMap: Record<string, string> = {
@@ -214,7 +224,8 @@ const statusMap: Record<string, string> = {
   NORMALIZING: '归一化中',
   PENDING_CONFIRM: '待确认',
   ARCHIVED: '已归档',
-  FAILED: '失败'
+  FAILED: '失败',
+  CANCELLED: '已撤销'
 };
 type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger';
 
@@ -242,7 +253,8 @@ const statusTagType = (status: string): TagType => {
     NORMALIZING: 'info',
     PENDING_CONFIRM: 'warning',
     ARCHIVED: 'success',
-    FAILED: 'danger'
+    FAILED: 'danger',
+    CANCELLED: 'info'
   };
   return map[status] ?? 'info';
 };
@@ -331,6 +343,29 @@ const handleArchive = async (row: ImportBatch) => {
     await getList();
   } finally {
     archivingId.value = undefined;
+  }
+};
+
+// ==================== 操作：撤销导入 ====================
+const cancellingId = ref<string | number | undefined>();
+
+const handleCancelImport = async (row: ImportBatch) => {
+  try {
+    await modal.confirm(
+      `确认撤销批次「${row.batchNo}」？\n` +
+      `将冲销该批次所有业绩事实（已调整事实不受影响），操作不可逆。`
+    );
+  } catch {
+    return;
+  }
+  cancellingId.value = row.id;
+  try {
+    const res = await importApi.cancelImport(row.id);
+    const count = res.data ?? 0;
+    modal.msgSuccess(`撤销成功，已冲销 ${count} 条业绩事实`);
+    await getList();
+  } finally {
+    cancellingId.value = undefined;
   }
 };
 
@@ -439,6 +474,18 @@ const handleDownloadFile = async (row: ImportBatch) => {
     user-select: none;
     line-height: 1;
     transition: background-color 0.15s ease, color 0.15s ease;
+
+    &.action-btn-danger {
+      color: var(--el-color-danger);
+
+      &:hover {
+        background-color: var(--el-color-danger-light-9);
+      }
+
+      &:active {
+        background-color: var(--el-color-danger-light-8);
+      }
+    }
 
     &:hover {
       background-color: var(--el-color-primary-light-9);

@@ -58,6 +58,10 @@ export const importApi = {
   archive(id: string | number) {
     return panjiaRequest.post<void>(`/import/batches/${id}/archive`);
   },
+  /** 撤销导入（冲销该批次所有业绩事实，标记批次为已撤销） */
+  cancelImport(id: string | number) {
+    return panjiaRequest.post<number>(`/perf/fact/cancel/${id}`);
+  },
   /** 忽略问题 */
   ignoreIssue(id: string | number) {
     return panjiaRequest.post<void>(`/import/issues/${id}/ignore`);
