@@ -3,6 +3,8 @@ export interface TaskQuery extends PageQuery {
   flowCode?: string;
   flowName?: string;
   createByIds?: Array<string | number>;
+  /** 业务标题关键字（合同号/房源地址/账期/金额等） */
+  businessTitle?: string;
 }
 
 export interface ParticipantVo {

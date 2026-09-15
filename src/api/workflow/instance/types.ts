@@ -7,6 +7,8 @@ export interface FlowInstanceQuery extends PageQuery {
   flowName?: string;
   createByIds?: Array<string | number>;
   businessId?: string;
+  /** 业务标题关键字（合同号/房源地址/账期/金额等） */
+  businessTitle?: string;
 }
 
 export interface FlowInstanceVO extends BaseEntity {

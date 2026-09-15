@@ -16,6 +16,15 @@
           <el-form-item label="当前环节" prop="nodeName">
             <el-input v-model="queryParams.nodeName" placeholder="如：总监审批" @keyup.enter="handleQuery" />
           </el-form-item>
+          <el-form-item label="业务关键字" prop="businessTitle">
+            <el-input
+              v-model="queryParams.businessTitle"
+              placeholder="合同号/房源/账期/金额"
+              clearable
+              @keyup.enter="handleQuery"
+              @clear="handleQuery"
+            />
+          </el-form-item>
           <el-form-item>
             <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
             <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -122,6 +131,12 @@ import { useLoading } from '@/hooks/async/useLoading';
 import { useSearchReset } from '@/hooks/form/useSearchReset';
 import { useSearchToggle } from '@/hooks/form/useSearchToggle';
 import { useTableSelection } from '@/hooks/table/useTableSelection';
+import {
+  FLOW_TYPE_TABS as flowTypeTabs,
+  flowTagType,
+  bizType,
+  bizDetail
+} from '@/hooks/workflow/useWorkflowBizCell';
 
 const userSelectRef = ref<InstanceType<typeof UserSelect>>();
 //提交组件
@@ -134,52 +149,7 @@ const total = ref(0);
 // 模型定义表格数据
 const taskList = ref([]);
 
-/** 业务类型快捷切换（与 flow_definition.flow_code 一一对应） */
-const flowTypeTabs = [
-  { label: '全部', code: '' },
-  { label: '结佣审批', code: 'commission_apply' },
-  { label: '结佣调整', code: 'commission_adjust' },
-  { label: '业绩调整', code: 'perf_adjust' },
-  { label: '实收审批', code: 'perf_received' },
-  { label: '奖金录入', code: 'bonus_apply' },
-  { label: '算薪批次', code: 'payroll_batch' },
-  { label: '补发单', code: 'payroll_supplement' }
-];
-
-/** 流程类型 -> 标签配色 */
-const TAG_TYPE_MAP: Record<string, string> = {
-  commission_apply: 'primary',
-  commission_adjust: 'warning',
-  perf_adjust: 'warning',
-  perf_received: 'success',
-  bonus_apply: 'info',
-  payroll_batch: 'danger',
-  payroll_supplement: 'danger'
-};
-const flowTagType = (flowCode: string) => TAG_TYPE_MAP[flowCode] || 'info';
-
-/**
- * 业务扩展标题由后端按「类型｜明细…」格式拼装（见 bizExt.buildBizExt），
- * 这里拆成"类型标签 + 明细"，避免整行糊在一起。
- */
-const splitTitle = (row: any): { type: string; detail: string } => {
-  const title = row?.businessTitle as string | undefined;
-  if (title && title.includes('｜')) {
-    const [head, ...rest] = title.split('｜');
-    return { type: head.trim(), detail: rest.join(' · ').trim() };
-  }
-  return { type: '', detail: title ? title.trim() : '' };
-};
-
-/** 第一列主标签：业务标题里的类型，缺省回退流程定义名 */
-const bizType = (row: any) => splitTitle(row).type || row.flowName || '待办';
-
-/** 第一列副文本：业务标题里的明细，缺省时至少让人看到流程名+业务ID，不留空白 */
-const bizDetail = (row: any) => {
-  const { detail } = splitTitle(row);
-  if (detail) return detail;
-  return `${row.flowName || '业务单据'}（业务ID ${row.businessId}）`;
-};
+// 业务类型 tabs / 标签配色 / 标题拆分 复用自 useWorkflowBizCell
 
 /** 切换业务类型时回到第 1 页 */
 const handleTypeChange = () => {
@@ -198,7 +168,8 @@ const queryParams = ref<TaskQuery>({
   nodeName: undefined,
   flowName: undefined,
   flowCode: '',
-  createByIds: []
+  createByIds: [],
+  businessTitle: undefined
 });
 const { resetQuery } = useSearchReset({
   queryFormRef,

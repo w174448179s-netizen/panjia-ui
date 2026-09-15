@@ -40,9 +40,11 @@
     </div>
 
     <template #footer>
-      <el-button @click="visible = false">取 消</el-button>
-      <el-button type="danger" :loading="taskOperating" @click="onReject">驳 回</el-button>
-      <el-button type="success" :loading="taskOperating" @click="onPass">通 过</el-button>
+      <el-button @click="visible = false">{{ readOnly ? '关 闭' : '取 消' }}</el-button>
+      <template v-if="!readOnly">
+        <el-button type="danger" :loading="taskOperating" @click="onReject">驳 回</el-button>
+        <el-button type="success" :loading="taskOperating" @click="onPass">通 过</el-button>
+      </template>
     </template>
   </el-dialog>
 </template>
@@ -80,6 +82,7 @@ const DETAIL_LOADERS: Record<string, () => Promise<any>> = {
 };
 
 const visible = ref(false);
+const readOnly = ref(false);
 const task = ref<any>(null);
 const bodyComponent = ref<Component | null>(null);
 
@@ -90,10 +93,20 @@ const bizTypeLabel = computed(() => {
   return task.value?.flowName || '待办';
 });
 
-const dialogTitle = computed(() => `办理：${bizTypeLabel.value}`);
+const dialogTitle = computed(() => readOnly.value ? `查看：${bizTypeLabel.value}` : `办理：${bizTypeLabel.value}`);
 
 /** 打开弹窗办理一条待办 */
 const open = (row: any) => {
+  readOnly.value = false;
+  task.value = row;
+  const loader = DETAIL_LOADERS[row?.flowCode as string];
+  bodyComponent.value = loader ? defineAsyncComponent(loader) : null;
+  visible.value = true;
+};
+
+/** 打开弹窗只读查看一条流程（已办/我发起的"查看"按钮共用，不显示通过/驳回按钮） */
+const openView = (row: any) => {
+  readOnly.value = true;
   task.value = row;
   const loader = DETAIL_LOADERS[row?.flowCode as string];
   bodyComponent.value = loader ? defineAsyncComponent(loader) : null;
@@ -116,7 +129,7 @@ const onReject = async () => {
   }
 };
 
-defineExpose({ open });
+defineExpose({ open, openView });
 </script>
 
 <style lang="scss" scoped>

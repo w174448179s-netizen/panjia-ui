@@ -17,6 +17,15 @@
           <el-form-item label="流程定义编码" label-width="100" prop="flowCode">
             <el-input v-model="queryParams.flowCode" placeholder="请输入流程定义编码" @keyup.enter="handleQuery" />
           </el-form-item>
+          <el-form-item label="业务关键字" prop="businessTitle">
+            <el-input
+              v-model="queryParams.businessTitle"
+              placeholder="合同号/房源/账期/金额"
+              clearable
+              @keyup.enter="handleQuery"
+              @clear="handleQuery"
+            />
+          </el-form-item>
           <el-form-item>
             <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
             <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -118,7 +127,8 @@ const queryParams = ref<TaskQuery>({
   pageSize: 10,
   nodeName: undefined,
   flowName: undefined,
-  flowCode: undefined
+  flowCode: undefined,
+  businessTitle: undefined
 });
 const { resetQuery } = useSearchReset({
   queryFormRef,
