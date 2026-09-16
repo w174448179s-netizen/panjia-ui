@@ -271,6 +271,25 @@ export interface PerformanceFactSearch {
   detailCount: number;        // 明细条数
 }
 
+/** 业绩查询·合同下明细行（/perf/fact/search/details 返回，含全部期间） */
+export interface PerformanceSearchDetailRow {
+  factId: string;
+  period: string;             // 归属期间（明细覆盖业务键全部期间）
+  employeeId: string;
+  employeeCode?: string;      // 工号
+  employeeName?: string;      // 姓名
+  deptPath?: string;          // 门店/组别全路径
+  roleType?: string;          // 所属角色
+  roleName?: string;          // 角色名
+  shareRatio?: number;        // 角色占比
+  businessDate?: string;      // 签约/认购日期
+  expectAmount: number;       // 应收金额（新签业绩，调整后）
+  originalExpectAmount: number; // 应收原始金额（调整前）
+  realAmount: number;         // 实收金额（按 source_key 配对，无实收为 0）
+  settled?: boolean;           // 是否已结算
+  settleDate?: string;        // 结算日期
+}
+
 // ========== API ==========
 export const performanceApi = {
   // 业绩事实
@@ -327,4 +346,9 @@ export const performanceApi = {
   // 完整业绩查询（合同维度）
   searchByContract: (params: { period?: string; deptId?: string; keyword?: string; pageNum?: number; pageSize?: number }) =>
     panjiaRequest.get<PageResult<PerformanceFactSearch>>('/perf/fact/search', params),
+
+  // 业绩查询·合同下明细（查看详情弹窗；bizNo=列表行展示的合同号/订单号，
+  // 一手房/房产金融/家装荐客传订单号，其余传合同号，空则订单号）
+  getSearchDetails: (params: { bizNo: string }) =>
+    panjiaRequest.get<PerformanceSearchDetailRow[]>('/perf/fact/search/details', params),
 };

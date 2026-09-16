@@ -19,9 +19,9 @@
             <el-tree-select
               v-model="queryParams.deptId"
               :data="deptTreeData"
-              :props="{ value: 'id', label: 'label', children: 'children' }"
-              node-key="id"
-              placeholder="全部门店"
+              :props="{ value: 'deptId', label: 'deptName', children: 'children' }"
+              node-key="deptId"
+              placeholder="全部门店/组别"
               clearable
               check-strictly
               style="width: 200px"
@@ -54,11 +54,19 @@
         >
           <el-table-column label="合同号" align="center" min-width="140" show-overflow-tooltip>
             <template #default="{ row }">
-              <span class="contract-no">{{ row.contractNo || '—' }}</span>
+              <el-button v-if="row.contractNo" type="primary" link class="no-click" @click="openDetail(row)">
+                {{ row.contractNo }}
+              </el-button>
+              <span v-else class="amount-gray">—</span>
             </template>
           </el-table-column>
-          <el-table-column label="订单号" align="center" prop="orderNo" min-width="120" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.orderNo || '—' }}</template>
+          <el-table-column label="订单号" align="center" min-width="120" show-overflow-tooltip>
+            <template #default="{ row }">
+              <el-button v-if="row.orderNo" type="primary" link class="no-click" @click="openDetail(row)">
+                {{ row.orderNo }}
+              </el-button>
+              <span v-else class="amount-gray">—</span>
+            </template>
           </el-table-column>
           <el-table-column label="类型" align="center" prop="bizType" width="100" show-overflow-tooltip>
             <template #default="{ row }">{{ row.bizType || '—' }}</template>
@@ -160,15 +168,137 @@
         </div>
       </div>
     </el-card>
+
+    <!-- 合同业绩详情弹窗（摘要 + 全部明细一次展示） -->
+    <el-dialog
+      v-model="detailDialog.visible"
+      title="合同业绩详情"
+      width="92%"
+      top="3vh"
+      class="search-detail-dialog"
+      destroy-on-close
+      append-to-body
+    >
+      <el-descriptions v-if="detailDialog.row" :column="3" border size="small" class="detail-desc">
+        <el-descriptions-item label="合同号">{{ detailDialog.row.contractNo || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="订单号">{{ detailDialog.row.orderNo || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="业务类型">{{ detailDialog.row.bizType || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="物业地址" :span="3">{{ detailDialog.row.propertyAddress || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="签约时间">{{ formatDate(detailDialog.row.signDate) }}</el-descriptions-item>
+        <el-descriptions-item label="最近期间">{{ detailDialog.row.period }}</el-descriptions-item>
+        <el-descriptions-item label="新签业绩（应收）">
+          <span class="amount-red">{{ formatMoney(detailDialog.row.expectAmount) }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="实收业绩">
+          <span class="amount-red">{{ formatMoney(detailDialog.row.realAmount) }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="调整后新签">
+          <span :class="detailDialog.row.hasAdjust ? 'amount-red' : 'amount-gray'">
+            {{ detailDialog.row.hasAdjust ? formatMoney(detailDialog.row.adjustedAmount) : '—' }}
+          </span>
+        </el-descriptions-item>
+        <el-descriptions-item label="调整单状态">
+          <el-tag v-if="detailDialog.row.adjustStatus" :type="adjustStatusTagType(detailDialog.row.adjustStatus)" size="small">
+            {{ adjustStatusMap[detailDialog.row.adjustStatus] ?? detailDialog.row.adjustStatus }}
+          </el-tag>
+          <span v-else class="amount-gray">—</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="实收审批">
+          <el-tag v-if="detailDialog.row.receivedStatus" :type="receivedStatusTagType(detailDialog.row.receivedStatus)" size="small">
+            {{ receivedStatusMap[detailDialog.row.receivedStatus] ?? detailDialog.row.receivedStatus }}
+          </el-tag>
+          <span v-else class="amount-gray">—</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="实收/应收">
+          <template v-if="detailDialog.row.receivedRealAmount != null">
+            <span class="amount-red">{{ formatMoney(detailDialog.row.receivedRealAmount) }}</span>
+            <span class="amount-gray"> / {{ formatMoney(detailDialog.row.receivedExpectedAmount) }}</span>
+          </template>
+          <span v-else class="amount-gray">—</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="结佣状态">
+          <el-tag v-if="detailDialog.row.commissionStatus" :type="commissionStatusTagType(detailDialog.row.commissionStatus)" size="small">
+            {{ commissionStatusMap[detailDialog.row.commissionStatus] ?? detailDialog.row.commissionStatus }}
+          </el-tag>
+          <span v-else class="amount-gray">—</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="结佣金额">
+          <span v-if="detailDialog.row.commissionAmount != null" class="amount-red">{{ formatMoney(detailDialog.row.commissionAmount) }}</span>
+          <span v-else class="amount-gray">—</span>
+        </el-descriptions-item>
+      </el-descriptions>
+
+      <!-- 汇总条 -->
+      <div class="detail-summary-bar">
+        <span class="summary-text">
+          涉及 <b>{{ detailSummary.employeeCount }}</b> 人 ·
+          <b>{{ detailList.length }}</b> 条明细
+        </span>
+        <span class="summary-amount">
+          应收合计：<b class="amount-red">{{ formatMoney(detailSummary.totalExpect) }}</b>
+          <span class="summary-sep">|</span>
+          实收合计：<b class="amount-red">{{ formatMoney(detailSummary.totalReal) }}</b>
+        </span>
+      </div>
+
+      <!-- 明细列表 -->
+      <el-table border :data="detailList" v-loading="detailLoading" max-height="480">
+        <el-table-column label="期间" align="center" prop="period" width="80" />
+        <el-table-column label="门店/组别" align="left" min-width="150" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.deptPath || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="工号" align="center" width="130" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.employeeCode || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="姓名" align="center" min-width="100">
+          <template #default="{ row }">{{ row.employeeName || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="所属角色" align="center" min-width="100" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.roleType || row.roleName || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="角色占比" align="center" width="90">
+          <template #default="{ row }">{{ formatRatio(row.shareRatio) }}</template>
+        </el-table-column>
+        <el-table-column label="签约/认购时间" align="center" width="160">
+          <template #default="{ row }">{{ formatDate(row.businessDate) }}</template>
+        </el-table-column>
+        <el-table-column label="应收金额" align="right" width="130">
+          <template #default="{ row }">
+            <span class="amount-red">{{ formatMoney(row.expectAmount) }}</span>
+            <el-tag v-if="row.expectAmount !== row.originalExpectAmount" type="primary" size="small" effect="plain" class="adjust-tag">已调</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="实收金额" align="right" width="130">
+          <template #default="{ row }">
+            <span :class="row.realAmount < 0 ? 'amount-red' : 'amount-ink'">{{ formatMoney(row.realAmount) }}</span>
+            <el-tag v-if="row.realAmount < 0" type="danger" size="small" effect="plain" class="adjust-tag">红冲</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="结算" align="center" width="120">
+          <template #default="{ row }">
+            <el-tag v-if="row.settled" type="success" size="small">已结算</el-tag>
+            <el-tag v-else type="info" size="small" effect="plain">未结算</el-tag>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty description="该合同暂无明细数据" />
+        </template>
+      </el-table>
+      <template #footer>
+        <el-button @click="detailDialog.visible = false">关 闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { Search, Refresh } from '@element-plus/icons-vue';
+import { ElMessage } from 'element-plus';
 import { performanceApi } from '@/api/panjia/performance';
-import type { PerformanceFactSearch } from '@/api/panjia/performance';
+import type { PerformanceFactSearch, PerformanceSearchDetailRow } from '@/api/panjia/performance';
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
+import { resolveBizNo } from '@/utils/panjiaBiz';
 
 defineOptions({ name: 'PerformanceSearch' });
 
@@ -307,6 +437,53 @@ const commissionStatusTagType = (status: string): TagType => {
   return map[status] ?? 'info';
 };
 
+const formatRatio = (val: number | string | undefined | null): string => {
+  if (val === undefined || val === null || val === '') return '—';
+  const n = Number(val);
+  if (Number.isNaN(n)) return String(val);
+  const pct = n * 100;
+  return `${Number.isInteger(pct) ? pct : pct.toFixed(2)}%`;
+};
+
+// ==================== 合同详情弹窗（摘要 + 明细一次展示） ====================
+// 业务键口径：一手房、房产金融、家装荐客以订单号为准，其它以合同号为准（空则回退订单号）
+const detailDialog = reactive({
+  visible: false,
+  row: undefined as PerformanceFactSearch | undefined,
+});
+const detailLoading = ref(false);
+const detailList = ref<PerformanceSearchDetailRow[]>([]);
+
+const detailSummary = computed(() => {
+  const list = detailList.value;
+  return {
+    employeeCount: new Set(list.map((r) => r.employeeId)).size,
+    totalExpect: list.reduce((s, r) => s + Number(r.expectAmount || 0), 0),
+    totalReal: list.reduce((s, r) => s + Number(r.realAmount || 0), 0),
+  };
+});
+
+const openDetail = async (row: PerformanceFactSearch) => {
+  const bizNo = resolveBizNo(row.bizType, row.contractNo, row.orderNo);
+  if (!bizNo) {
+    ElMessage.warning('该合同无合同号/订单号，无法查看明细');
+    return;
+  }
+  detailDialog.row = row;
+  detailList.value = [];
+  detailDialog.visible = true;
+  detailLoading.value = true;
+  try {
+    const res = await performanceApi.getSearchDetails({ bizNo });
+    detailList.value = res.data ?? [];
+  } catch (e) {
+    console.error('[search] 合同明细加载失败', e);
+    detailList.value = [];
+  } finally {
+    detailLoading.value = false;
+  }
+};
+
 // ==================== 初始化 ====================
 onMounted(() => {
   calcTableHeight();
@@ -353,8 +530,9 @@ onBeforeUnmount(() => {
   padding-top: 4px;
 }
 
-.contract-no {
-  color: var(--el-color-primary);
+.no-click {
+  padding: 0;
+  height: auto;
   font-weight: 500;
 }
 
@@ -365,5 +543,34 @@ onBeforeUnmount(() => {
 
 .amount-gray {
   color: #909399;
+}
+
+.amount-ink {
+  color: #303133;
+  font-weight: 500;
+}
+
+.adjust-tag {
+  margin-left: 4px;
+}
+
+.detail-desc {
+  margin-bottom: 12px;
+}
+
+.detail-summary-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.summary-sep {
+  margin: 0 8px;
+  color: #c0c4cc;
 }
 </style>

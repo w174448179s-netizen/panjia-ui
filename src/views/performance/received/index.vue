@@ -14,6 +14,19 @@
             @change="handleQuery"
           />
         </el-form-item>
+        <el-form-item label="门店/组别" prop="deptId">
+          <el-tree-select
+            v-model="queryParams.deptId"
+            :data="deptTreeData"
+            :props="{ value: 'deptId', label: 'deptName', children: 'children' }"
+            node-key="deptId"
+            placeholder="全部门店/组别"
+            clearable
+            check-strictly
+            style="width: 200px"
+            @change="handleQuery"
+          />
+        </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="queryParams.status" placeholder="全部状态" clearable style="width: 130px" @change="handleQuery">
             <el-option v-for="opt in statusOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
@@ -59,7 +72,7 @@
       <el-table border class="data-table" :data="applyList">
         <el-table-column label="合同号/订单号" align="center" min-width="180" fixed="left">
           <template #default="{ row }">
-            <el-button type="primary" link class="contract-link" @click="viewDetail(row)">{{ row.contractNo || row.orderNo || '—' }}</el-button>
+            <el-button type="primary" link class="contract-link" @click="viewDetail(row)">{{ contractOrOrderNo(row) }}</el-button>
           </template>
         </el-table-column>
         <el-table-column label="新签业绩" align="right" width="130">
@@ -239,7 +252,7 @@
             v-model="batchApproveForm.contractNosText"
             type="textarea"
             :rows="10"
-            placeholder="每行一个合同号，或用逗号/空格分隔"
+            placeholder="每行一个合同号/订单号（以列表展示的编号为准），或用逗号/空格分隔"
           />
         </el-form-item>
         <div class="batch-hint">将逐单审批当前节点，非您审批范围内的单据会跳过并提示原因。</div>
@@ -261,9 +274,11 @@ import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { receivedApi, type ReceivedApply, type ReceivedFact } from '@/api/panjia/received';
 import { employeeApi } from '@/api/panjia/employee';
+import type { DeptNode } from '@/api/panjia/types';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { useBizApproval } from '@/hooks/workflow/useBizApproval';
 import { checkPermi } from '@/utils/permission';
+import { resolveBizNo } from '@/utils/panjiaBiz';
 import { useUserStore } from '@/store/modules/user';
 import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
 
@@ -298,7 +313,19 @@ const queryParams = reactive({
   status: '',
   currentNode: '',
   keyword: '',
+  deptId: undefined as string | undefined,
 });
+
+// ==================== 门店/组别筛选（与业绩查询/业绩明细同口径） ====================
+const deptTreeData = ref<DeptNode[]>([]);
+const loadDeptTree = async () => {
+  try {
+    const res = await employeeApi.deptTree();
+    deptTreeData.value = res.data ?? [];
+  } catch (e) {
+    console.error('[received] 部门树加载失败', e);
+  }
+};
 
 const num = (v: number | string | null | undefined): number => {
   if (v === undefined || v === null || v === '') return 0;
@@ -384,6 +411,7 @@ const getList = async () => {
       status: queryParams.status || undefined,
       currentNode: queryParams.currentNode || undefined,
       keyword: queryParams.keyword || undefined,
+      deptId: queryParams.deptId || undefined,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
     });
@@ -401,9 +429,14 @@ const handleQuery = () => {
   queryParams.pageNum = 1;
   getList();
 };
+
+// 合同号/订单号合并展示：一手房、房产金融、家装荐客以订单号为准，其它以合同号为准（空则回退）
+const contractOrOrderNo = (row: ReceivedApply): string =>
+  resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—';
 const resetQuery = () => {
   Object.assign(queryParams, {
-    period: currentPeriod(), status: '', currentNode: '', keyword: '', pageNum: 1,
+    period: currentPeriod(), status: '', currentNode: '', keyword: '',
+    deptId: undefined, pageNum: 1,
   });
   getList();
 };
@@ -543,6 +576,7 @@ const openFromWorkflow = async () => {
 useWorkflowRouteOpen('/performance/received', openFromWorkflow);
 
 onMounted(() => {
+  loadDeptTree();
   loadEmployeeMap();
   getList();
 });

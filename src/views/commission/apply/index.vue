@@ -135,7 +135,7 @@
               <el-button
                 v-if="canOriginate(row) || row.status === 'REJECTED'"
                 link type="warning"
-                :loading="submittingMap[row.contractNo]"
+                :loading="submittingMap[contractOrOrderNo(row)]"
                 @click="onSubmit(row as CommissionContractVO)">{{ row.status === 'REJECTED' ? '重提' : '提交' }}</el-button>
               <el-button v-if="(row.status === 'DRAFT' || row.status === 'SUBMITTED') && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
             </div>
@@ -181,12 +181,12 @@
             style="width: 100%"
           />
         </el-form-item>
-        <el-form-item label="合同号">
+        <el-form-item label="合同号/订单号">
           <el-input
             v-model="batchApproveForm.contractNosText"
             type="textarea"
             :rows="10"
-            placeholder="每行一个合同号，或用逗号/空格分隔"
+            placeholder="每行一个合同号/订单号（以列表展示的编号为准），或用逗号/空格分隔"
           />
         </el-form-item>
         <div class="batch-hint">将逐单审批当前节点，非您审批范围内的单据会跳过并提示原因。</div>
@@ -212,6 +212,7 @@ import type { DeptNode } from '@/api/panjia/types';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { useBizApproval } from '@/hooks/workflow/useBizApproval';
 import { checkPermi } from '@/utils/permission';
+import { resolveBizNo } from '@/utils/panjiaBiz';
 import { useUserStore } from '@/store/modules/user';
 import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
 import CommissionApplyDetail from '@/components/WorkflowHandle/details/CommissionApplyDetail.vue';
@@ -275,13 +276,9 @@ const num = (v: number | string | null | undefined): number => {
 const formatAmount = (n: number | string | null | undefined) =>
   n == null ? '0.00' : num(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// 合同号/订单号合并展示
-const contractOrOrderNo = (row: CommissionContractVO): string => {
-  if (row.bizType === '一手房') {
-    return row.orderNo || row.contractNo || '—';
-  }
-  return row.contractNo || row.orderNo || '—';
-};
+// 合同号/订单号合并展示：一手房、房产金融、家装荐客以订单号为准，其它以合同号为准（空则回退）
+const contractOrOrderNo = (row: CommissionContractVO): string =>
+  resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—';
 
 // 部门树（用于顶部门店筛选；详情弹窗的归属门店翻译在 CommissionApplyDetail 内自处理）
 const deptTreeData = ref<DeptNode[]>([]);
@@ -488,7 +485,7 @@ const viewDetail = async (row: CommissionContractVO) => {
   if (!row.applicationId) {
     router.push({
       name: 'PerformanceContractDetail',
-      query: { contractNo: row.contractNo, period: row.period }
+      query: { contractNo: resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo, period: row.period }
     }).catch(() => { /* 重复跳转忽略 */ });
     return;
   }
@@ -514,14 +511,16 @@ const onSubmit = async (row: CommissionContractVO) => {
   } catch {
     return;
   }
-  submittingMap[row.contractNo] = true;
+  // 业务键口径：与后端 selectContractSummaries 输出的 contractNo（= 发起/幂等/单据存储键）一致
+  const bizNo = resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo;
+  submittingMap[bizNo] = true;
   try {
     // 后端已合并发起+提交为一次调用；驳回单后端识别后重提，不新建单
-    await commissionApi.createApplication({ period: row.period, contractNo: row.contractNo });
+    await commissionApi.createApplication({ period: row.period, contractNo: bizNo });
     ElMessage.success(`${action}成功`);
     getList();
   } catch { /* 拦截器处理（含部分失败提示） */ } finally {
-    submittingMap[row.contractNo] = false;
+    submittingMap[bizNo] = false;
   }
 };
 

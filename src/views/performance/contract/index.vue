@@ -370,6 +370,7 @@ import type { PerformanceManageContract, PerformanceManageRow } from '@/api/panj
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
 import { useUserStore } from '@/store/modules/user';
+import { resolveBizNo } from '@/utils/panjiaBiz';
 
 const userStore = useUserStore();
 const isBroker = computed(() => userStore.roles.includes('agent'));
@@ -413,13 +414,9 @@ const formatAmount = (val: number | string | undefined | null): string => {
   return Number.isNaN(n) ? String(val) : n.toFixed(2);
 };
 
-// 合同号/订单号合并展示：业务类型为「一手房」时展示订单号，其它展示合同号
-const contractOrOrderNo = (row: PerformanceManageContract): string => {
-  if (row.bizType === '一手房') {
-    return row.orderNo || row.contractNo || '—';
-  }
-  return row.contractNo || row.orderNo || '—';
-};
+// 合同号/订单号合并展示：一手房、房产金融、家装荐客以订单号为准，其它以合同号为准（空则回退）
+const contractOrOrderNo = (row: PerformanceManageContract): string =>
+  resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—';
 
 // ==================== 合同明细弹窗 ====================
 const detailLoading = ref(false);
@@ -445,7 +442,7 @@ const detailSummary = computed(() => {
 });
 
 const goDetail = async (row: PerformanceManageContract) => {
-  detailDialog.contractNo = row.contractNo || row.orderNo || '';
+  detailDialog.contractNo = resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '';
   detailDialog.orderNo = row.orderNo || '';
   detailDialog.bizType = row.bizType || '';
   detailDialog.propertyAddress = row.propertyAddress || '';
@@ -700,7 +697,7 @@ const adjustRules = {
 };
 
 const openAdjustDialog = (row: PerformanceManageContract) => {
-  adjustDialog.contractNo = row.contractNo || row.orderNo || '';
+  adjustDialog.contractNo = resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '';
   adjustDialog.amount = row.amount ?? 0;
   adjustForm.adjustType = 'AMOUNT';
   adjustForm.targetAmount = undefined;

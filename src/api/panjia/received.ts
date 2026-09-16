@@ -58,6 +58,8 @@ export interface ReceivedQuery extends PageQuery {
   currentNode?: string;
   batchId?: string;
   keyword?: string;
+  /** 门店/组别（含下级组别，后端按部门子树过滤） */
+  deptId?: string;
 }
 
 /** Excel 批量审批结果 */
