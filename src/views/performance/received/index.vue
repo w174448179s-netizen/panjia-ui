@@ -18,7 +18,8 @@
           <el-tree-select
             v-model="queryParams.deptId"
             :data="deptTreeData"
-            :props="{ value: 'deptId', label: 'deptName', children: 'children' }"
+            :props="{ label: 'deptName', children: 'children' } as any"
+            value-key="deptId"
             node-key="deptId"
             placeholder="全部门店/组别"
             clearable
@@ -197,12 +198,12 @@
           <el-table-column label="角色占比" align="center" width="90">
             <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
           </el-table-column>
-          <el-table-column label="应收金额" align="right" width="120">
+          <el-table-column label="新签业绩" align="right" width="120">
             <template #default="scope">
               <span class="amount amount-expected">{{ formatAmount(scope.row.expectedAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="实收金额" align="right" width="120">
+          <el-table-column label="实收业绩" align="right" width="120">
             <template #default="scope">
               <span class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
             </template>

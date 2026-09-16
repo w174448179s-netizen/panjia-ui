@@ -46,9 +46,9 @@ export interface ReceivedFact {
   roleName?: string;
   /** 角色占比 */
   shareRatio?: number;
-  /** 应收金额（同 sourceKey 的 PERF_EXPECT 事实金额） */
+  /** 新签业绩（同 sourceKey 的 PERF_EXPECT 事实金额） */
   expectedAmount?: number;
-  /** 实收金额（PERF_REAL 事实金额） */
+  /** 实收业绩（PERF_REAL 事实金额） */
   amount: number;
 }
 
@@ -84,7 +84,7 @@ export const receivedApi = {
     panjiaRequest.post<void>(`/performance/received/${id}/resubmit`),
   cancel: (id: string | number) =>
     panjiaRequest.post<void>(`/performance/received/${id}/cancel`),
-  /** Excel 批量审批（匹配合同号+实收金额，§2.3） */
+  /** Excel 批量审批（匹配合同号+实收业绩，§2.3） */
   batchApprove: (file: File, period: string) => {
     const formData = new FormData();
     formData.append('file', file);

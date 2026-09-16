@@ -19,7 +19,8 @@
             <el-tree-select
               v-model="queryParams.deptId"
               :data="deptTreeData"
-              :props="{ value: 'deptId', label: 'deptName', children: 'children' }"
+              :props="{ label: 'deptName', children: 'children' } as any"
+              value-key="deptId"
               node-key="deptId"
               placeholder="全部门店/组别"
               clearable
@@ -52,18 +53,16 @@
           stripe
           :max-height="tableMaxHeight"
         >
-          <el-table-column label="合同号" align="center" min-width="140" show-overflow-tooltip>
+          <el-table-column label="合同号/订单号" align="center" min-width="150" show-overflow-tooltip>
             <template #default="{ row }">
-              <el-button v-if="row.contractNo" type="primary" link class="no-click" @click="openDetail(row)">
-                {{ row.contractNo }}
-              </el-button>
-              <span v-else class="amount-gray">—</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="订单号" align="center" min-width="120" show-overflow-tooltip>
-            <template #default="{ row }">
-              <el-button v-if="row.orderNo" type="primary" link class="no-click" @click="openDetail(row)">
-                {{ row.orderNo }}
+              <el-button
+                v-if="resolveBizNo(row.bizType, row.contractNo, row.orderNo)"
+                type="primary"
+                link
+                class="no-click"
+                @click="openDetail(row as PerformanceFactSearch)"
+              >
+                {{ resolveBizNo(row.bizType, row.contractNo, row.orderNo) }}
               </el-button>
               <span v-else class="amount-gray">—</span>
             </template>
@@ -81,7 +80,7 @@
 
           <el-table-column label="新签业绩" align="right" width="130">
             <template #default="{ row }">
-              <span :class="{ 'amount-gray': row.expectAmount === 0 }">{{ formatMoney(row.expectAmount) }}</span>
+              <span :class="{ 'amount-gray': row.expectOriginalAmount === 0 }">{{ formatMoney(row.expectOriginalAmount) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="实收业绩" align="right" width="130">
@@ -96,9 +95,9 @@
               <span v-else class="amount-gray">—</span>
             </template>
           </el-table-column>
-          <el-table-column label="调整后新签" align="right" width="130">
+          <el-table-column label="调整后业绩" align="right" width="130">
             <template #default="{ row }">
-              <span v-if="row.hasAdjust" class="amount-red">{{ formatMoney(row.adjustedAmount) }}</span>
+              <span v-if="row.hasAdjust" class="amount-red">{{ formatMoney(row.expectAmount) }}</span>
               <span v-else class="amount-gray">—</span>
             </template>
           </el-table-column>
@@ -137,7 +136,7 @@
               <span v-else class="amount-gray">—</span>
             </template>
           </el-table-column>
-          <el-table-column label="结佣金额" align="right" width="130">
+          <el-table-column label="结佣业绩" align="right" width="130">
             <template #default="{ row }">
               <span v-if="row.commissionAmount != null" class="amount-red">{{ formatMoney(row.commissionAmount) }}</span>
               <span v-else class="amount-gray">—</span>
@@ -187,14 +186,14 @@
         <el-descriptions-item label="签约时间">{{ formatDate(detailDialog.row.signDate) }}</el-descriptions-item>
         <el-descriptions-item label="最近期间">{{ detailDialog.row.period }}</el-descriptions-item>
         <el-descriptions-item label="新签业绩（应收）">
-          <span class="amount-red">{{ formatMoney(detailDialog.row.expectAmount) }}</span>
+          <span class="amount-red">{{ formatMoney(detailDialog.row.expectOriginalAmount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="实收业绩">
           <span class="amount-red">{{ formatMoney(detailDialog.row.realAmount) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="调整后新签">
+        <el-descriptions-item label="调整后业绩">
           <span :class="detailDialog.row.hasAdjust ? 'amount-red' : 'amount-gray'">
-            {{ detailDialog.row.hasAdjust ? formatMoney(detailDialog.row.adjustedAmount) : '—' }}
+            {{ detailDialog.row.hasAdjust ? formatMoney(detailDialog.row.expectAmount) : '—' }}
           </span>
         </el-descriptions-item>
         <el-descriptions-item label="调整单状态">
@@ -222,7 +221,7 @@
           </el-tag>
           <span v-else class="amount-gray">—</span>
         </el-descriptions-item>
-        <el-descriptions-item label="结佣金额">
+        <el-descriptions-item label="结佣业绩">
           <span v-if="detailDialog.row.commissionAmount != null" class="amount-red">{{ formatMoney(detailDialog.row.commissionAmount) }}</span>
           <span v-else class="amount-gray">—</span>
         </el-descriptions-item>
@@ -235,7 +234,11 @@
           <b>{{ detailList.length }}</b> 条明细
         </span>
         <span class="summary-amount">
-          应收合计：<b class="amount-red">{{ formatMoney(detailSummary.totalExpect) }}</b>
+          新签业绩合计：<b class="amount-red">{{ formatMoney(detailSummary.totalExpectOriginal) }}</b>
+          <template v-if="detailSummary.hasAdjustRow">
+            <span class="summary-sep">|</span>
+            调整后业绩合计：<b class="amount-red">{{ formatMoney(detailSummary.totalExpect) }}</b>
+          </template>
           <span class="summary-sep">|</span>
           实收合计：<b class="amount-red">{{ formatMoney(detailSummary.totalReal) }}</b>
         </span>
@@ -262,13 +265,20 @@
         <el-table-column label="签约/认购时间" align="center" width="160">
           <template #default="{ row }">{{ formatDate(row.businessDate) }}</template>
         </el-table-column>
-        <el-table-column label="应收金额" align="right" width="130">
+        <el-table-column label="新签业绩" align="right" width="130">
           <template #default="{ row }">
-            <span class="amount-red">{{ formatMoney(row.expectAmount) }}</span>
-            <el-tag v-if="row.expectAmount !== row.originalExpectAmount" type="primary" size="small" effect="plain" class="adjust-tag">已调</el-tag>
+            <span class="amount-red">{{ formatMoney(row.originalExpectAmount ?? row.expectAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="实收金额" align="right" width="130">
+        <el-table-column label="调整后业绩" align="right" width="130">
+          <template #default="{ row }">
+            <span v-if="Number(row.expectAmount) !== Number(row.originalExpectAmount ?? row.expectAmount)" class="amount-red">
+              {{ formatMoney(row.expectAmount) }}
+            </span>
+            <span v-else class="amount-gray">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="实收业绩" align="right" width="130">
           <template #default="{ row }">
             <span :class="row.realAmount < 0 ? 'amount-red' : 'amount-ink'">{{ formatMoney(row.realAmount) }}</span>
             <el-tag v-if="row.realAmount < 0" type="danger" size="small" effect="plain" class="adjust-tag">红冲</el-tag>
@@ -458,7 +468,10 @@ const detailSummary = computed(() => {
   const list = detailList.value;
   return {
     employeeCount: new Set(list.map((r) => r.employeeId)).size,
+    // 新签业绩合计取调整前（未调整时与当前一致）；有调整的行才计入调整后合计
+    totalExpectOriginal: list.reduce((s, r) => s + Number(r.originalExpectAmount ?? r.expectAmount ?? 0), 0),
     totalExpect: list.reduce((s, r) => s + Number(r.expectAmount || 0), 0),
+    hasAdjustRow: list.some((r) => Number(r.expectAmount) !== Number(r.originalExpectAmount ?? r.expectAmount)),
     totalReal: list.reduce((s, r) => s + Number(r.realAmount || 0), 0),
   };
 });

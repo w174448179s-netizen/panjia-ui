@@ -253,10 +253,11 @@ export interface PerformanceFactSearch {
   propertyAddress?: string;
   signDate?: string;
   period: string;
-  expectAmount: number;       // 新签业绩合计
+  expectAmount: number;       // 新签业绩合计（调整后当前值）
+  expectOriginalAmount: number; // 新签业绩合计（调整前；未调整时 = expectAmount）
   realAmount: number;         // 实收业绩合计
   hasAdjust: boolean;         // 是否有调整
-  adjustedAmount: number;     // 调整后新签金额
+  adjustedAmount: number;     // 调整后新签业绩（兼容保留；展示用 expectAmount）
   adjustStatus?: string;     // 调整单状态
   adjustNo?: string;         // 调整单号
   adjustType?: string;       // 调整类型
@@ -266,7 +267,7 @@ export interface PerformanceFactSearch {
   receivedRealAmount?: number;     // 实收审批单实收
   commissionStatus?: string; // 结佣状态
   commissionApplyNo?: string; // 结佣申请单号
-  commissionAmount?: number;   // 结佣金额
+  commissionAmount?: number;   // 结佣业绩
   employeeCount: number;      // 涉及人数
   detailCount: number;        // 明细条数
 }
@@ -283,9 +284,9 @@ export interface PerformanceSearchDetailRow {
   roleName?: string;          // 角色名
   shareRatio?: number;        // 角色占比
   businessDate?: string;      // 签约/认购日期
-  expectAmount: number;       // 应收金额（新签业绩，调整后）
+  expectAmount: number;       // 新签业绩（新签业绩，调整后）
   originalExpectAmount: number; // 应收原始金额（调整前）
-  realAmount: number;         // 实收金额（按 source_key 配对，无实收为 0）
+  realAmount: number;         // 实收业绩（按 source_key 配对，无实收为 0）
   settled?: boolean;           // 是否已结算
   settleDate?: string;        // 结算日期
 }

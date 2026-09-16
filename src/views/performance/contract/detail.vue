@@ -26,11 +26,13 @@
           <b>{{ detailList.length }}</b> 条明细
         </span>
         <span class="summary-amount">
-          原始合计：
+          新签业绩合计：
           <b :class="{ 'amount-negative': totalOriginalAmount < 0 }">{{ formatAmount(totalOriginalAmount) }}</b>
-          <span class="summary-sep">|</span>
-          应收合计：
-          <b :class="{ 'amount-negative': totalAmount < 0 }">{{ formatAmount(totalAmount) }}</b>
+          <template v-if="hasAdjustRow">
+            <span class="summary-sep">|</span>
+            调整后业绩合计：
+            <b :class="{ 'amount-negative': totalAmount < 0 }">{{ formatAmount(totalAmount) }}</b>
+          </template>
         </span>
       </div>
 
@@ -59,17 +61,17 @@
         <el-table-column label="角色占比" align="center" width="90">
           <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
         </el-table-column>
-        <el-table-column label="原始金额" align="right" width="120">
+        <el-table-column label="新签业绩" align="right" width="120">
           <template #default="scope">
             <span class="amount-original">{{ formatAmount(scope.row.originalAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column :label="'应收金额'" align="right" width="130">
+        <el-table-column label="调整后业绩" align="right" width="130">
           <template #default="scope">
-            <span class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
+            <span v-if="scope.row.amount !== scope.row.originalAmount" class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
+            <span v-else class="amount-none">—</span>
             <div class="amount-tags">
               <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
-              <el-tag v-if="scope.row.amount !== scope.row.originalAmount" type="primary" size="small" effect="plain" class="adjust-tag">已调</el-tag>
             </div>
           </template>
         </el-table-column>
@@ -111,7 +113,7 @@
             <el-option label="部门划转" value="TRANSFER" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整后金额" prop="targetAmount">
+        <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整后业绩" prop="targetAmount">
           <el-input-number
             v-model="adjustForm.targetAmount"
             :precision="2"
@@ -192,6 +194,8 @@ const contractInfo = computed(() => {
 const employeeCount = computed(() => new Set(detailList.value.map(r => r.employeeId)).size);
 const totalAmount = computed(() => detailList.value.reduce((sum, r) => sum + num(r.amount), 0));
 const totalOriginalAmount = computed(() => detailList.value.reduce((sum, r) => sum + num(r.originalAmount), 0));
+// 有调整的行才显示「调整后业绩」与对应合计，未调整时保持 — 避免歧义
+const hasAdjustRow = computed(() => detailList.value.some(r => num(r.amount) !== num(r.originalAmount)));
 
 // ==================== 工具 ====================
 const num = (v: number | string | undefined | null): number => {
@@ -274,6 +278,7 @@ const adjustDialog = reactive({
   factId: '',
   employeeId: '',
   employeeName: '',
+  amount: 0,
 });
 const adjustForm = reactive({
   adjustType: 'AMOUNT',
@@ -287,7 +292,7 @@ const adjustRules = {
     {
       validator: (_rule: unknown, value: number | undefined, callback: (err?: Error) => void) => {
         if (adjustForm.adjustType === 'AMOUNT' && (value === undefined || value === null)) {
-          callback(new Error('请输入调整后金额'));
+          callback(new Error('请输入调整后业绩'));
         } else {
           callback();
         }
@@ -495,6 +500,10 @@ onMounted(async () => {
   }
   .amount-redink {
     color: #f56c6c;
+  }
+  .amount-none {
+    color: #c0c4cc;
+    font-variant-numeric: tabular-nums;
   }
   .amount-tags {
     display: flex;

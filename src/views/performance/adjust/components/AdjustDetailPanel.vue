@@ -25,8 +25,8 @@
             → {{ detail.targetDeptName }}
           </span>
         </el-descriptions-item>
-        <el-descriptions-item label="原始金额">{{ formatYuan(detail.originalAmount) }}</el-descriptions-item>
-        <el-descriptions-item label="调整后金额">
+        <el-descriptions-item label="新签业绩">{{ formatYuan(detail.originalAmount) }}</el-descriptions-item>
+        <el-descriptions-item label="调整后业绩">
           <span class="amount-red">{{ formatYuan(detail.targetAmount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="申请人">{{ detail.applicantName || '—' }}</el-descriptions-item>
@@ -44,10 +44,10 @@
           <el-descriptions-item label="订单号">{{ detail.orderNo || '—' }}</el-descriptions-item>
           <el-descriptions-item label="签约时间">{{ detail.businessDate || '—' }}</el-descriptions-item>
           <el-descriptions-item label="明细条数">{{ detail.detailCount ?? 0 }} 条</el-descriptions-item>
-          <el-descriptions-item label="合同金额">
+          <el-descriptions-item label="新签业绩">
             <span class="amount">{{ formatYuan(detail.originalAmount) }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="调整后金额">
+          <el-descriptions-item label="调整后业绩">
             <span class="amount amount-red">{{ formatYuan(detail.targetAmount) }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="房源地址" :span="2">{{ detail.propertyAddress || '—' }}</el-descriptions-item>
@@ -78,7 +78,7 @@
                 <span>{{ formatRatio(scope.row.shareRatio) }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="应收金额" width="120" align="right">
+            <el-table-column label="新签业绩" width="120" align="right">
               <template #default="scope">
                 <span class="amount amount-expected">{{ formatNumber(scope.row.amount) }}</span>
               </template>
@@ -88,7 +88,7 @@
                 <span :class="getAmountClass(scope.row.deltaAmount)">{{ formatDelta(scope.row.deltaAmount) }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="调整后" width="120" align="right">
+            <el-table-column label="调整后业绩" width="120" align="right">
               <template #default="scope">
                 <span class="amount" :class="getAmountClass(scope.row.deltaAmount)">
                   {{ formatNumber(scope.row.afterAmount) }}
@@ -193,7 +193,7 @@ const formatRatio = (val: number | string | undefined | null): string => {
 
 const rowClassName = ({ row }: { row: any }) => (row.target ? 'target-row' : '');
 
-// 「合同金额」与「调整后金额」直接取调整单的 originalAmount / targetAmount，
+// 「合同金额」与「调整后业绩」直接取调整单的 originalAmount / targetAmount，
 // 不再按 details 累加：调整单执行后 details 查的是新 ACTIVE 事实，amount 已是
 // 调整后的值，再累加会与单据头部的 originalAmount/targetAmount 不一致。
 

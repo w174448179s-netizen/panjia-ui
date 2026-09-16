@@ -134,12 +134,12 @@
               {{ adjustTypeMap[scope.row.adjustType] ?? scope.row.adjustType }}
             </template>
           </el-table-column>
-          <el-table-column label="原始金额" align="right" prop="originalAmount" width="130">
+          <el-table-column label="新签业绩" align="right" prop="originalAmount" width="130">
             <template #default="scope">
               <span class="origin-amount">{{ formatOrigin(scope.row.originalAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="调整后金额" align="right" width="140">
+          <el-table-column label="调整后业绩" align="right" width="140">
             <template #default="scope">
               <span class="amount-red">
                 {{ formatOrigin(scope.row.targetAmount) }}
@@ -257,10 +257,10 @@
             />
           </el-select>
           <div v-if="formData.factId" class="fact-amount-hint">
-            当前原始金额：¥{{ formatNumber(selectedFact?.amount) }}
+            当前新签业绩：¥{{ formatNumber(selectedFact?.amount) }}
           </div>
         </el-form-item>
-        <el-form-item v-if="formData.adjustType === 'AMOUNT'" label="调整后金额" prop="targetAmount">
+        <el-form-item v-if="formData.adjustType === 'AMOUNT'" label="调整后业绩" prop="targetAmount">
           <el-input-number
             v-model="formData.targetAmount"
             :min="0"

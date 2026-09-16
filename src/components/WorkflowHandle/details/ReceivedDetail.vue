@@ -51,12 +51,12 @@
           <el-table-column label="角色占比" align="center" width="90">
             <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
           </el-table-column>
-          <el-table-column label="应收金额" align="right" width="120">
+          <el-table-column label="新签业绩" align="right" width="120">
             <template #default="scope">
               <span class="amount">{{ formatAmount(scope.row.expectedAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="实收金额" align="right" width="120">
+          <el-table-column label="实收业绩" align="right" width="120">
             <template #default="scope">
               <span class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
             </template>

@@ -64,7 +64,7 @@
           </span>
         </div>
         <div class="summary-right">
-          <span class="summary-amount">{{ amountLabel }}合计：<b>{{ formatAmount(summary.totalAmount) }}</b></span>
+          <span class="summary-amount">金额合计：<b>{{ formatAmount(summary.totalAmount) }}</b></span>
         </div>
       </div>
 
@@ -77,15 +77,15 @@
             </el-button>
           </template>
         </el-table-column>
-        <el-table-column label="原始金额" align="right" width="110" fixed="left">
+        <el-table-column label="新签业绩" align="right" width="110" fixed="left">
           <template #default="scope">
             <span class="amount-original">{{ formatAmount(scope.row.originalAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column :label="amountLabel" align="right" width="110" fixed="left">
+        <el-table-column label="调整后业绩" align="right" width="110" fixed="left">
           <template #default="scope">
-            <span class="amount amount-contract">{{ formatAmount(scope.row.amount) }}</span>
-            <el-tag v-if="scope.row.amount !== scope.row.originalAmount" type="primary" size="small" effect="plain" class="adjust-tag">已调</el-tag>
+            <span v-if="scope.row.amount !== scope.row.originalAmount" class="amount amount-contract">{{ formatAmount(scope.row.amount) }}</span>
+            <span v-else class="amount-none">—</span>
           </template>
         </el-table-column>
         <el-table-column label="类型" align="center" width="100">
@@ -149,7 +149,7 @@
         <el-form-item label="合同号">
           <span>{{ adjustDialog.contractNo }}</span>
         </el-form-item>
-        <el-form-item label="应收金额">
+        <el-form-item label="新签业绩">
           <!-- 当前合同应收合计（performance_amount 之和），调整金额将按各明细 performance_amount 占比分摊 -->
           <span class="amount-red">¥{{ formatAmount(adjustDialog.amount) }}</span>
         </el-form-item>
@@ -160,7 +160,7 @@
             <el-option label="部门划转" value="TRANSFER" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整后金额" prop="targetAmount">
+        <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整后业绩" prop="targetAmount">
           <el-input-number
             v-model="adjustForm.targetAmount"
             :precision="2"
@@ -231,11 +231,13 @@
           <b>{{ detailList.length }}</b> 条明细
         </span>
         <span class="summary-amount">
-          原始合计：
+          新签业绩合计：
           <b :class="{ 'amount-negative': detailSummary.totalOriginalAmount < 0 }">{{ formatAmount(detailSummary.totalOriginalAmount) }}</b>
-          <span class="summary-sep">|</span>
-          应收合计：
-          <b :class="{ 'amount-negative': detailSummary.totalAmount < 0 }">{{ formatAmount(detailSummary.totalAmount) }}</b>
+          <template v-if="detailSummary.hasAdjustRow">
+            <span class="summary-sep">|</span>
+            调整后业绩合计：
+            <b :class="{ 'amount-negative': detailSummary.totalAmount < 0 }">{{ formatAmount(detailSummary.totalAmount) }}</b>
+          </template>
         </span>
       </div>
 
@@ -264,17 +266,17 @@
         <el-table-column label="角色占比" align="center" width="90">
           <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
         </el-table-column>
-        <el-table-column label="原始金额" align="right" width="120">
+        <el-table-column label="新签业绩" align="right" width="120">
           <template #default="scope">
             <span class="amount-original">{{ formatAmount(scope.row.originalAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column :label="'应收金额'" align="right" width="130">
+        <el-table-column label="调整后业绩" align="right" width="130">
           <template #default="scope">
-            <span class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
+            <span v-if="scope.row.amount !== scope.row.originalAmount" class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
+            <span v-else class="amount-none">—</span>
             <div class="amount-tags">
               <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
-              <el-tag v-if="scope.row.amount !== scope.row.originalAmount" type="primary" size="small" effect="plain" class="adjust-tag">已调</el-tag>
             </div>
           </template>
         </el-table-column>
@@ -308,8 +310,8 @@
         <el-form-item label="员工">
           <span>{{ detailAdjustDialog.employeeName }}</span>
         </el-form-item>
-        <el-form-item label="应收金额">
-          <!-- 当前明细的应收业绩（performance_amount），调后应收 = 应收金额 + 调整金额 -->
+        <el-form-item label="新签业绩">
+          <!-- 当前明细的应收业绩（performance_amount），调后应收 = 新签业绩 + 调整金额 -->
           <span class="amount-red">¥{{ formatAmount(detailAdjustDialog.amount) }}</span>
         </el-form-item>
         <el-form-item label="调整类型">
@@ -319,7 +321,7 @@
             <el-option label="部门划转" value="TRANSFER" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="detailAdjustForm.adjustType === 'AMOUNT'" label="调整后金额" prop="targetAmount">
+        <el-form-item v-if="detailAdjustForm.adjustType === 'AMOUNT'" label="调整后业绩" prop="targetAmount">
           <el-input-number
             v-model="detailAdjustForm.targetAmount"
             :precision="2"
@@ -376,8 +378,6 @@ const userStore = useUserStore();
 const isBroker = computed(() => userStore.roles.includes('agent'));
 
 // ==================== 筛选 ====================
-const amountLabel = '新签业绩';
-
 const queryParams = reactive<{
   period: string;
   deptId: string | number | undefined;
@@ -438,6 +438,7 @@ const detailSummary = computed(() => {
     employeeCount: new Set(list.map(r => r.employeeId)).size,
     totalAmount: list.reduce((sum, r) => sum + num(r.amount), 0),
     totalOriginalAmount: list.reduce((sum, r) => sum + num(r.originalAmount), 0),
+    hasAdjustRow: list.some(r => num(r.amount) !== num(r.originalAmount)),
   };
 });
 
@@ -479,7 +480,7 @@ const detailAdjustDialog = reactive({
   factId: '',
   employeeId: '',
   employeeName: '',
-  amount: 0,                // 当前明细的应收金额（PerformanceManageRow.amount = performance_amount）
+  amount: 0,                // 当前明细的新签业绩（PerformanceManageRow.amount = performance_amount）
 });
 const detailAdjustForm = reactive({
   adjustType: 'AMOUNT',
@@ -493,7 +494,7 @@ const detailAdjustRules = {
     {
       validator: (_rule: unknown, value: number | undefined, callback: (err?: Error) => void) => {
         if (detailAdjustForm.adjustType === 'AMOUNT' && (value === undefined || value === null)) {
-          callback(new Error('请输入调整后金额'));
+          callback(new Error('请输入调整后业绩'));
         } else {
           callback();
         }
@@ -674,7 +675,7 @@ const adjustRules = {
     {
       validator: (_rule: unknown, value: number | undefined, callback: (err?: Error) => void) => {
         if (adjustForm.adjustType === 'AMOUNT' && (value === undefined || value === null)) {
-          callback(new Error('请输入调整后金额'));
+          callback(new Error('请输入调整后业绩'));
         } else {
           callback();
         }
@@ -919,6 +920,11 @@ onMounted(async () => {
 }
 .amount-redink {
   color: #f56c6c;
+}
+/* 调整后业绩占位：未调整时显示 —，避免与新签业绩两列重复造成歧义 */
+.amount-none {
+  color: #c0c4cc;
+  font-variant-numeric: tabular-nums;
 }
 .redink-tag {
   margin-left: 4px;

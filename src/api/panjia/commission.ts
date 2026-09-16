@@ -96,9 +96,9 @@ export interface CommissionItemDetail {
   roleName?: string;
   /** 角色占比 */
   shareRatio?: number;
-  /** 应收金额（同 sourceKey 的 PERF_EXPECT 事实金额） */
+  /** 新签业绩（同 sourceKey 的 PERF_EXPECT 事实金额） */
   expectedAmount?: number;
-  /** 结佣金额 */
+  /** 结佣业绩 */
   amount: number;
   feeItem?: string;
   status: string;        // DRAFT / PENDING / APPROVED / REVERSED
