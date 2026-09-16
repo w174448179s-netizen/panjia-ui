@@ -245,6 +245,32 @@ export interface PerformanceManageContractPage {
   summary: PerformanceManageSummary;
 }
 
+/** 完整业绩查询行（合同维度，/perf/fact/search 返回） */
+export interface PerformanceFactSearch {
+  contractNo: string;
+  orderNo?: string;
+  bizType?: string;
+  propertyAddress?: string;
+  signDate?: string;
+  period: string;
+  expectAmount: number;       // 新签业绩合计
+  realAmount: number;         // 实收业绩合计
+  hasAdjust: boolean;         // 是否有调整
+  adjustedAmount: number;     // 调整后新签金额
+  adjustStatus?: string;     // 调整单状态
+  adjustNo?: string;         // 调整单号
+  adjustType?: string;       // 调整类型
+  receivedStatus?: string;   // 实收审批状态
+  receivedApplyNo?: string;  // 实收审批单号
+  receivedExpectedAmount?: number; // 实收审批单应收
+  receivedRealAmount?: number;     // 实收审批单实收
+  commissionStatus?: string; // 结佣状态
+  commissionApplyNo?: string; // 结佣申请单号
+  commissionAmount?: number;   // 结佣金额
+  employeeCount: number;      // 涉及人数
+  detailCount: number;        // 明细条数
+}
+
 // ========== API ==========
 export const performanceApi = {
   // 业绩事实
@@ -297,4 +323,8 @@ export const performanceApi = {
   },
   reopenPeriod: (period: string) =>
     panjiaRequest.post<void>(`/perf/period/reopen/${period}`),
+
+  // 完整业绩查询（合同维度）
+  searchByContract: (params: { period?: string; deptId?: string; keyword?: string; pageNum?: number; pageSize?: number }) =>
+    panjiaRequest.get<PageResult<PerformanceFactSearch>>('/perf/fact/search', params),
 };
