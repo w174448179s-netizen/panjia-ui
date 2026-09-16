@@ -136,13 +136,11 @@
         <el-table-column label="发起人" align="center" width="100">
           <template #default="{ row }">{{ row.applicantId === 0 ? '系统' : (applicantName(row.applicantId) || '—') }}</template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="220" fixed="right">
+        <el-table-column label="操作" align="center" width="260" fixed="right">
           <template #default="{ row }">
-            <!-- ≤3 个按钮平铺；white-space:nowrap 防重叠，超过 3 个才收「更多」下拉 -->
             <div class="table-actions">
-              <!-- 详情：未发起跳合同业绩详情页；已发起打开结佣申请详情对话框 -->
               <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
-              <!-- 发起并提交一步到位：未发起/已作废 = 发起并提交；驳回 = 重新提交（后端识别 REJECTED 单重提，不新建） -->
+              <el-button v-if="row.status === 'SUBMITTED' && row.applicationId && checkPermi(['workflow:task:edit'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.applicationId)">审批</el-button>
               <el-button
                 v-if="canOriginate(row) || row.status === 'REJECTED'"
                 link type="warning"
@@ -179,6 +177,9 @@
         <el-button @click="showDetail = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 业务明细直接审批弹窗（与「我的待办」共用同一 WorkflowHandle 组件） -->
+    <WorkflowHandle ref="workflowHandleRef" @handled="getList" />
   </div>
 </template>
 
@@ -190,8 +191,10 @@ import { commissionApi, type CommissionContractVO } from '@/api/panjia/commissio
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
+import { useBizApproval } from '@/hooks/workflow/useBizApproval';
 import { checkPermi } from '@/utils/permission';
 import { useUserStore } from '@/store/modules/user';
+import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
 import CommissionApplyDetail from '@/components/WorkflowHandle/details/CommissionApplyDetail.vue';
 
 const route = useRoute();
@@ -203,6 +206,12 @@ const canCancel = (row: CommissionContractVO): boolean => {
   if (userStore.roles.includes('admin') || userStore.roles.includes('superadmin')) return true;
   return String(row.applicantId) === String(userStore.userId);
 };
+
+/** 业务明细直接审批：通过 businessId 查当前用户可办理任务，复用 WorkflowHandle 弹窗 */
+const workflowHandleRef = ref<InstanceType<typeof WorkflowHandle>>();
+const { loading: approvalLoading, handleBizApproval } = useBizApproval();
+const onBizApprove = (businessId: string | number) =>
+  handleBizApproval(businessId, (task) => workflowHandleRef.value?.open(task));
 
 const loading = ref(false);
 const contractList = ref<CommissionContractVO[]>([]);

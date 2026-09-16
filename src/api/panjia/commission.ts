@@ -53,7 +53,7 @@ export interface CommissionApplication {
   totalAmount: number;
   expectedAmount?: number;   // 应收合计（§3.4/3.5）
   aligned?: boolean;         // 是否已实收对齐应收
-  currentNode?: string;      // DIRECTOR / FINANCE
+  currentNode?: string;      // DIRECTOR / FINANCE / null（T-04 后实收==应收时财务节点跳过，流程直接结束）
   status: string;        // DRAFT / SUBMITTED / APPROVED / LOCKED / REJECTED / CANCELLED
   approvedMonth?: string;
   processInstanceId?: string;
@@ -130,7 +130,7 @@ export interface CommissionContractVO {
   amount: number;
   expectedAmount?: number;   // 应收合计
   aligned?: boolean;
-  currentNode?: string;      // DIRECTOR / FINANCE
+  currentNode?: string;      // DIRECTOR / FINANCE / null（T-04 后实收==应收时财务节点跳过，流程直接结束）
   employeeCount: number;
   detailCount: number;
   period: string;

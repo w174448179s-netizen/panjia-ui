@@ -2,6 +2,7 @@ export interface TaskQuery extends PageQuery {
   nodeName?: string;
   flowCode?: string;
   flowName?: string;
+  instanceId?: string | number;
   createByIds?: Array<string | number>;
   /** 业务标题关键字（合同号/房源地址/账期/金额等） */
   businessTitle?: string;

@@ -155,11 +155,10 @@
             </template>
           </el-table-column>
           <el-table-column label="申请时间" align="center" prop="createTime" width="170" sortable />
-          <el-table-column label="操作" align="center" width="80" class-name="small-padding fixed-width">
+          <el-table-column label="操作" align="center" width="140" class-name="small-padding fixed-width">
             <template #default="scope">
               <el-button link type="primary" @click="handleDetail(scope.row)">详情</el-button>
-              <!-- 撤销操作统一在「我发起的」中通过流程实例撤销入口完成（鉴权更严格：仅申请人本人可撤）；
-                   业绩调整列表仅做业务维度的查询与详情展示，不承担流程操作职责 -->
+              <el-button v-if="scope.row.status === 'SUBMITTED' && checkPermi(['workflow:task:edit'])" link type="success" :loading="approvalLoading" @click="onBizApprove(scope.row.id)">审批</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -323,6 +322,9 @@
         <el-button @click="detailDialog.visible = false">关 闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 业务明细直接审批弹窗（与「我的待办」共用同一 WorkflowHandle 组件） -->
+    <WorkflowHandle ref="workflowHandleRef" @handled="getList" />
   </div>
 </template>
 
@@ -335,8 +337,17 @@ import type { DeptNode, Employee } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
 import { useRoute } from 'vue-router';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
+import { useBizApproval } from '@/hooks/workflow/useBizApproval';
+import { checkPermi } from '@/utils/permission';
+import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
 
 const route = useRoute();
+
+/** 业务明细直接审批：通过 businessId 查当前用户可办理任务，复用 WorkflowHandle 弹窗 */
+const workflowHandleRef = ref<InstanceType<typeof WorkflowHandle>>();
+const { loading: approvalLoading, handleBizApproval } = useBizApproval();
+const onBizApprove = (businessId: string | number) =>
+  handleBizApproval(businessId, (task) => workflowHandleRef.value?.open(task));
 
 // ==================== 枚举 ====================
 const adjustTypeMap: Record<string, string> = {

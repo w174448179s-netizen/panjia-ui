@@ -108,11 +108,11 @@
         <el-table-column label="发起人" align="center" width="100">
           <template #default="{ row }">{{ applicantName(row.applicantName, row.applicantId) }}</template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="220" fixed="right">
+        <el-table-column label="操作" align="center" width="260" fixed="right">
           <template #default="{ row }">
-            <!-- ≤3 个按钮平铺；nowrap 保证不折行重叠，超过 3 个才收「更多」下拉 -->
             <div class="table-actions">
               <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
+              <el-button v-if="row.status === 'SUBMITTED' && checkPermi(['workflow:task:edit'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.id)">审批</el-button>
               <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重新提交</el-button>
               <el-button v-if="(row.status === 'DRAFT' || row.status === 'SUBMITTED') && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
             </div>
@@ -230,6 +230,9 @@
         <el-button @click="showManual = false">取消</el-button>
       </template>
     </el-dialog>
+
+    <!-- 业务明细直接审批弹窗（与「我的待办」共用同一 WorkflowHandle 组件） -->
+    <WorkflowHandle ref="workflowHandleRef" @handled="getList" />
   </div>
 </template>
 
@@ -240,8 +243,10 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { receivedApi, type ReceivedApply, type ReceivedFact } from '@/api/panjia/received';
 import { employeeApi } from '@/api/panjia/employee';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
+import { useBizApproval } from '@/hooks/workflow/useBizApproval';
 import { checkPermi } from '@/utils/permission';
 import { useUserStore } from '@/store/modules/user';
+import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
 
 const route = useRoute();
 const userStore = useUserStore();
@@ -251,6 +256,12 @@ const canCancel = (row: ReceivedApply): boolean => {
   if (userStore.roles.includes('admin') || userStore.roles.includes('superadmin')) return true;
   return String(row.applicantId) === String(userStore.userId);
 };
+
+/** 业务明细直接审批：通过 businessId 查当前用户可办理任务，复用 WorkflowHandle 弹窗 */
+const workflowHandleRef = ref<InstanceType<typeof WorkflowHandle>>();
+const { loading: approvalLoading, handleBizApproval } = useBizApproval();
+const onBizApprove = (businessId: string | number) =>
+  handleBizApproval(businessId, (task) => workflowHandleRef.value?.open(task));
 
 const loading = ref(false);
 const applyList = ref<ReceivedApply[]>([]);
