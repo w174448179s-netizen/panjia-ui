@@ -139,17 +139,17 @@ const itemStatusTagType = (s: string) => {
 const applicantName = (app: CommissionApplication) =>
   app.applicantName || (app.applicantId === 0 ? '系统自动' : employeeName(app.applicantId));
 
-// 部门树（归属门店名称）
-const deptMap = new Map<number, string>();
+// 部门树（归属门店名称）——String key：19 位雪花 ID 超出 JS 安全整数，Number() 会丢精度
+const deptMap = new Map<string, string>();
 const buildDeptMap = (nodes: DeptNode[]) => {
   for (const n of nodes) {
-    if (n.deptId != null) deptMap.set(Number(n.deptId), n.deptName);
+    if (n.deptId != null) deptMap.set(String(n.deptId), n.deptName);
     if (n.children?.length) buildDeptMap(n.children);
   }
 };
-const deptName = (deptId: number | undefined) => {
+const deptName = (deptId: number | string | undefined) => {
   if (deptId == null) return '—';
-  return deptMap.get(deptId) ?? String(deptId);
+  return deptMap.get(String(deptId)) ?? String(deptId);
 };
 
 onMounted(async () => {
@@ -159,7 +159,8 @@ onMounted(async () => {
       loadEmployees(),
       employeeApi.deptTree().then((res: any) => buildDeptMap(res.data ?? [])),
     ]);
-    const res: any = await commissionApi.getApplication(Number(props.businessId));
+    // 雪花 ID 以字符串透传（19 位超出 JS 安全整数，Number() 会丢精度 →「申请单不存在」）
+    const res: any = await commissionApi.getApplication(props.businessId);
     const data = res.data ?? {};
     detail.value = data.application ?? null;
     items.value = data.items ?? [];

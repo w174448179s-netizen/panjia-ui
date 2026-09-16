@@ -265,17 +265,17 @@ const loadDeptTree = async () => {
   } catch { /* ignore */ }
 };
 
-// 员工姓名映射
-const employeeMap = new Map<number, string>();
-const employeeName = (empId: number | undefined) => {
-  if (empId == null) return '—';
-  return employeeMap.get(empId) ?? `员工#${empId}`;
+// 员工姓名映射（String key：19 位雪花 ID 超出 JS 安全整数，Number() 会丢精度）
+const employeeMap = new Map<string, string>();
+const employeeName = (empId: number | string | undefined) => {
+  if (empId == null || String(empId) === '') return '—';
+  return employeeMap.get(String(empId)) ?? `员工#${empId}`;
 };
 
 // 发起人姓名（从员工映射取）
-const applicantName = (applicantId: number | undefined) => {
-  if (applicantId == null) return '—';
-  return employeeMap.get(applicantId) ?? `用户#${applicantId}`;
+const applicantName = (applicantId: number | string | undefined) => {
+  if (applicantId == null || String(applicantId) === '') return '—';
+  return employeeMap.get(String(applicantId)) ?? `用户#${applicantId}`;
 };
 
 const loadEmployeeMap = async () => {
@@ -283,7 +283,7 @@ const loadEmployeeMap = async () => {
     const res: any = await employeeApi.list({ pageNum: 1, pageSize: 9999 });
     const rows = res.data?.rows ?? [];
     for (const e of rows) {
-      if (e.employeeId != null) employeeMap.set(Number(e.employeeId), e.employeeName || `员工#${e.employeeId}`);
+      if (e.employeeId != null) employeeMap.set(String(e.employeeId), e.employeeName || `员工#${e.employeeId}`);
     }
   } catch { /* ignore */ }
 };
@@ -311,7 +311,7 @@ const getList = async () => {
   try {
     const res: any = await commissionApi.listContracts({
       period: queryParams.period || currentPeriod(),
-      deptId: queryParams.deptId ? Number(queryParams.deptId) : undefined,
+      deptId: queryParams.deptId || undefined,
       status: queryParams.status || undefined,
       keyword: queryParams.keyword || undefined,
       pageNum: queryParams.pageNum,
@@ -341,8 +341,8 @@ const resetQuery = () => {
 };
 
 // 发起 → 提交一步到位：按合同当月实收拉取明细生成草稿后立即送审
-// 后端契约不变：先 commissionApi.createApplication 拿到 applicationId，再 submitApplication(id) 走工作流
-// 若 submit 失败最坏后果是单据停在草稿，用户重试/单独点提交即可兜底（与 Excel 批量发起同款路径）
+// 后端契约：POST /commission/apply 返回 R<Long>，拦截器给到的是 R 包装对象，取 .data 拿 applicationId，
+// 再 submitApplication(id) 走工作流；若 submit 失败最坏后果是单据停在草稿，用户重试/单独点提交即可兜底（与 Excel 批量发起同款路径）
 const submittingMap = reactive<Record<string, boolean>>({});
 const originateAndSubmit = async (row: CommissionContractVO) => {
   const no = contractOrOrderNo(row);
@@ -356,7 +356,10 @@ const originateAndSubmit = async (row: CommissionContractVO) => {
   }
   submittingMap[row.contractNo] = true;
   try {
-    const applicationId = await commissionApi.createApplication({ period: row.period, contractNo: row.contractNo });
+    // request 拦截器返回的是 R 包装对象（{code,msg,data}），data 才是 applicationId；
+    // 雪花 ID 由后端 BigNumberSerializer 以字符串下发，禁止 Number() 转换（19 位超出 JS 安全整数会丢精度）
+    const res: any = await commissionApi.createApplication({ period: row.period, contractNo: row.contractNo });
+    const applicationId = res?.data ?? res;
     if (applicationId) {
       await commissionApi.submitApplication(applicationId);
     }
@@ -384,7 +387,7 @@ const openBatchCreate = async () => {
   try {
     const res: any = await commissionApi.batchCreateApplications({
       period,
-      deptId: queryParams.deptId ? Number(queryParams.deptId) : undefined,
+      deptId: queryParams.deptId || undefined,
     });
     ElMessage.success(res?.msg || '批量发起完成');
     getList();

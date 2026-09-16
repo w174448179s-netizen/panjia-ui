@@ -45,7 +45,8 @@ const statusTagType = (s: string) => {
 onMounted(async () => {
   loading.value = true;
   try {
-    const [res] = await Promise.all([payrollApi.getManual(Number(props.businessId)), loadEmployees()]);
+    // 雪花 ID 以字符串透传（19 位超出 JS 安全整数，Number() 会丢精度）
+    const [res] = await Promise.all([payrollApi.getManual(props.businessId), loadEmployees()]);
     detail.value = (res as any).data ?? null;
     if (!detail.value) loadError.value = '未找到该奖金记录';
   } catch {

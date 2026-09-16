@@ -105,7 +105,8 @@ const STATUS_TAG: Record<string, string> = {
   REVIEWING: 'warning', APPROVED: 'success', LOCKED: 'success', PAID: 'success',
 };
 const statusLabel = (s: string) => STATUS_LABEL[s] || s;
-const statusTag = (s: string) => STATUS_TAG[s] || 'info';
+const statusTag = (s: string): 'primary' | 'success' | 'info' | 'warning' | 'danger' =>
+  ((STATUS_TAG[s] || 'info') as 'primary' | 'success' | 'info' | 'warning' | 'danger');
 const roleLabel = (r: string) => (({ AGENT: '经纪人', MANAGER: '店长', DIRECTOR: '总监' } as Record<string, string>)[r] || r);
 
 const fmt = (n: number | null | undefined) =>
@@ -138,7 +139,8 @@ const summaryMethod = ({ columns, data }: any) => {
 onMounted(async () => {
   loading.value = true;
   try {
-    const id = Number(props.businessId);
+    // 雪花 ID 以字符串透传（19 位超出 JS 安全整数，Number() 会丢精度 →「批次不存在」）
+    const id = props.businessId;
     const [batchRes, detRes]: any[] = await Promise.all([payrollApi.getBatch(id), payrollApi.getDetails(id), loadEmployees()]);
     batch.value = batchRes.data ?? null;
     details.value = detRes.data ?? [];

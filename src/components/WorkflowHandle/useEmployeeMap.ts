@@ -10,14 +10,16 @@ import { employeeApi } from '@/api/panjia/employee';
  * 多个详情组件、多次打开弹窗共享；请求失败不置已加载，下次可重试。
  */
 let sharedPromise: Promise<void> | null = null;
-const employeeMap = ref(new Map<number, string>());
+// 员工 ID 为 19 位雪花：后端以字符串下发，超出 JS 安全整数。
+// 统一用 String 做 key，禁止 Number()（丢精度后不同员工可能舍入到同一 key，姓名错乱）
+const employeeMap = ref(new Map<string, string>());
 
 const doLoad = async () => {
   try {
     const res: any = await employeeApi.list({ pageNum: 1, pageSize: 9999 });
-    const map = new Map<number, string>();
+    const map = new Map<string, string>();
     for (const e of res.data?.rows ?? []) {
-      if (e.employeeId != null) map.set(Number(e.employeeId), e.employeeName || `员工#${e.employeeId}`);
+      if (e.employeeId != null) map.set(String(e.employeeId), e.employeeName || `员工#${e.employeeId}`);
     }
     employeeMap.value = map;
   } catch {
@@ -33,7 +35,7 @@ export function useEmployeeMap() {
   /** 取员工姓名；未知 ID 回退为「员工#ID」，空值显示 — */
   const name = (empId: number | string | null | undefined): string => {
     if (empId === null || empId === undefined || String(empId).trim() === '') return '—';
-    return employeeMap.value.get(Number(empId)) ?? `员工#${empId}`;
+    return employeeMap.value.get(String(empId)) ?? `员工#${empId}`;
   };
 
   return { load, name };

@@ -56,7 +56,8 @@ const statusTagType = (s: string) => {
 onMounted(async () => {
   loading.value = true;
   try {
-    const res: any = await commissionApi.getAdjust(Number(props.businessId));
+    // 雪花 ID 以字符串透传（19 位超出 JS 安全整数，Number() 会丢精度 →「调整单不存在」）
+    const res: any = await commissionApi.getAdjust(props.businessId);
     detail.value = res.data ?? null;
     if (!detail.value) loadError.value = '未找到该结佣调整单';
   } catch {

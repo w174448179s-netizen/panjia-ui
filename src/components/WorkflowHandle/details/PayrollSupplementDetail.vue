@@ -62,7 +62,8 @@ const amountClass = (n: number | undefined) => {
 onMounted(async () => {
   loading.value = true;
   try {
-    const [res] = await Promise.all([payrollApi.getAdjust(Number(props.businessId)), loadEmployees()]);
+    // 雪花 ID 以字符串透传（19 位超出 JS 安全整数，Number() 会丢精度）
+    const [res] = await Promise.all([payrollApi.getAdjust(props.businessId), loadEmployees()]);
     detail.value = (res as any).data ?? null;
     if (!detail.value) loadError.value = '未找到该调整/补发单';
   } catch {

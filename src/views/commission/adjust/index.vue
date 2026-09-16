@@ -111,10 +111,11 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="申请单ID" prop="applicationId">
-          <el-input-number v-model="form.applicationId" :min="1" controls-position="right" style="width:100%" placeholder="调整对象申请单ID" />
+          <!-- 雪花 ID 文本输入（19 位超出 JS 安全整数，el-input-number 转 number 会丢精度） -->
+          <el-input v-model="form.applicationId" placeholder="调整对象申请单ID" />
         </el-form-item>
         <el-form-item label="结佣明细ID" prop="itemId">
-          <el-input-number v-model="form.itemId" :min="1" controls-position="right" style="width:100%" placeholder="调整对象结佣明细ID" />
+          <el-input v-model="form.itemId" placeholder="调整对象结佣明细ID" />
         </el-form-item>
         <el-form-item v-if="form.adjustType === 'DISCOUNT'" label="折后金额" prop="newAmount">
           <el-input-number v-model="form.newAmount" :min="0" :precision="2" :step="100" controls-position="right" style="width:100%" />
@@ -227,7 +228,7 @@ const getList = async () => {
       period: queryParams.period || undefined,
       adjustType: queryParams.adjustType || undefined,
       status: queryParams.status || undefined,
-      applicationId: queryParams.applicationId ? Number(queryParams.applicationId) : undefined,
+      applicationId: queryParams.applicationId || undefined,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
     });
@@ -273,8 +274,9 @@ const formRef = ref<FormInstance>();
 
 const form = reactive({
   adjustType: 'DISCOUNT',
-  applicationId: null as number | null,
-  itemId: null as number | null,
+  // 雪花 ID 以字符串收集（19 位超出 JS 安全整数，禁止 number）
+  applicationId: null as string | null,
+  itemId: null as string | null,
   newAmount: null as number | null,
   diffAmount: null as number | null,
   targetPeriod: '',
@@ -356,7 +358,7 @@ const openFromWorkflow = async () => {
   const type = route.query.type as string;
   if (!id || !type) return;
   try {
-    const res = await commissionApi.getAdjust(Number(id));
+    const res = await commissionApi.getAdjust(id);
     detailData.value = (res as any).data;
     showDetail.value = true;
   } catch {

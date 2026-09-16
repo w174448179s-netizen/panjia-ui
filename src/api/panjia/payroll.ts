@@ -119,10 +119,11 @@ export const payrollApi = {
   listBatches(period?: string) {
     return panjiaRequest.get<PayrollBatch[]>('/payroll/batch', { period });
   },
-  getBatch(id: number) {
+  /** id 接受字符串：雪花 ID 由后端以字符串下发，Number() 转换 19 位会丢精度 */
+  getBatch(id: number | string) {
     return panjiaRequest.get<PayrollBatch>(`/payroll/batch/${id}`);
   },
-  getDetails(id: number) {
+  getDetails(id: number | string) {
     return panjiaRequest.get<PayrollDetail[]>(`/payroll/batch/${id}/details`);
   },
   getSnapshot(id: number) {
@@ -156,7 +157,7 @@ export const payrollApi = {
   listManual(period: string) {
     return panjiaRequest.get<ManualItem[]>('/payroll/manual-item', { period });
   },
-  getManual(id: number) {
+  getManual(id: number | string) {
     return panjiaRequest.get<ManualItem>(`/payroll/manual-item/${id}`);
   },
   deleteManual(id: number) {
@@ -170,7 +171,7 @@ export const payrollApi = {
   createAdjust(data: Partial<PayrollAdjust>) {
     return panjiaRequest.post<number>('/payroll/adjust', data);
   },
-  getAdjust(id: number) {
+  getAdjust(id: number | string) {
     return panjiaRequest.get<PayrollAdjust>(`/payroll/adjust/${id}`);
   },
 };

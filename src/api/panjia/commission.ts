@@ -15,6 +15,7 @@ export interface CommissionAdjust {
   status: string;        // SUBMITTED / APPROVED / REJECTED / CANCELLED / EXECUTED
   processInstanceId?: string;
   applicantId?: number;
+  applicantName?: string;   // 后端 @Translation 翻译产物（非入库字段）
   approverId?: number;
   createTime: string;
   updateTime?: string;
@@ -24,12 +25,12 @@ export interface CommissionAdjustQuery extends PageQuery {
   adjustType?: string;
   status?: string;
   period?: string;
-  applicationId?: number;
+  applicationId?: number | string;   // 19 位雪花 ID 以字符串下发/输入
 }
 
 export interface CommissionAdjustCreateDTO {
-  applicationId: number;
-  itemId: number;
+  applicationId: number | string;    // 雪花 ID 以字符串透传，禁止 Number() 丢精度
+  itemId: number | string;
   adjustType: string;    // DISCOUNT / DIFF / VOID
   newAmount?: number;
   diffAmount?: number;
@@ -57,6 +58,7 @@ export interface CommissionApplication {
   approvedMonth?: string;
   processInstanceId?: string;
   applicantId?: number;
+  applicantName?: string;   // 后端 @Translation 翻译产物（非入库字段）
   approverId?: number;
   lockTime?: string;
   createTime: string;
@@ -104,15 +106,16 @@ export interface CommissionItemDetail {
 
 export interface CommissionApplyQuery extends PageQuery {
   period?: string;
-  deptId?: number;
+  deptId?: number | string;   // 19 位雪花 ID 由后端以字符串下发，禁止 Number() 转换
   status?: string;
   keyword?: string;
+  applicationId?: number | string;
 }
 
 export interface CommissionApplyCreateDTO {
   period: string;
   contractNo?: string;   // 单个发起必填；批量发起不传
-  deptId?: number;       // 仅批量发起使用
+  deptId?: number | string;   // 仅批量发起使用（19 位雪花 ID 以字符串下发）
 }
 
 // 结佣明细「合同」维度行
@@ -150,18 +153,16 @@ export const commissionApi = {
     panjiaRequest.get<PageResult<CommissionApplication>>('/commission/apply/list', params),
   listContracts: (params: CommissionApplyQuery) =>
     panjiaRequest.get<PageResult<CommissionContractVO>>('/commission/apply/contract-list', params),
-  getApplication: (id: number) =>
+  /** id 接受字符串：雪花 ID 由后端以字符串下发，Number() 转换 19 位会丢精度 */
+  getApplication: (id: number | string) =>
     panjiaRequest.get<{ application: CommissionApplication; items: CommissionItemDetail[] }>(`/commission/apply/${id}`),
   createApplication: (data: CommissionApplyCreateDTO) =>
     panjiaRequest.post<number>('/commission/apply', data),
   batchCreateApplications: (data: CommissionApplyCreateDTO) =>
     panjiaRequest.post<number>('/commission/apply/batch', data),
-  submitApplication: (id: number) =>
+  submitApplication: (id: number | string) =>
     panjiaRequest.post<void>(`/commission/apply/${id}/submit`),
-  /** 单个审批通过（按当前节点：总监/财务，§3.3） */
-  approveApplication: (id: number) =>
-    panjiaRequest.post<void>(`/commission/apply/${id}/approve`),
-  cancelApplication: (id: number) =>
+  cancelApplication: (id: number | string) =>
     panjiaRequest.post<void>(`/commission/apply/${id}/cancel`),
   /** Excel 批量发起（§3.2，按合同号自动发起+提交） */
   batchInitiate: (file: File, period: string) => {
@@ -181,7 +182,7 @@ export const commissionApi = {
   // 结佣调整
   listAdjusts: (params: CommissionAdjustQuery) =>
     panjiaRequest.get<PageResult<CommissionAdjust>>('/commission/adjust/list', params),
-  getAdjust: (id: number) =>
+  getAdjust: (id: number | string) =>
     panjiaRequest.get<CommissionAdjust>(`/commission/adjust/${id}`),
   createAdjust: (data: CommissionAdjustCreateDTO) =>
     panjiaRequest.post<number>('/commission/adjust', data),
