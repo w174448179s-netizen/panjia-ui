@@ -72,16 +72,7 @@
           >
             <el-button type="primary" plain icon="Upload">Excel批量发起</el-button>
           </el-upload>
-          <!-- 批量审批入口按权限码收口（能否批哪张单仍由引擎按节点判权） -->
-          <el-upload
-            v-if="checkPermi(['commission:apply:batch'])"
-            :show-file-list="false"
-            :auto-upload="true"
-            :http-request="handleBatchApproveUpload"
-            accept=".xlsx,.xls"
-          >
-            <el-button type="success" plain icon="DocumentChecked">Excel批量审批</el-button>
-          </el-upload>
+          <el-button v-if="checkPermi(['commission:apply:batch'])" type="success" plain icon="DocumentChecked" @click="showBatchApprove = true">批量审批</el-button>
         </div>
       </div>
 
@@ -175,6 +166,34 @@
       <CommissionApplyDetail v-if="showDetail" :business-id="detailApplicationId!" />
       <template #footer>
         <el-button @click="showDetail = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量审批弹窗：输入合同号列表，逐单办理当前待办节点 -->
+    <el-dialog v-model="showBatchApprove" title="批量审批" width="520px">
+      <el-form label-width="80px">
+        <el-form-item label="结算月">
+          <el-date-picker
+            v-model="batchApproveForm.period"
+            type="month"
+            value-format="YYYY-MM"
+            placeholder="选择月份"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="合同号">
+          <el-input
+            v-model="batchApproveForm.contractNosText"
+            type="textarea"
+            :rows="10"
+            placeholder="每行一个合同号，或用逗号/空格分隔"
+          />
+        </el-form-item>
+        <div class="batch-hint">将逐单审批当前节点，非您审批范围内的单据会跳过并提示原因。</div>
+      </el-form>
+      <template #footer>
+        <el-button @click="showBatchApprove = false">取消</el-button>
+        <el-button type="primary" :loading="batchApproveLoading" @click="doBatchApprove">开始审批</el-button>
       </template>
     </el-dialog>
 
@@ -405,11 +424,29 @@ const handleBatchInitiateUpload = async (options: any) => {
   } catch { /* 拦截器处理 */ }
 };
 
-// Excel 批量审批上传
-const handleBatchApproveUpload = async (options: any) => {
-  const period = queryParams.period || currentPeriod();
+// 批量审批
+const showBatchApprove = ref(false);
+const batchApproveLoading = ref(false);
+const batchApproveForm = reactive({
+  period: currentPeriod(),
+  contractNosText: '',
+});
+const doBatchApprove = async () => {
+  if (!batchApproveForm.period) {
+    ElMessage.warning('请选择结算月');
+    return;
+  }
+  const contractNos = batchApproveForm.contractNosText
+    .split(/[\n,，\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (contractNos.length === 0) {
+    ElMessage.warning('请输入至少一个合同号');
+    return;
+  }
+  batchApproveLoading.value = true;
   try {
-    const res: any = await commissionApi.batchApprove(options.file as File, period);
+    const res: any = await commissionApi.batchApproveByContract(batchApproveForm.period, contractNos);
     const r = res?.data;
     if (r && r.failedRows?.length) {
       ElMessageBox.alert(
@@ -420,8 +457,11 @@ const handleBatchApproveUpload = async (options: any) => {
     } else {
       ElMessage.success(`批量审批完成，成功 ${r?.successCount ?? 0} 条`);
     }
+    showBatchApprove.value = false;
     getList();
-  } catch { /* 拦截器处理 */ }
+  } catch { /* 拦截器处理 */ } finally {
+    batchApproveLoading.value = false;
+  }
 };
 
 // 作废
@@ -602,5 +642,13 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 12px;
+}
+
+.batch-hint {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
+  margin-top: 4px;
+  padding-left: 80px;
 }
 </style>

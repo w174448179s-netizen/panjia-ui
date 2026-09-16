@@ -89,4 +89,10 @@ export const receivedApi = {
     return panjiaRequest.post<ReceivedBatchResult>(
       `/performance/received/batch-approve?period=${encodeURIComponent(period)}`, formData);
   },
+  /** 按合同号批量审批（录入合同号列表，逐单办理当前待办节点） */
+  batchApproveByContract: (period: string, contractNos: string[]) =>
+    panjiaRequest.post<ReceivedBatchResult>('/performance/received/batch-approve-by-contract', {
+      period,
+      contractNos,
+    }),
 };
