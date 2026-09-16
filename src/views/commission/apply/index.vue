@@ -125,7 +125,7 @@
           </template>
         </el-table-column>
         <el-table-column label="发起人" align="center" width="100">
-          <template #default="{ row }">{{ row.applicantId === 0 ? '系统' : (applicantName(row.applicantId) || '—') }}</template>
+          <template #default="{ row }">{{ row.applicantName || '—' }}</template>
         </el-table-column>
         <el-table-column label="操作" align="center" width="260" fixed="right">
           <template #default="{ row }">
@@ -287,29 +287,6 @@ const loadDeptTree = async () => {
   try {
     const res: any = await employeeApi.deptTree();
     deptTreeData.value = res.data ?? [];
-  } catch { /* ignore */ }
-};
-
-// 员工姓名映射（String key：19 位雪花 ID 超出 JS 安全整数，Number() 会丢精度）
-const employeeMap = new Map<string, string>();
-const employeeName = (empId: number | string | undefined) => {
-  if (empId == null || String(empId) === '') return '—';
-  return employeeMap.get(String(empId)) ?? `员工#${empId}`;
-};
-
-// 发起人姓名（从员工映射取）
-const applicantName = (applicantId: number | string | undefined) => {
-  if (applicantId == null || String(applicantId) === '') return '—';
-  return employeeMap.get(String(applicantId)) ?? `用户#${applicantId}`;
-};
-
-const loadEmployeeMap = async () => {
-  try {
-    const res: any = await employeeApi.list({ pageNum: 1, pageSize: 9999 });
-    const rows = res.data?.rows ?? [];
-    for (const e of rows) {
-      if (e.employeeId != null) employeeMap.set(String(e.employeeId), e.employeeName || `员工#${e.employeeId}`);
-    }
   } catch { /* ignore */ }
 };
 
@@ -544,7 +521,6 @@ useWorkflowRouteOpen('/performance/apply', openFromWorkflow);
 
 onMounted(() => {
   loadDeptTree();
-  loadEmployeeMap();
   getList();
 });
 </script>

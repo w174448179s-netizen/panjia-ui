@@ -394,14 +394,14 @@ const loadEmployeeMap = async () => {
 
 /**
  * 发起人/审批人姓名由后端统一翻译（ReceivedApply.applicantName / approverName，
- * 基于 @Translation 按 userId 取昵称）。
+ * 基于 @Translation 按 userId 取昵称），列表与详情一律直接展示姓名。
  * 不在前端查用户表：业务角色（店长/财务/人事/经纪人）没有 system:user:query 权限，直查会 403。
  * 空值即「系统自动」——导入归档等无人值守发起，不留空白。
  */
 const applicantName = (name?: string | null, userId?: number | string | null) => {
   if (name) return name;
   if (userId === null || userId === undefined || String(userId).trim() === '') return '系统自动';
-  return `用户#${userId}`;
+  return '—';
 };
 
 const getList = async () => {

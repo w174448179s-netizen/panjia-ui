@@ -123,11 +123,11 @@ const deptGroup = (path: string): string => {
   return parts.length >= 2 ? parts[parts.length - 1] : '';
 };
 
-/** 发起人姓名由后端翻译；空值 = 系统自动发起（如导入归档自动建单） */
+/** 发起人姓名由后端翻译，直接展示；空值 = 系统自动发起（如导入归档自动建单） */
 const applicantName = (name?: string | null, userId?: number | string | null) => {
   if (name) return name;
   if (userId === null || userId === undefined || String(userId).trim() === '') return '系统自动';
-  return `用户#${userId}`;
+  return '—';
 };
 
 onMounted(async () => {
