@@ -160,8 +160,6 @@ export const commissionApi = {
     panjiaRequest.post<number>('/commission/apply', data),
   batchCreateApplications: (data: CommissionApplyCreateDTO) =>
     panjiaRequest.post<number>('/commission/apply/batch', data),
-  submitApplication: (id: number | string) =>
-    panjiaRequest.post<void>(`/commission/apply/${id}/submit`),
   cancelApplication: (id: number | string) =>
     panjiaRequest.post<void>(`/commission/apply/${id}/cancel`),
   /** Excel 批量发起（§3.2，按合同号自动发起+提交） */
