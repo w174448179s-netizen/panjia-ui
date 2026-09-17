@@ -319,7 +319,12 @@ const canCancel = (row: CommissionContractVO): boolean => {
 
 /** 业务明细直接审批：通过 businessId 查当前用户可办理任务，复用 WorkflowHandle 弹窗 */
 const workflowHandleRef = ref<InstanceType<typeof WorkflowHandle>>();
-const { loading: approvalLoading, handleBizApproval } = useBizApproval();
+const { loading: approvalLoading, handleBizApproval } = useBizApproval(
+  async (businessId) => {
+    const res: any = await commissionApi.getInstanceId(businessId);
+    return res.data?.instanceId ?? null;
+  },
+);
 const onBizApprove = (businessId: string | number) =>
   handleBizApproval(businessId, (task) => workflowHandleRef.value?.open(task));
 

@@ -8,13 +8,16 @@ import type { FlowTaskVO } from '@/api/workflow/task/types';
  * 业务明细直接审批 composable（双入口之「推」模式）。
  *
  * 设计依据：审批集成设计说明 §3.2
- *   businessId → getInfo → instanceId → pageByTaskWait(instanceId) → 当前用户可办理任务
+ *   businessId → getInstanceId → pageByTaskWait(instanceId) → 当前用户可办理任务
  *
  * 与「我的待办」共用同一 completeTask/backProcess API，结果与留痕完全一致。
  * 服务端鉴权：pageByTaskWait 按 flow_user.processedBy 过滤当前登录用户，
  * 非审批人查不到任务 → 前端不弹窗 → 不存在越权入口。
+ *
+ * 默认通过 getInfo（workflow:instance:query 权限）获取实例 ID；
+ * 业务域可传 fetchInstanceId 回调，用业务自身权限的轻量端点获取实例 ID，绕过 workflow:instance:query。
  */
-export function useBizApproval() {
+export function useBizApproval(fetchInstanceId?: (businessId: string | number) => Promise<string | number | null>) {
   const loading = ref(false);
 
   /**
@@ -25,12 +28,17 @@ export function useBizApproval() {
   const getMyTaskByBusinessId = async (businessId: string | number): Promise<FlowTaskVO | null> => {
     loading.value = true;
     try {
-      const instanceRes: any = await getInfo(businessId);
-      const instance = instanceRes.data;
-      if (!instance?.id) return null;
+      let instanceId: string | number | null = null;
+      if (fetchInstanceId) {
+        instanceId = await fetchInstanceId(businessId);
+      } else {
+        const instanceRes: any = await getInfo(businessId);
+        instanceId = instanceRes.data?.id ?? null;
+      }
+      if (!instanceId) return null;
 
       const taskRes: any = await pageByTaskWait({
-        instanceId: instance.id,
+        instanceId,
         pageNum: 1,
         pageSize: 1,
       });

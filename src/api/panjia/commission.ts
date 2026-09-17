@@ -164,6 +164,9 @@ export const commissionApi = {
   /** id 接受字符串：雪花 ID 由后端以字符串下发，Number() 转换 19 位会丢精度 */
   getApplication: (id: number | string) =>
     panjiaRequest.get<{ application: CommissionApplication; items: CommissionItemDetail[] }>(`/commission/apply/${id}`),
+  /** 按申请单 ID 查流程实例 ID（绕过 workflow:instance:query 权限） */
+  getInstanceId: (id: number | string) =>
+    panjiaRequest.get<{ instanceId: string | number }>(`/commission/apply/${id}/instance`),
   createApplication: (data: CommissionApplyCreateDTO) =>
     panjiaRequest.post<number>('/commission/apply', data),
   cancelApplication: (id: number | string) =>
