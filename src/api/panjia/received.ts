@@ -62,12 +62,6 @@ export interface ReceivedQuery extends PageQuery {
   deptId?: string;
 }
 
-/** Excel 批量审批结果 */
-export interface ReceivedBatchResult {
-  successCount: number;
-  failedRows: Array<{ contractNo: string; amount: string; reason: string }>;
-}
-
 export type ReceivedPage = PageResult<ReceivedApply>;
 export type ReceivedDetail = { apply: ReceivedApply; facts: ReceivedFact[] };
 
@@ -84,16 +78,9 @@ export const receivedApi = {
     panjiaRequest.post<void>(`/performance/received/${id}/resubmit`),
   cancel: (id: string | number) =>
     panjiaRequest.post<void>(`/performance/received/${id}/cancel`),
-  /** Excel 批量审批（匹配合同号+实收业绩，§2.3） */
-  batchApprove: (file: File, period: string) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    return panjiaRequest.post<ReceivedBatchResult>(
-      `/performance/received/batch-approve?period=${encodeURIComponent(period)}`, formData);
-  },
-  /** 按合同号批量审批（录入合同号列表，逐单办理当前待办节点） */
-  batchApproveByContract: (period: string, contractNos: string[]) =>
-    panjiaRequest.post<ReceivedBatchResult>('/performance/received/batch-approve-by-contract', {
+  /** 按合同号异步批量审批（返回提交合同号数量，后台逐单跑） */
+  batchApproveByContractAsync: (period: string, contractNos: string[]) =>
+    panjiaRequest.post<number>('/performance/received/batch-approve-by-contract-async', {
       period,
       contractNos,
     }),

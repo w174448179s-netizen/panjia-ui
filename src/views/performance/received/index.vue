@@ -236,8 +236,8 @@
       </template>
     </el-dialog>
 
-    <!-- 批量审批弹窗：输入合同号列表，逐单办理当前待办节点 -->
-    <el-dialog v-model="showBatchApprove" title="批量审批" width="520px">
+    <!-- 批量审批弹窗：录入合同号 → 提交后台异步审批 -->
+    <el-dialog v-model="showBatchApprove" title="批量审批" width="520px" @close="resetBatchApprove">
       <el-form label-width="80px">
         <el-form-item label="结算月">
           <el-date-picker
@@ -258,6 +258,7 @@
         </el-form-item>
         <div class="batch-hint">将逐单审批当前节点，非您审批范围内的单据会跳过并提示原因。</div>
       </el-form>
+
       <template #footer>
         <el-button @click="showBatchApprove = false">取消</el-button>
         <el-button type="primary" :loading="batchApproveLoading" @click="doBatchApprove">开始审批</el-button>
@@ -505,13 +506,20 @@ const doManualSubmit = async () => {
   }
 };
 
-// 批量审批
+// 批量审批（异步：提交后给提示，后台逐单跑，前端不轮询）
 const showBatchApprove = ref(false);
 const batchApproveLoading = ref(false);
 const batchApproveForm = reactive({
   period: currentPeriod(),
   contractNosText: '',
 });
+
+const resetBatchApprove = () => {
+  batchApproveForm.period = currentPeriod();
+  batchApproveForm.contractNosText = '';
+  batchApproveLoading.value = false;
+};
+
 const doBatchApprove = async () => {
   if (!batchApproveForm.period) {
     ElMessage.warning('请选择结算月');
@@ -527,19 +535,9 @@ const doBatchApprove = async () => {
   }
   batchApproveLoading.value = true;
   try {
-    const res: any = await receivedApi.batchApproveByContract(batchApproveForm.period, contractNos);
-    const r = res?.data;
-    if (r && r.failedRows?.length) {
-      ElMessageBox.alert(
-        `成功 ${r.successCount} 条，失败 ${r.failedRows.length} 条：\n`
-        + r.failedRows.slice(0, 20).map((f: any) => `· ${f.contractNo}：${f.reason}`).join('\n'),
-        '批量审批结果', { confirmButtonText: '知道了' },
-      );
-    } else {
-      ElMessage.success(`批量审批完成，成功 ${r?.successCount ?? 0} 条`);
-    }
+    const res: any = await receivedApi.batchApproveByContractAsync(batchApproveForm.period, contractNos);
+    ElMessage.success(res.msg || '已提交后台批量审批，请稍后查看结果');
     showBatchApprove.value = false;
-    getList();
   } catch { /* 拦截器处理 */ } finally {
     batchApproveLoading.value = false;
   }
