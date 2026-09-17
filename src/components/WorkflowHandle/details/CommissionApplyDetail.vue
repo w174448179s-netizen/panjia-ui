@@ -16,7 +16,10 @@
         <el-descriptions-item label="结佣合计">
           <span class="amount amount-red">¥{{ formatAmount(detail.totalAmount) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="应收合计"><span class="amount amount-expected">¥{{ formatAmount(detail.expectedAmount) }}</span></el-descriptions-item>
+        <el-descriptions-item label="应收合计">
+          <span class="amount amount-expected">¥{{ formatAmount(detail.expectedAmount) }}</span>
+          <el-tag v-if="detail.expectedAdjusted" type="warning" size="small" effect="plain" style="margin-left: 4px">已调整</el-tag>
+        </el-descriptions-item>
         <el-descriptions-item label="当前节点">{{ detail.currentNode ? nodeLabel(detail.currentNode) : '—' }}</el-descriptions-item>
         <el-descriptions-item label="实收对齐应收">{{ detail.aligned ? '已对齐' : '未对齐' }}</el-descriptions-item>
         <el-descriptions-item label="发起人">{{ applicantName(detail) }}</el-descriptions-item>

@@ -88,9 +88,10 @@
             <span class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="应收" align="right" width="120">
+        <el-table-column label="应收" align="right" width="130">
           <template #default="{ row }">
             <span class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
+            <el-tag v-if="row.expectedAdjusted" type="warning" size="small" effect="plain" class="adj-tag">已调整</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="差异" align="center" width="90">
@@ -777,5 +778,9 @@ onMounted(() => {
     max-height: 120px;
     overflow-y: auto;
   }
+}
+
+.adj-tag {
+  margin-left: 4px;
 }
 </style>
