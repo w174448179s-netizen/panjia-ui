@@ -108,6 +108,7 @@ export interface CommissionApplyQuery extends PageQuery {
   period?: string;
   deptId?: number | string;   // 19 位雪花 ID 由后端以字符串下发，禁止 Number() 转换
   status?: string;
+  currentNode?: string;
   keyword?: string;
   applicationId?: number | string;
 }
@@ -163,8 +164,6 @@ export const commissionApi = {
     panjiaRequest.get<{ application: CommissionApplication; items: CommissionItemDetail[] }>(`/commission/apply/${id}`),
   createApplication: (data: CommissionApplyCreateDTO) =>
     panjiaRequest.post<number>('/commission/apply', data),
-  batchCreateApplications: (data: CommissionApplyCreateDTO) =>
-    panjiaRequest.post<number>('/commission/apply/batch', data),
   cancelApplication: (id: number | string) =>
     panjiaRequest.post<void>(`/commission/apply/${id}/cancel`),
   /** 按合同号批量发起（CompletableFuture 挂起等待，返回每张单处理结果） */

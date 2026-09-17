@@ -33,6 +33,12 @@
             <el-option v-for="opt in statusOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="节点">
+          <el-select v-model="queryParams.currentNode" placeholder="全部节点" clearable style="width: 130px" @change="handleQuery">
+            <el-option label="总监审批" value="DIRECTOR" />
+            <el-option label="财务审批" value="FINANCE" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="关键字">
           <el-input
             v-model="queryParams.keyword"
@@ -63,9 +69,6 @@
           <el-button v-if="checkPermi(['commission:apply:add'])" type="primary" icon="Plus" @click="showBatchApply = true">
             批量发起
           </el-button>
-          <el-button v-if="checkPermi(['commission:apply:add'])" :loading="batchCreating" @click="openBatchCreate">
-            全量发起{{ queryParams.period ? `（${queryParams.period}）` : '' }}
-          </el-button>
           <el-button v-if="checkPermi(['commission:apply:batch'])" type="success" plain icon="DocumentChecked" @click="showBatchApprove = true">批量审批</el-button>
         </div>
       </div>
@@ -90,11 +93,16 @@
             <span class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="差异/节点" align="center" width="110">
+        <el-table-column label="差异" align="center" width="90">
           <template #default="{ row }">
             <el-tag v-if="row.aligned" type="success" size="small">已对齐</el-tag>
             <el-tag v-else-if="hasDiff(row)" type="danger" size="small">有差异</el-tag>
-            <el-tag v-else-if="row.currentNode" type="warning" size="small">{{ nodeLabel(row.currentNode) }}</el-tag>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="当前节点" align="center" width="100">
+          <template #default="{ row }">
+            <el-tag v-if="row.currentNode" type="warning" size="small">{{ nodeLabel(row.currentNode) }}</el-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
@@ -330,6 +338,7 @@ const queryParams = reactive({
   period: currentPeriod(),
   deptId: undefined as string | undefined,
   status: '' as string,
+  currentNode: '' as string,
   keyword: '' as string,
 });
 
@@ -396,6 +405,7 @@ const getList = async () => {
       period: queryParams.period || currentPeriod(),
       deptId: queryParams.deptId || undefined,
       status: queryParams.status || undefined,
+      currentNode: queryParams.currentNode || undefined,
       keyword: queryParams.keyword || undefined,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
@@ -418,7 +428,7 @@ const handleQuery = () => {
 
 const resetQuery = () => {
   Object.assign(queryParams, {
-    period: currentPeriod(), deptId: undefined, status: '', keyword: '', pageNum: 1,
+    period: currentPeriod(), deptId: undefined, status: '', currentNode: '', keyword: '', pageNum: 1,
   });
   getList();
 };
@@ -426,39 +436,13 @@ const resetQuery = () => {
 // 按钮 loading 状态（以 contractNo 为 key：未发起行无 applicationId，统一用 contractNo）
 const submittingMap = reactive<Record<string, boolean>>({});
 
-// 批量发起
-const batchCreating = ref(false);
-const openBatchCreate = async () => {
-  const period = queryParams.period || currentPeriod();
-  const scope = queryParams.deptId ? '当前选中门店（含下级）范围内' : '全部门店';
-  try {
-    await ElMessageBox.confirm(
-      `确认为${scope}${period} 月所有「未发起/已驳回」合同批量发起并提交审批？`,
-      '批量发起结佣', { type: 'info' },
-    );
-  } catch {
-    return;
-  }
-  batchCreating.value = true;
-  try {
-    const res: any = await commissionApi.batchCreateApplications({
-      period,
-      deptId: queryParams.deptId || undefined,
-    });
-    ElMessage.success(res?.msg || '批量发起完成');
-    getList();
-  } catch { /* 拦截器处理（含部分失败提示） */ } finally {
-    batchCreating.value = false;
-  }
-};
-
 // 审批节点中文名
 const nodeLabel = (node?: string) => node === 'DIRECTOR' ? '总监审批' : node === 'FINANCE' ? '财务审批' : (node || '—');
 
-// 是否有差异（实收 vs 应收，均有值时比较）
+// 是否有差异（实收 vs 应收，均有值时比较；差异 1 元以内视为无差异）
 const hasDiff = (row: CommissionContractVO) =>
   row.expectedAmount !== undefined && row.expectedAmount !== null
-  && num(row.amount) !== num(row.expectedAmount);
+  && Math.abs(num(row.amount) - num(row.expectedAmount)) > 1;
 
 // 批量发起（按合同号）
 const showBatchApply = ref(false);
