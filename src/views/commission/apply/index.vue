@@ -397,7 +397,12 @@ const loadDeptTree = async () => {
 const STATUS_MAP: Record<string, string> = {
   NONE: '未发起', DRAFT: '草稿', SUBMITTED: '已提交', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
 };
-const statusOptions = Object.entries(STATUS_MAP).map(([value, label]) => ({ value, label }));
+// 筛选下拉只列实际会出现在列表中的状态：
+// DRAFT（发起即提交，无保存草稿入口）、APPROVED（审批通过直接落 LOCKED，不经过 APPROVED）不会出现
+const HIDDEN_FILTER_STATUS = ['DRAFT', 'APPROVED'];
+const statusOptions = Object.entries(STATUS_MAP)
+  .filter(([value]) => !HIDDEN_FILTER_STATUS.includes(value))
+  .map(([value, label]) => ({ value, label }));
 const statusLabel = (s: string) => STATUS_MAP[s] || s || '—';
 const statusTagType = (s: string) => {
   const map: Record<string, string> = {

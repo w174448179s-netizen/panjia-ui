@@ -404,7 +404,11 @@ const summaryAmount = computed(() => applyList.value.reduce((s, r) => s + num(r.
 const STATUS_MAP: Record<string, string> = {
   DRAFT: '待提交', SUBMITTED: '审批中', APPROVED: '已通过', REJECTED: '已驳回', CANCELLED: '已作废',
 };
-const statusOptions = Object.entries(STATUS_MAP).map(([value, label]) => ({ value, label }));
+// 筛选下拉只列实际会出现在列表中的状态：实收单导入即提交，无「保存草稿」入口，DRAFT（待提交）不会落库展示
+const HIDDEN_FILTER_STATUS = ['DRAFT'];
+const statusOptions = Object.entries(STATUS_MAP)
+  .filter(([value]) => !HIDDEN_FILTER_STATUS.includes(value))
+  .map(([value, label]) => ({ value, label }));
 const statusLabel = (s: string) => STATUS_MAP[s] || s || '—';
 const statusTagType = (s: string) => {
   const map: Record<string, string> = {
