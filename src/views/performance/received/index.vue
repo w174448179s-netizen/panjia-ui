@@ -117,7 +117,7 @@
           <template #default="{ row }">
             <div class="table-actions">
               <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
-              <el-button v-if="row.status === 'SUBMITTED' && checkPermi(['workflow:task:edit'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.id)">审批</el-button>
+              <el-button v-if="row.status === 'SUBMITTED' && checkPermi(['perf:received:approve'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.id)">审批</el-button>
               <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重新提交</el-button>
               <el-button v-if="(row.status === 'DRAFT' || row.status === 'SUBMITTED') && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
             </div>
@@ -236,32 +236,63 @@
       </template>
     </el-dialog>
 
-    <!-- 批量审批弹窗：录入合同号 → 提交后台异步审批 -->
-    <el-dialog v-model="showBatchApprove" title="批量审批" width="520px" @close="resetBatchApprove">
-      <el-form label-width="80px">
-        <el-form-item label="结算月">
-          <el-date-picker
-            v-model="batchApproveForm.period"
-            type="month"
-            value-format="YYYY-MM"
-            placeholder="选择月份"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="合同号">
-          <el-input
-            v-model="batchApproveForm.contractNosText"
-            type="textarea"
-            :rows="10"
-            placeholder="每行一个合同号/订单号（以列表展示的编号为准），或用逗号/空格分隔"
-          />
-        </el-form-item>
-        <div class="batch-hint">将逐单审批当前节点，非您审批范围内的单据会跳过并提示原因。</div>
-      </el-form>
+    <!-- 批量审批弹窗：录入合同号 → 等待处理完成 → 展示结果 -->
+    <el-dialog v-model="showBatchApprove" title="批量审批" width="560px" @close="resetBatchApprove">
+      <!-- 输入视图 -->
+      <template v-if="!batchApproveResult">
+        <el-form label-width="80px">
+          <el-form-item label="结算月" required>
+            <el-date-picker
+              v-model="batchApproveForm.period"
+              type="month"
+              value-format="YYYY-MM"
+              placeholder="请选择月份"
+              style="width: 100%"
+            />
+          </el-form-item>
+          <el-form-item label="合同号" required>
+            <el-input
+              v-model="batchApproveForm.contractNosText"
+              type="textarea"
+              :rows="10"
+              placeholder="每行一个合同号/订单号（以列表展示的编号为准），或用逗号/空格分隔"
+            />
+          </el-form-item>
+          <div class="batch-hint">将逐单审批当前节点，非您审批范围内的单据会跳过并提示原因。</div>
+        </el-form>
+      </template>
+
+      <!-- 等待视图 -->
+      <div v-else-if="batchApproveLoading" class="batch-waiting">
+        <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+        <p class="waiting-text">正在批量审批，请耐心等待...</p>
+        <p class="waiting-sub">共 {{ batchApproveForm.parsedCount }} 个合同号，逐单处理中</p>
+      </div>
+
+      <!-- 结果视图 -->
+      <div v-else class="batch-result">
+        <el-result :icon="batchApproveResult.failed > 0 ? 'warning' : 'success'" :title="batchResultSummary">
+        </el-result>
+        <div class="result-detail">
+          <div v-if="batchApproveResult.successContracts.length" class="result-section">
+            <div class="result-label success">成功（{{ batchApproveResult.success }}）</div>
+            <div class="contract-list">{{ batchApproveResult.successContracts.join('、') }}</div>
+          </div>
+          <div v-if="batchApproveResult.skippedContracts.length" class="result-section">
+            <div class="result-label skip">跳过（{{ batchApproveResult.skipped }}）</div>
+            <div class="contract-list">{{ batchApproveResult.skippedContracts.join('、') }}</div>
+          </div>
+          <div v-if="batchApproveResult.failedContracts.length" class="result-section">
+            <div class="result-label fail">失败（{{ batchApproveResult.failed }}）</div>
+            <div class="contract-list">{{ batchApproveResult.failedContracts.join('、') }}</div>
+          </div>
+        </div>
+      </div>
 
       <template #footer>
-        <el-button @click="showBatchApprove = false">取消</el-button>
-        <el-button type="primary" :loading="batchApproveLoading" @click="doBatchApprove">开始审批</el-button>
+        <el-button v-if="!batchApproveResult && !batchApproveLoading" @click="showBatchApprove = false">取消</el-button>
+        <el-button v-if="!batchApproveResult && !batchApproveLoading" type="primary" @click="doBatchApprove">开始审批</el-button>
+        <el-button v-if="batchApproveResult" type="primary" @click="closeBatchResult">关闭</el-button>
       </template>
     </el-dialog>
 
@@ -274,7 +305,8 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { receivedApi, type ReceivedApply, type ReceivedFact } from '@/api/panjia/received';
+import { Loading } from '@element-plus/icons-vue';
+import { receivedApi, type ReceivedApply, type ReceivedFact, type BatchApproveResult } from '@/api/panjia/received';
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
@@ -506,18 +538,34 @@ const doManualSubmit = async () => {
   }
 };
 
-// 批量审批（异步：提交后给提示，后台逐单跑，前端不轮询）
+// 批量审批：录入 → 等待 → 展示结果
 const showBatchApprove = ref(false);
 const batchApproveLoading = ref(false);
+const batchApproveResult = ref<BatchApproveResult | null>(null);
 const batchApproveForm = reactive({
-  period: currentPeriod(),
+  period: '' as string,
   contractNosText: '',
+  parsedCount: 0,
+});
+
+const batchResultSummary = computed(() => {
+  const r = batchApproveResult.value;
+  if (!r) return '';
+  return `成功 ${r.success} 个，跳过 ${r.skipped} 个，失败 ${r.failed} 个`;
 });
 
 const resetBatchApprove = () => {
-  batchApproveForm.period = currentPeriod();
+  batchApproveForm.period = '';
   batchApproveForm.contractNosText = '';
+  batchApproveForm.parsedCount = 0;
   batchApproveLoading.value = false;
+  batchApproveResult.value = null;
+};
+
+const closeBatchResult = () => {
+  showBatchApprove.value = false;
+  resetBatchApprove();
+  getList();
 };
 
 const doBatchApprove = async () => {
@@ -533,11 +581,11 @@ const doBatchApprove = async () => {
     ElMessage.warning('请输入至少一个合同号');
     return;
   }
+  batchApproveForm.parsedCount = contractNos.length;
   batchApproveLoading.value = true;
   try {
     const res: any = await receivedApi.batchApproveByContractAsync(batchApproveForm.period, contractNos);
-    ElMessage.success(res.msg || '已提交后台批量审批，请稍后查看结果');
-    showBatchApprove.value = false;
+    batchApproveResult.value = res.data;
   } catch { /* 拦截器处理 */ } finally {
     batchApproveLoading.value = false;
   }
@@ -708,5 +756,53 @@ onMounted(() => {
   line-height: 1.5;
   margin-top: 4px;
   padding-left: 80px;
+}
+
+.batch-waiting {
+  text-align: center;
+  padding: 40px 0;
+
+  .waiting-text {
+    font-size: 15px;
+    font-weight: 500;
+    margin-top: 16px;
+  }
+  .waiting-sub {
+    font-size: 13px;
+    color: #909399;
+    margin-top: 8px;
+  }
+}
+
+.batch-result {
+  .result-detail {
+    margin-top: 8px;
+  }
+
+  .result-section {
+    margin-bottom: 12px;
+  }
+
+  .result-label {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+
+    &.success { color: #67c23a; }
+    &.skip { color: #909399; }
+    &.fail { color: #f56c6c; }
+  }
+
+  .contract-list {
+    font-size: 12px;
+    color: #606266;
+    line-height: 1.6;
+    word-break: break-all;
+    background: var(--el-fill-color-light);
+    border-radius: 4px;
+    padding: 8px 10px;
+    max-height: 120px;
+    overflow-y: auto;
+  }
 }
 </style>

@@ -65,6 +65,17 @@ export interface ReceivedQuery extends PageQuery {
 export type ReceivedPage = PageResult<ReceivedApply>;
 export type ReceivedDetail = { apply: ReceivedApply; facts: ReceivedFact[] };
 
+/** 批量审批结果 */
+export interface BatchApproveResult {
+  total: number;
+  success: number;
+  skipped: number;
+  failed: number;
+  successContracts: string[];
+  skippedContracts: string[];
+  failedContracts: string[];
+}
+
 export const receivedApi = {
   list: (params: ReceivedQuery) =>
     panjiaRequest.get<ReceivedPage>('/performance/received/list', params),
@@ -78,10 +89,10 @@ export const receivedApi = {
     panjiaRequest.post<void>(`/performance/received/${id}/resubmit`),
   cancel: (id: string | number) =>
     panjiaRequest.post<void>(`/performance/received/${id}/cancel`),
-  /** 按合同号异步批量审批（返回提交合同号数量，后台逐单跑） */
+  /** 按合同号批量审批（CompletableFuture 挂起等待，返回每张单处理结果） */
   batchApproveByContractAsync: (period: string, contractNos: string[]) =>
-    panjiaRequest.post<number>('/performance/received/batch-approve-by-contract-async', {
+    panjiaRequest.post<BatchApproveResult>('/performance/received/batch-approve-by-contract-async', {
       period,
       contractNos,
-    }),
+    }, { timeout: 300000 }),
 };

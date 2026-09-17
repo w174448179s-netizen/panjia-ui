@@ -37,8 +37,8 @@ const panjiaRequest = {
   get<T>(url: string, params?: any) {
     return (request as any).get<T>(`/api/panjia${withQuery(url, params)}`);
   },
-  post<T>(url: string, data?: any) {
-    return (request as any).post<T>(`/api/panjia${url}`, data);
+  post<T>(url: string, data?: any, config?: Record<string, any>) {
+    return (request as any).post<T>(`/api/panjia${url}`, data, config);
   },
   put<T>(url: string, data?: any) {
     return (request as any).put<T>(`/api/panjia${url}`, data);
