@@ -37,13 +37,31 @@ export function useBizApproval(fetchInstanceId?: (businessId: string | number) =
       }
       if (!instanceId) return null;
 
-      const taskRes: any = await pageByTaskWait({
-        instanceId,
-        pageNum: 1,
-        pageSize: 1,
-      });
-      const tasks: FlowTaskVO[] = taskRes.data?.rows ?? [];
-      return tasks.length > 0 ? tasks[0] : null;
+      // 注意：工作流系统级 pageByTaskWait 当前并未按 instanceId 过滤，
+      // 返回的是本人全部待办（按创建时间倒序）。直接取首页第一条会导致
+      // 「点任意行审批都打开同一条任务」，因此这里分页拉取后在客户端按实例精确匹配。
+      const pageSize = 100;
+      let pageNum = 1;
+      let matched: FlowTaskVO | null = null;
+      while (true) {
+        const taskRes: any = await pageByTaskWait({
+          instanceId,
+          pageNum,
+          pageSize,
+        });
+        const tasks: FlowTaskVO[] = taskRes.data?.rows ?? [];
+        const hit = tasks.find((t) => String(t.instanceId) === String(instanceId));
+        if (hit) {
+          matched = hit;
+          break;
+        }
+        const total: number = taskRes.data?.total ?? 0;
+        if (tasks.length === 0 || pageNum * pageSize >= total) {
+          break;
+        }
+        pageNum += 1;
+      }
+      return matched;
     } catch {
       return null;
     } finally {

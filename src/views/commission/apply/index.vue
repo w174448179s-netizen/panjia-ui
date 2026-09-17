@@ -33,12 +33,6 @@
             <el-option v-for="opt in statusOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="节点">
-          <el-select v-model="queryParams.currentNode" placeholder="全部节点" clearable style="width: 130px" @change="handleQuery">
-            <el-option label="总监审批" value="DIRECTOR" />
-            <el-option label="财务审批" value="FINANCE" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="关键字">
           <el-input
             v-model="queryParams.keyword"
@@ -344,7 +338,6 @@ const queryParams = reactive({
   period: currentPeriod(),
   deptId: undefined as string | undefined,
   status: '' as string,
-  currentNode: '' as string,
   keyword: '' as string,
 });
 
@@ -411,7 +404,6 @@ const getList = async () => {
       period: queryParams.period || currentPeriod(),
       deptId: queryParams.deptId || undefined,
       status: queryParams.status || undefined,
-      currentNode: queryParams.currentNode || undefined,
       keyword: queryParams.keyword || undefined,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
@@ -434,7 +426,7 @@ const handleQuery = () => {
 
 const resetQuery = () => {
   Object.assign(queryParams, {
-    period: currentPeriod(), deptId: undefined, status: '', currentNode: '', keyword: '', pageNum: 1,
+    period: currentPeriod(), deptId: undefined, status: '', keyword: '', pageNum: 1,
   });
   getList();
 };

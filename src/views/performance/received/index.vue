@@ -33,12 +33,6 @@
             <el-option v-for="opt in statusOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="节点">
-          <el-select v-model="queryParams.currentNode" placeholder="全部节点" clearable style="width: 130px" @change="handleQuery">
-            <el-option label="财务审批" value="FINANCE" />
-            <el-option label="总监审批" value="DIRECTOR" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="关键字">
           <el-input
             v-model="queryParams.keyword"
@@ -357,7 +351,6 @@ const queryParams = reactive({
   pageSize: 20,
   period: currentPeriod(),
   status: '',
-  currentNode: '',
   keyword: '',
   deptId: undefined as string | undefined,
 });
@@ -455,7 +448,6 @@ const getList = async () => {
     const res: any = await receivedApi.list({
       period: queryParams.period || undefined,
       status: queryParams.status || undefined,
-      currentNode: queryParams.currentNode || undefined,
       keyword: queryParams.keyword || undefined,
       deptId: queryParams.deptId || undefined,
       pageNum: queryParams.pageNum,
@@ -481,7 +473,7 @@ const contractOrOrderNo = (row: ReceivedApply): string =>
   resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—';
 const resetQuery = () => {
   Object.assign(queryParams, {
-    period: currentPeriod(), status: '', currentNode: '', keyword: '',
+    period: currentPeriod(), status: '', keyword: '',
     deptId: undefined, pageNum: 1,
   });
   getList();
