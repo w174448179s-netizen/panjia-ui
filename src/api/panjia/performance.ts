@@ -270,11 +270,13 @@ export interface PerformanceFactSearch {
   commissionAmount?: number;   // 结佣业绩
   employeeCount: number;      // 涉及人数
   detailCount: number;        // 明细条数
+  factStatus?: string;        // 事实状态（ACTIVE/VOIDED/ALL）
 }
 
 /** 业绩查询·合同下明细行（/perf/fact/search/details 返回，含全部期间） */
 export interface PerformanceSearchDetailRow {
   factId: string;
+  factStatus?: string;        // 事实状态（ACTIVE/VOIDED）
   period: string;             // 归属期间（明细覆盖业务键全部期间）
   employeeId: string;
   employeeCode?: string;      // 工号
@@ -345,11 +347,19 @@ export const performanceApi = {
     panjiaRequest.post<void>(`/perf/period/reopen/${period}`),
 
   // 完整业绩查询（合同维度）
-  searchByContract: (params: { period?: string; deptId?: string; keyword?: string; pageNum?: number; pageSize?: number }) =>
+  searchByContract: (params: { period?: string; deptId?: string; keyword?: string; factStatus?: string; pageNum?: number; pageSize?: number }) =>
     panjiaRequest.get<PageResult<PerformanceFactSearch>>('/perf/fact/search', params),
 
   // 业绩查询·合同下明细（查看详情弹窗；bizNo=列表行展示的合同号/订单号，
   // 一手房/房产金融/家装荐客传订单号，其余传合同号，空则订单号）
   getSearchDetails: (params: { bizNo: string }) =>
     panjiaRequest.get<PerformanceSearchDetailRow[]>('/perf/fact/search/details', params),
+
+  // 作废业绩事实（ACTIVE → VOIDED）
+  voidFact: (id: string | number, reason: string) =>
+    panjiaRequest.post<void>(`/perf/fact/void/${id}?reason=${encodeURIComponent(reason)}`),
+
+  // 恢复业绩事实（VOIDED → ACTIVE）
+  restoreFact: (id: string | number, reason: string) =>
+    panjiaRequest.post<void>(`/perf/fact/restore/${id}?reason=${encodeURIComponent(reason)}`),
 };

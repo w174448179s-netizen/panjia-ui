@@ -39,6 +39,19 @@
               @clear="handleQuery"
             />
           </el-form-item>
+          <el-form-item label="状态" prop="factStatus">
+            <el-select
+              v-model="queryParams.factStatus"
+              placeholder="全部"
+              clearable
+              style="width: 120px"
+              @change="handleQuery"
+            >
+              <el-option label="有效" value="ACTIVE" />
+              <el-option label="已作废" value="VOIDED" />
+              <el-option label="全部" value="ALL" />
+            </el-select>
+          </el-form-item>
           <el-form-item>
             <el-button type="primary" :icon="Search" @click="handleQuery">查询</el-button>
             <el-button :icon="Refresh" @click="resetQuery">重置</el-button>
@@ -140,6 +153,13 @@
             <template #default="{ row }">
               <span v-if="row.commissionAmount != null" class="amount-red">{{ formatMoney(row.commissionAmount) }}</span>
               <span v-else class="amount-gray">—</span>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="状态" align="center" width="80">
+            <template #default="{ row }">
+              <el-tag v-if="row.factStatus === 'VOIDED'" type="info" size="small">已作废</el-tag>
+              <el-tag v-else type="success" size="small">有效</el-tag>
             </template>
           </el-table-column>
 
@@ -290,6 +310,30 @@
             <el-tag v-else type="info" size="small" effect="plain">未结算</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="状态" align="center" width="80">
+          <template #default="{ row }">
+            <el-tag v-if="row.factStatus === 'VOIDED'" type="info" size="small">已作废</el-tag>
+            <el-tag v-else type="success" size="small">有效</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" align="center" width="100" v-if="checkPermi(['perf:fact:void'])">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.factStatus !== 'VOIDED'"
+              type="danger"
+              link
+              size="small"
+              @click="handleVoid(row as PerformanceSearchDetailRow)"
+            >作废</el-button>
+            <el-button
+              v-else
+              type="primary"
+              link
+              size="small"
+              @click="handleRestore(row as PerformanceSearchDetailRow)"
+            >恢复</el-button>
+          </template>
+        </el-table-column>
         <template #empty>
           <el-empty description="该合同暂无明细数据" />
         </template>
@@ -303,12 +347,13 @@
 
 <script setup lang="ts">
 import { Search, Refresh } from '@element-plus/icons-vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceFactSearch, PerformanceSearchDetailRow } from '@/api/panjia/performance';
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
 import { resolveBizNo } from '@/utils/panjiaBiz';
+import { checkPermi } from '@/utils/permission';
 
 defineOptions({ name: 'PerformanceSearch' });
 
@@ -338,6 +383,7 @@ const queryParams = reactive({
   period: undefined as string | undefined,
   deptId: undefined as string | undefined,
   keyword: undefined as string | undefined,
+  factStatus: undefined as string | undefined,
 });
 
 const loading = ref(false);
@@ -351,6 +397,7 @@ const getList = async () => {
       period: queryParams.period,
       deptId: queryParams.deptId,
       keyword: queryParams.keyword,
+      factStatus: queryParams.factStatus,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
     });
@@ -374,6 +421,7 @@ const resetQuery = () => {
   queryParams.period = undefined;
   queryParams.deptId = undefined;
   queryParams.keyword = undefined;
+  queryParams.factStatus = undefined;
   handleQuery();
 };
 
@@ -494,6 +542,61 @@ const openDetail = async (row: PerformanceFactSearch) => {
     detailList.value = [];
   } finally {
     detailLoading.value = false;
+  }
+};
+
+// ==================== 作废/恢复 ====================
+const handleVoid = async (row: PerformanceSearchDetailRow) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入作废原因', '作废业绩', {
+      confirmButtonText: '确定作废',
+      cancelButtonText: '取消',
+      inputType: 'textarea',
+      inputPlaceholder: '必填，如：录入错误、重复录入等',
+      inputValidator: (v) => !!v?.trim() || '请输入作废原因',
+    });
+    await performanceApi.voidFact(row.factId, value.trim());
+    ElMessage.success('已作废');
+    // 刷新明细 + 列表
+    if (detailDialog.row) {
+      const bizNo = resolveBizNo(detailDialog.row.bizType, detailDialog.row.contractNo, detailDialog.row.orderNo);
+      if (bizNo) {
+        const res = await performanceApi.getSearchDetails({ bizNo });
+        detailList.value = res.data ?? [];
+      }
+    }
+    getList();
+  } catch (e: any) {
+    if (e !== 'cancel' && e?.message !== 'cancel') {
+      ElMessage.error(e?.message || '作废失败');
+    }
+  }
+};
+
+const handleRestore = async (row: PerformanceSearchDetailRow) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入恢复原因', '恢复业绩', {
+      confirmButtonText: '确定恢复',
+      cancelButtonText: '取消',
+      inputType: 'textarea',
+      inputPlaceholder: '必填，如：误操作作废等',
+      inputValidator: (v) => !!v?.trim() || '请输入恢复原因',
+    });
+    await performanceApi.restoreFact(row.factId, value.trim());
+    ElMessage.success('已恢复');
+    // 刷新明细 + 列表
+    if (detailDialog.row) {
+      const bizNo = resolveBizNo(detailDialog.row.bizType, detailDialog.row.contractNo, detailDialog.row.orderNo);
+      if (bizNo) {
+        const res = await performanceApi.getSearchDetails({ bizNo });
+        detailList.value = res.data ?? [];
+      }
+    }
+    getList();
+  } catch (e: any) {
+    if (e !== 'cancel' && e?.message !== 'cancel') {
+      ElMessage.error(e?.message || '恢复失败');
+    }
   }
 };
 
