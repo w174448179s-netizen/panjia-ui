@@ -141,10 +141,15 @@ export interface CommissionContractVO {
   createTime?: string;
 }
 
-/** Excel 批量操作结果 */
-export interface CommissionBatchResult {
-  successCount: number;
-  failedRows: Array<{ contractNo: string; amount: string; reason: string }>;
+/** 批量操作结果（批量发起 / 批量审批） */
+export interface BatchResultDTO {
+  total: number;
+  success: number;
+  skipped: number;
+  failed: number;
+  successContracts: string[];
+  skippedContracts: string[];
+  failedContracts: string[];
 }
 
 export const commissionApi = {
@@ -162,26 +167,18 @@ export const commissionApi = {
     panjiaRequest.post<number>('/commission/apply/batch', data),
   cancelApplication: (id: number | string) =>
     panjiaRequest.post<void>(`/commission/apply/${id}/cancel`),
-  /** Excel 批量发起（§3.2，按合同号自动发起+提交） */
-  batchInitiate: (file: File, period: string) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    return panjiaRequest.post<CommissionBatchResult>(
-      `/commission/apply/batch-initiate?period=${encodeURIComponent(period)}`, formData);
-  },
-  /** Excel 批量审批（§3.3，匹配合同号+金额） */
-  batchApprove: (file: File, period: string) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    return panjiaRequest.post<CommissionBatchResult>(
-      `/commission/apply/batch-approve?period=${encodeURIComponent(period)}`, formData);
-  },
-  /** 按合同号批量审批（录入合同号列表，逐单办理当前待办节点） */
-  batchApproveByContract: (period: string, contractNos: string[]) =>
-    panjiaRequest.post<CommissionBatchResult>('/commission/apply/batch-approve-by-contract', {
+  /** 按合同号批量发起（CompletableFuture 挂起等待，返回每张单处理结果） */
+  batchApplyByContract: (period: string, contractNos: string[]) =>
+    panjiaRequest.post<BatchResultDTO>('/commission/apply/batch-apply-by-contract', {
       period,
       contractNos,
-    }),
+    }, { timeout: 300000 }),
+  /** 按合同号批量审批（CompletableFuture 挂起等待，返回每张单处理结果） */
+  batchApproveByContract: (period: string, contractNos: string[]) =>
+    panjiaRequest.post<BatchResultDTO>('/commission/apply/batch-approve-by-contract', {
+      period,
+      contractNos,
+    }, { timeout: 300000 }),
 
   // 结佣调整
   listAdjusts: (params: CommissionAdjustQuery) =>

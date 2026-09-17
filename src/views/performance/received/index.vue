@@ -238,8 +238,35 @@
 
     <!-- 批量审批弹窗：录入合同号 → 等待处理完成 → 展示结果 -->
     <el-dialog v-model="showBatchApprove" title="批量审批" width="560px" @close="resetBatchApprove">
+      <!-- 等待视图 -->
+      <div v-if="batchApproveLoading" class="batch-waiting">
+        <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+        <p class="waiting-text">正在批量审批，请耐心等待...</p>
+        <p class="waiting-sub">共 {{ batchApproveForm.parsedCount }} 个合同号，逐单处理中</p>
+      </div>
+
+      <!-- 结果视图 -->
+      <div v-else-if="batchApproveResult" class="batch-result">
+        <el-result :icon="batchApproveResult.failed > 0 ? 'warning' : 'success'" :title="batchResultSummary">
+        </el-result>
+        <div class="result-detail">
+          <div v-if="batchApproveResult.successContracts.length" class="result-section">
+            <div class="result-label success">成功（{{ batchApproveResult.success }}）</div>
+            <div class="contract-list">{{ batchApproveResult.successContracts.join('、') }}</div>
+          </div>
+          <div v-if="batchApproveResult.skippedContracts.length" class="result-section">
+            <div class="result-label skip">跳过（{{ batchApproveResult.skipped }}）</div>
+            <div class="contract-list">{{ batchApproveResult.skippedContracts.join('、') }}</div>
+          </div>
+          <div v-if="batchApproveResult.failedContracts.length" class="result-section">
+            <div class="result-label fail">失败（{{ batchApproveResult.failed }}）</div>
+            <div class="contract-list">{{ batchApproveResult.failedContracts.join('、') }}</div>
+          </div>
+        </div>
+      </div>
+
       <!-- 输入视图 -->
-      <template v-if="!batchApproveResult">
+      <template v-else>
         <el-form label-width="80px">
           <el-form-item label="结算月" required>
             <el-date-picker
@@ -261,33 +288,6 @@
           <div class="batch-hint">将逐单审批当前节点，非您审批范围内的单据会跳过并提示原因。</div>
         </el-form>
       </template>
-
-      <!-- 等待视图 -->
-      <div v-else-if="batchApproveLoading" class="batch-waiting">
-        <el-icon class="is-loading" :size="32"><Loading /></el-icon>
-        <p class="waiting-text">正在批量审批，请耐心等待...</p>
-        <p class="waiting-sub">共 {{ batchApproveForm.parsedCount }} 个合同号，逐单处理中</p>
-      </div>
-
-      <!-- 结果视图 -->
-      <div v-else class="batch-result">
-        <el-result :icon="batchApproveResult.failed > 0 ? 'warning' : 'success'" :title="batchResultSummary">
-        </el-result>
-        <div class="result-detail">
-          <div v-if="batchApproveResult.successContracts.length" class="result-section">
-            <div class="result-label success">成功（{{ batchApproveResult.success }}）</div>
-            <div class="contract-list">{{ batchApproveResult.successContracts.join('、') }}</div>
-          </div>
-          <div v-if="batchApproveResult.skippedContracts.length" class="result-section">
-            <div class="result-label skip">跳过（{{ batchApproveResult.skipped }}）</div>
-            <div class="contract-list">{{ batchApproveResult.skippedContracts.join('、') }}</div>
-          </div>
-          <div v-if="batchApproveResult.failedContracts.length" class="result-section">
-            <div class="result-label fail">失败（{{ batchApproveResult.failed }}）</div>
-            <div class="contract-list">{{ batchApproveResult.failedContracts.join('、') }}</div>
-          </div>
-        </div>
-      </div>
 
       <template #footer>
         <el-button v-if="!batchApproveResult && !batchApproveLoading" @click="showBatchApprove = false">取消</el-button>
