@@ -165,8 +165,15 @@
           <span class="amount amount-red">¥{{ formatAmount(detailApp.receivedAmount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="应收合计" :span="2">
-          <span class="amount amount-expected">¥{{ formatAmount(detailApp.expectedAmount) }}</span>
-          <el-tag v-if="detailApp.expectedAdjusted" type="warning" size="small" effect="plain" style="margin-left: 6px">已调整</el-tag>
+          <template v-if="detailApp.expectedAdjusted">
+            <span style="text-decoration: line-through; color: #999">¥{{ formatAmount(detailApp.originalExpectedAmount) }}</span>
+            <span style="margin: 0 4px">→</span>
+            <span class="amount amount-red">¥{{ formatAmount(detailApp.expectedAmount) }}</span>
+            <el-tag type="warning" size="small" effect="plain" style="margin-left: 6px">已调整</el-tag>
+          </template>
+          <template v-else>
+            <span class="amount amount-expected">¥{{ formatAmount(detailApp.expectedAmount) }}</span>
+          </template>
         </el-descriptions-item>
         <el-descriptions-item label="房源地址" :span="3">{{ detailApp.propertyAddress || '—' }}</el-descriptions-item>
       </el-descriptions>
@@ -200,7 +207,7 @@
           </el-table-column>
           <el-table-column label="新签业绩" align="right" width="120">
             <template #default="scope">
-              <span class="amount amount-expected">{{ formatAmount(scope.row.expectedAmount) }}</span>
+              <span :class="['amount', scope.row.expectedAdjusted ? 'amount-red' : 'amount-expected']">{{ formatAmount(scope.row.expectedAmount) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="实收业绩" align="right" width="120">

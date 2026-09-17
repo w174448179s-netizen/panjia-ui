@@ -16,6 +16,8 @@ export interface ReceivedApply {
   expectedAmount?: number;    // 应收合计（展示实时值：ACTIVE PERF_EXPECT 含已生效调整）
   /** 应收已被调整（当前应收 ≠ 提交时快照，展示「已调整」标记） */
   expectedAdjusted?: boolean;
+  /** 提交时快照应收（展示「调整前」值） */
+  originalExpectedAmount?: number;
   itemCount: number;
   /** 业务类型（列表接口按 (期间,合同号) 从 ACTIVE PERF_REAL 事实回填） */
   bizType?: string;
@@ -48,6 +50,8 @@ export interface ReceivedFact {
   shareRatio?: number;
   /** 新签业绩（同 sourceKey 的 PERF_EXPECT 事实金额） */
   expectedAmount?: number;
+  /** 该行应收已被调整（同 sourceKey 存在 REVERSED 的 PERF_EXPECT 事实） */
+  expectedAdjusted?: boolean;
   /** 实收业绩（PERF_REAL 事实金额） */
   amount: number;
 }
