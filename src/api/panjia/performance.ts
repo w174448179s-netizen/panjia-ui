@@ -150,6 +150,7 @@ export interface ManualFactForm {
 /** 业绩管理明细行（人→合同→明细 树表的明细层，后端 /perf/fact/manage 返回） */
 export interface PerformanceManageRow {
   id: string;
+  factStatus?: string;       // ACTIVE 有效 / VOIDED 已作废
   factType: string;          // PERF_REAL / PERF_EXPECT
   period: string;
   businessDate: string;      // 签约/认购日期
@@ -179,6 +180,7 @@ export interface ManageQuery {
   bizType?: string;
   settled?: boolean;
   keyword?: string;          // 员工号/姓名/合同号/订单号/房源地址/角色/门店/店组
+  factStatus?: string;       // ACTIVE / VOIDED / ALL（不传默认 ACTIVE）
   pageNum?: number;
   pageSize?: number;
 }
@@ -230,6 +232,7 @@ export interface PerformanceManageContract {
   employeeCount: number;     // 涉及签约人数
   detailCount: number;       // 明细条数
   unsettledCount: number;    // 未结算条数
+  factStatus?: string;       // 聚合状态（ACTIVE 有任一有效 / VOIDED 全部作废）
 }
 
 /** 合同明细懒加载查询参数（展开合同时按合同号查） */
@@ -270,13 +273,11 @@ export interface PerformanceFactSearch {
   commissionAmount?: number;   // 结佣业绩
   employeeCount: number;      // 涉及人数
   detailCount: number;        // 明细条数
-  factStatus?: string;        // 事实状态（ACTIVE/VOIDED/ALL）
 }
 
 /** 业绩查询·合同下明细行（/perf/fact/search/details 返回，含全部期间） */
 export interface PerformanceSearchDetailRow {
   factId: string;
-  factStatus?: string;        // 事实状态（ACTIVE/VOIDED）
   period: string;             // 归属期间（明细覆盖业务键全部期间）
   employeeId: string;
   employeeCode?: string;      // 工号
@@ -347,7 +348,7 @@ export const performanceApi = {
     panjiaRequest.post<void>(`/perf/period/reopen/${period}`),
 
   // 完整业绩查询（合同维度）
-  searchByContract: (params: { period?: string; deptId?: string; keyword?: string; factStatus?: string; pageNum?: number; pageSize?: number }) =>
+  searchByContract: (params: { period?: string; deptId?: string; keyword?: string; pageNum?: number; pageSize?: number }) =>
     panjiaRequest.get<PageResult<PerformanceFactSearch>>('/perf/fact/search', params),
 
   // 业绩查询·合同下明细（查看详情弹窗；bizNo=列表行展示的合同号/订单号，

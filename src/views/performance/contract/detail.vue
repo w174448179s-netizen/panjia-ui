@@ -75,10 +75,28 @@
             </div>
           </template>
         </el-table-column>
-        <!-- 操作列：明细级业绩调整（经纪人无权限） -->
-        <el-table-column v-if="!isBroker" label="操作" align="center" width="80" fixed="right">
+        <el-table-column label="状态" align="center" width="80">
           <template #default="scope">
-            <el-button type="primary" link @click="openAdjustDialog(scope.row)">调整</el-button>
+            <el-tag v-if="scope.row.factStatus === 'VOIDED'" type="info" size="small">已作废</el-tag>
+            <el-tag v-else type="success" size="small">有效</el-tag>
+          </template>
+        </el-table-column>
+        <!-- 操作列：明细级业绩调整 + 作废/恢复（经纪人无权限） -->
+        <el-table-column v-if="!isBroker" label="操作" align="center" width="160" fixed="right">
+          <template #default="scope">
+            <el-button type="primary" link @click="openAdjustDialog(scope.row as PerformanceManageRow)">调整</el-button>
+            <el-button
+              v-if="canVoid && scope.row.factStatus !== 'VOIDED'"
+              type="danger"
+              link
+              @click="handleVoid(scope.row as PerformanceManageRow)"
+            >作废</el-button>
+            <el-button
+              v-else-if="canVoid && scope.row.factStatus === 'VOIDED'"
+              type="success"
+              link
+              @click="handleRestore(scope.row as PerformanceManageRow)"
+            >恢复</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -159,17 +177,20 @@
 
 <script setup lang="ts">
 import { useRouter, useRoute } from 'vue-router';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceManageRow } from '@/api/panjia/performance';
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
 import { useUserStore } from '@/store/modules/user';
+import { checkPermi } from '@/utils/permission';
 
 const router = useRouter();
 const route = useRoute();
 
 const userStore = useUserStore();
 const isBroker = computed(() => userStore.roles.includes('agent'));
+const canVoid = computed(() => checkPermi(['perf:fact:void']));
 
 // ==================== 路由参数 ====================
 const contractNo = ref(String(route.query.contractNo || ''));
@@ -190,12 +211,13 @@ const contractInfo = computed(() => {
   };
 });
 
-// 统计
-const employeeCount = computed(() => new Set(detailList.value.map(r => r.employeeId)).size);
-const totalAmount = computed(() => detailList.value.reduce((sum, r) => sum + num(r.amount), 0));
-const totalOriginalAmount = computed(() => detailList.value.reduce((sum, r) => sum + num(r.originalAmount), 0));
+// 统计（仅 ACTIVE 行，已作废不计入合计）
+const activeList = computed(() => detailList.value.filter(r => r.factStatus !== 'VOIDED'));
+const employeeCount = computed(() => new Set(activeList.value.map(r => r.employeeId)).size);
+const totalAmount = computed(() => activeList.value.reduce((sum, r) => sum + num(r.amount), 0));
+const totalOriginalAmount = computed(() => activeList.value.reduce((sum, r) => sum + num(r.originalAmount), 0));
 // 有调整的行才显示「调整后业绩」与对应合计，未调整时保持 — 避免歧义
-const hasAdjustRow = computed(() => detailList.value.some(r => num(r.amount) !== num(r.originalAmount)));
+const hasAdjustRow = computed(() => activeList.value.some(r => num(r.amount) !== num(r.originalAmount)));
 
 // ==================== 工具 ====================
 const num = (v: number | string | undefined | null): number => {
@@ -258,6 +280,45 @@ const loadDetails = async () => {
     console.error('[contract-detail] 明细加载失败', e);
   } finally {
     loading.value = false;
+  }
+};
+
+// ==================== 作废/恢复 ====================
+const handleVoid = async (row: PerformanceManageRow) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入作废原因', '作废业绩', {
+      confirmButtonText: '确定作废',
+      cancelButtonText: '取消',
+      inputType: 'textarea',
+      inputPlaceholder: '必填，如：录入错误、重复录入等',
+      inputValidator: (v) => !!v?.trim() || '请输入作废原因',
+    });
+    await performanceApi.voidFact(row.id, value.trim());
+    ElMessage.success('已作废');
+    await loadDetails();
+  } catch (e: any) {
+    if (e !== 'cancel' && e?.message !== 'cancel') {
+      ElMessage.error(e?.message || '作废失败');
+    }
+  }
+};
+
+const handleRestore = async (row: PerformanceManageRow) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入恢复原因（恢复后业绩计入当前月）', '恢复业绩', {
+      confirmButtonText: '确定恢复',
+      cancelButtonText: '取消',
+      inputType: 'textarea',
+      inputPlaceholder: '必填，如：误操作作废等',
+      inputValidator: (v) => !!v?.trim() || '请输入恢复原因',
+    });
+    await performanceApi.restoreFact(row.id, value.trim());
+    ElMessage.success('已恢复，业绩计入当前月');
+    await loadDetails();
+  } catch (e: any) {
+    if (e !== 'cancel' && e?.message !== 'cancel') {
+      ElMessage.error(e?.message || '恢复失败');
+    }
   }
 };
 

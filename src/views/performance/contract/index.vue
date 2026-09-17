@@ -39,6 +39,19 @@
             <el-option v-for="t in bizTypeOptions" :key="t" :label="t" :value="t" />
           </el-select>
         </el-form-item>
+        <el-form-item label="状态">
+          <el-select
+            v-model="queryParams.factStatus"
+            placeholder="有效"
+            clearable
+            style="width: 120px"
+            @change="handleQuery"
+          >
+            <el-option label="有效" value="ACTIVE" />
+            <el-option label="已作废" value="VOIDED" />
+            <el-option label="全部" value="ALL" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
           <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -72,8 +85,8 @@
       <el-table border class="data-table" :data="contractData">
         <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="scope">
-            <el-button type="primary" link class="contract-link" @click="goDetail(scope.row)">
-              {{ contractOrOrderNo(scope.row) }}
+            <el-button type="primary" link class="contract-link" @click="goDetail(scope.row as PerformanceManageContract)">
+              {{ contractOrOrderNo(scope.row as PerformanceManageContract) }}
             </el-button>
           </template>
         </el-table-column>
@@ -103,11 +116,17 @@
         <el-table-column label="明细条数" align="center" width="80">
           <template #default="scope">{{ scope.row.detailCount ?? 0 }}</template>
         </el-table-column>
+        <el-table-column label="状态" align="center" width="80">
+          <template #default="scope">
+            <el-tag v-if="scope.row.factStatus === 'VOIDED'" type="info" size="small">已作废</el-tag>
+            <el-tag v-else type="success" size="small">有效</el-tag>
+          </template>
+        </el-table-column>
         <!-- 操作列：详情 + 合同级业绩调整（经纪人无调整权限） -->
         <el-table-column label="操作" align="center" width="120" fixed="right">
           <template #default="scope">
-            <el-button link type="primary" @click="goDetail(scope.row)">详情</el-button>
-            <el-button v-if="!isBroker" link type="warning" @click="openAdjustDialog(scope.row)">调整</el-button>
+            <el-button link type="primary" @click="goDetail(scope.row as PerformanceManageContract)">详情</el-button>
+            <el-button v-if="!isBroker" link type="warning" @click="openAdjustDialog(scope.row as PerformanceManageContract)">调整</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -280,9 +299,29 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column v-if="!isBroker" label="操作" align="center" width="100" fixed="right">
+        <el-table-column label="状态" align="center" width="80">
           <template #default="scope">
-            <el-button type="primary" link size="small" @click="openDetailAdjustDialog(scope.row)">调整</el-button>
+            <el-tag v-if="scope.row.factStatus === 'VOIDED'" type="info" size="small">已作废</el-tag>
+            <el-tag v-else type="success" size="small">有效</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column v-if="!isBroker" label="操作" align="center" width="160" fixed="right">
+          <template #default="scope">
+            <el-button type="primary" link size="small" @click="openDetailAdjustDialog(scope.row as PerformanceManageRow)">调整</el-button>
+            <el-button
+              v-if="canVoid && scope.row.factStatus !== 'VOIDED'"
+              type="danger"
+              link
+              size="small"
+              @click="handleVoid(scope.row as PerformanceManageRow)"
+            >作废</el-button>
+            <el-button
+              v-else-if="canVoid && scope.row.factStatus === 'VOIDED'"
+              type="success"
+              link
+              size="small"
+              @click="handleRestore(scope.row as PerformanceManageRow)"
+            >恢复</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -367,25 +406,30 @@
 
 <script setup lang="ts">
 import { Search } from '@element-plus/icons-vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceManageContract, PerformanceManageRow } from '@/api/panjia/performance';
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
 import { useUserStore } from '@/store/modules/user';
 import { resolveBizNo } from '@/utils/panjiaBiz';
+import { checkPermi } from '@/utils/permission';
 
 const userStore = useUserStore();
 const isBroker = computed(() => userStore.roles.includes('agent'));
+const canVoid = computed(() => checkPermi(['perf:fact:void']));
 
 // ==================== 筛选 ====================
 const queryParams = reactive<{
   period: string;
   deptId: string | number | undefined;
   bizType: string;
+  factStatus: string;
 }>({
   period: '',
   deptId: undefined,
   bizType: '',
+  factStatus: '',
 });
 
 const deptTreeData = ref<DeptNode[]>([]);
@@ -433,7 +477,8 @@ const detailDialog = reactive({
 });
 
 const detailSummary = computed(() => {
-  const list = detailList.value;
+  // 合计仅统计有效（ACTIVE）行，已作废金额不计入
+  const list = detailList.value.filter(r => r.factStatus !== 'VOIDED');
   return {
     employeeCount: new Set(list.map(r => r.employeeId)).size,
     totalAmount: list.reduce((sum, r) => sum + num(r.amount), 0),
@@ -469,6 +514,47 @@ const loadDetailList = async () => {
     console.error('[performance-contract] 明细加载失败', e);
   } finally {
     detailLoading.value = false;
+  }
+};
+
+// ==================== 作废/恢复 ====================
+const handleVoid = async (row: PerformanceManageRow) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入作废原因', '作废业绩', {
+      confirmButtonText: '确定作废',
+      cancelButtonText: '取消',
+      inputType: 'textarea',
+      inputPlaceholder: '必填，如：录入错误、重复录入等',
+      inputValidator: (v) => !!v?.trim() || '请输入作废原因',
+    });
+    await performanceApi.voidFact(row.id, value.trim());
+    ElMessage.success('已作废');
+    await loadDetailList();
+    getList();
+  } catch (e: any) {
+    if (e !== 'cancel' && e?.message !== 'cancel') {
+      ElMessage.error(e?.message || '作废失败');
+    }
+  }
+};
+
+const handleRestore = async (row: PerformanceManageRow) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入恢复原因（恢复后业绩计入当前月）', '恢复业绩', {
+      confirmButtonText: '确定恢复',
+      cancelButtonText: '取消',
+      inputType: 'textarea',
+      inputPlaceholder: '必填，如：误操作作废等',
+      inputValidator: (v) => !!v?.trim() || '请输入恢复原因',
+    });
+    await performanceApi.restoreFact(row.id, value.trim());
+    ElMessage.success('已恢复，业绩计入当前月');
+    await loadDetailList();
+    getList();
+  } catch (e: any) {
+    if (e !== 'cancel' && e?.message !== 'cancel') {
+      ElMessage.error(e?.message || '恢复失败');
+    }
   }
 };
 
@@ -621,6 +707,7 @@ const getList = async () => {
       deptId: queryParams.deptId ? String(queryParams.deptId) : undefined,
       bizType: queryParams.bizType || undefined,
       keyword: keyword.value.trim() || undefined,
+      factStatus: queryParams.factStatus || undefined,
       pageNum: pageNum.value,
       pageSize: pageSize.value
     });
@@ -646,6 +733,7 @@ const handleQuery = () => {
 const resetQuery = () => {
   queryParams.deptId = undefined;
   queryParams.bizType = '';
+  queryParams.factStatus = '';
   suppressKeywordWatch = true;
   keyword.value = '';
   pageNum.value = 1;
