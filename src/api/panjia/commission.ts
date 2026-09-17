@@ -61,6 +61,8 @@ export interface CommissionApplication {
   applicantId?: number;
   applicantName?: string;   // 后端 @Translation 翻译产物（非入库字段）
   approverId?: number;
+  approverName?: string;    // 后端 @Translation 翻译产物：最近节点办理人
+  approveTime?: string;     // 审批时间（总监通过/终审锁定/驳回留痕）
   lockTime?: string;
   createTime: string;
   updateTime?: string;
