@@ -48,9 +48,17 @@ export interface Employee {
   leaveDate?: string;
   status: string;
   socialInsured: boolean;
+  /** 社保金额（自定义；null=用全局默认算法） */
+  socialFee?: number;
   housingInsured: boolean;
   commercialInsured: boolean;
+  /** 商业保险金额（自定义；null=用全局默认 21 元） */
+  commercialFee?: number;
   dormitory: boolean;
+  /** 公积金金额（自定义；null=用全局默认算法） */
+  housingFund?: number;
+  /** 宿舍费金额（自定义；null=用全局默认算法） */
+  dormitoryFee?: number;
   isPartTime: boolean;
   mentorCode?: string;
   mentorName?: string;
@@ -85,6 +93,14 @@ export interface EmployeeCreateForm {
   parttime: boolean;
   mentorCode?: string;
   remark?: string;
+  /** 社保金额（自定义；null=用全局默认算法） */
+  socialFee?: number;
+  /** 商业保险金额（自定义；null=用全局默认 21 元） */
+  commercialFee?: number;
+  /** 公积金金额（自定义；null=用全局默认算法） */
+  housingFund?: number;
+  /** 宿舍费金额（自定义；null=用全局默认算法） */
+  dormitoryFee?: number;
 }
 
 /** 修改员工表单（在新增基础上支持生效日与离职日） */

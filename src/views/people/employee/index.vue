@@ -334,6 +334,30 @@
               <el-switch v-model="form.parttime" />
             </el-form-item>
           </el-col>
+          <el-col :span="12" v-if="form.socialInsured">
+            <el-form-item label="社保金额">
+              <el-input-number v-model="form.socialFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+              <span class="form-tip" style="margin-left:8px">元/月，不填用全局默认</span>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12" v-if="form.commercialInsured">
+            <el-form-item label="商业保险金额">
+              <el-input-number v-model="form.commercialFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+              <span class="form-tip" style="margin-left:8px">元/月，不填用全局默认</span>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12" v-if="form.housingInsured">
+            <el-form-item label="公积金金额">
+              <el-input-number v-model="form.housingFund" :min="0" :precision="2" :controls="false" style="width:100%" />
+              <span class="form-tip" style="margin-left:8px">元/月，不填用全局默认</span>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12" v-if="form.dormitory">
+            <el-form-item label="宿舍费金额">
+              <el-input-number v-model="form.dormitoryFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+              <span class="form-tip" style="margin-left:8px">元/月，不填用全局默认</span>
+            </el-form-item>
+          </el-col>
           <el-col :span="12" v-if="formDialog.isEdit">
             <el-form-item label="变更生效日" prop="effectiveDate">
               <el-date-picker
@@ -356,8 +380,8 @@
       </template>
     </el-dialog>
 
-    <!-- 详情抽屉 -->
-    <el-drawer v-model="detailVisible" size="680px" :title="`员工详情 - ${detailData?.employeeName ?? ''}`">
+    <!-- 详情弹窗 -->
+    <el-dialog v-model="detailVisible" :title="`员工详情 - ${detailData?.employeeName ?? ''}`" width="780px" append-to-body>
       <template v-if="detailData">
         <el-descriptions title="基本信息" :column="2" border>
           <el-descriptions-item label="工号">{{ detailData.employeeCode }}</el-descriptions-item>
@@ -395,21 +419,33 @@
             <el-tag :type="detailData.socialInsured ? 'success' : 'info'" size="small">
               {{ detailData.socialInsured ? '已缴' : '未缴' }}
             </el-tag>
+            <span v-if="detailData.socialInsured && detailData.socialFee" class="detail-amount">
+              {{ detailData.socialFee }} 元/月
+            </span>
           </el-descriptions-item>
           <el-descriptions-item label="公积金">
             <el-tag :type="detailData.housingInsured ? 'success' : 'info'" size="small">
               {{ detailData.housingInsured ? '已缴' : '未缴' }}
             </el-tag>
+            <span v-if="detailData.housingInsured && detailData.housingFund" class="detail-amount">
+              {{ detailData.housingFund }} 元/月
+            </span>
           </el-descriptions-item>
           <el-descriptions-item label="商业保险">
             <el-tag :type="detailData.commercialInsured ? 'success' : 'info'" size="small">
               {{ detailData.commercialInsured ? '已买' : '未买' }}
             </el-tag>
+            <span v-if="detailData.commercialInsured && detailData.commercialFee" class="detail-amount">
+              {{ detailData.commercialFee }} 元/月
+            </span>
           </el-descriptions-item>
           <el-descriptions-item label="宿舍">
             <el-tag :type="detailData.dormitory ? 'success' : 'info'" size="small">
               {{ detailData.dormitory ? '住' : '不住' }}
             </el-tag>
+            <span v-if="detailData.dormitory && detailData.dormitoryFee" class="detail-amount">
+              {{ detailData.dormitoryFee }} 元/月
+            </span>
           </el-descriptions-item>
         </el-descriptions>
 
@@ -430,7 +466,10 @@
           </el-table>
         </div>
       </template>
-    </el-drawer>
+      <template #footer>
+        <el-button @click="detailVisible = false">关 闭</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 对账结果 -->
     <el-dialog v-model="reconcileDialog.visible" title="员工-账户对账结果" width="780px" append-to-body>
@@ -654,7 +693,11 @@ const initForm = (): EmployeeCreateForm => ({
   dormitory: false,
   parttime: false,
   mentorCode: '',
-  remark: ''
+  remark: '',
+  socialFee: undefined,
+  commercialFee: undefined,
+  housingFund: undefined,
+  dormitoryFee: undefined
 });
 
 const form = reactive<EmployeeCreateForm & EmployeeUpdateForm>({ ...initForm() });
@@ -709,6 +752,10 @@ const handleUpdate = async (row: Employee) => {
   form.parttime = !!detail.isPartTime;
   form.mentorCode = detail.mentorCode ?? '';
   form.remark = detail.remark ?? '';
+  form.socialFee = detail.socialFee ?? undefined;
+  form.commercialFee = detail.commercialFee ?? undefined;
+  form.housingFund = detail.housingFund ?? undefined;
+  form.dormitoryFee = detail.dormitoryFee ?? undefined;
   formDialog.isEdit = true;
   formDialog.title = '修改员工';
   formDialog.visible = true;
@@ -969,6 +1016,12 @@ onMounted(() => {
     h4 {
       margin: 0 0 10px;
     }
+  }
+
+  .detail-amount {
+    margin-left: 8px;
+    color: #f56c6c;
+    font-weight: 600;
   }
 
   .reconcile-alert {
