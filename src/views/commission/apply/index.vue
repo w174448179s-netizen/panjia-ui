@@ -166,6 +166,20 @@
       </template>
     </el-dialog>
 
+    <!-- 未发起行：合同业绩明细弹窗（复用合同业绩详情页组件，嵌入模式不跳页） -->
+    <el-dialog v-model="showContractDetail" title="合同业绩明细" width="1100px" top="5vh" append-to-body destroy-on-close>
+      <ContractDetail
+        v-if="showContractDetail && detailContract"
+        embedded
+        :key="`${detailContract.contractNo}-${detailContract.period}`"
+        :contract-no="detailContract.contractNo"
+        :period="detailContract.period"
+      />
+      <template #footer>
+        <el-button @click="showContractDetail = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 批量发起弹窗：录入合同号 → 等待处理完成 → 展示结果 -->
     <el-dialog v-model="showBatchApply" title="批量发起结佣" width="560px" @close="resetBatchApply">
       <div v-if="batchApplyLoading" class="batch-waiting">
@@ -287,7 +301,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Loading } from '@element-plus/icons-vue';
 import { commissionApi, type CommissionContractVO, type BatchResultDTO } from '@/api/panjia/commission';
@@ -300,9 +314,9 @@ import { resolveBizNo } from '@/utils/panjiaBiz';
 import { useUserStore } from '@/store/modules/user';
 import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
 import CommissionApplyDetail from '@/components/WorkflowHandle/details/CommissionApplyDetail.vue';
+import ContractDetail from '@/views/performance/contract/detail.vue';
 
 const route = useRoute();
-const router = useRouter();
 const userStore = useUserStore();
 
 /** 是否可以作废：超管全部可操作，普通用户只能操作自己发起的单据 */
@@ -556,16 +570,21 @@ const cancel = async (row: CommissionContractVO) => {
 
 // 详情
 const showDetail = ref(false);
-// 传给 CommissionApplyDetail 的业务 ID（已发起行才设；未发起行走 router 跳转合同业绩详情）
+// 传给 CommissionApplyDetail 的业务 ID（已发起行才设；未发起行打开合同业绩明细弹窗）
 const detailApplicationId = ref<number | string | null>(null);
 
+// 未发起行：合同业绩明细弹窗（原地查看，不跳页）
+const showContractDetail = ref(false);
+const detailContract = ref<{ contractNo: string; period: string } | null>(null);
+
 const viewDetail = async (row: CommissionContractVO) => {
-  // 未发起：跳合同业绩详情页，看合同金额/累计结佣/业绩构成
+  // 未发起：弹窗查看合同金额/累计结佣/业绩构成（复用合同业绩明细组件）
   if (!row.applicationId) {
-    router.push({
-      name: 'PerformanceContractDetail',
-      query: { contractNo: resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo, period: row.period }
-    }).catch(() => { /* 重复跳转忽略 */ });
+    detailContract.value = {
+      contractNo: resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo,
+      period: row.period,
+    };
+    showContractDetail.value = true;
     return;
   }
   // 已发起：打开结佣申请详情对话框（复用 WorkflowHandle/details/CommissionApplyDetail，与实收详情同款）

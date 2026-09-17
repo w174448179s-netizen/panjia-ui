@@ -1,10 +1,10 @@
 <template>
-  <div class="contract-detail-page">
+  <div class="contract-detail-page" :class="{ embedded }">
     <el-card class="page-card" v-loading="loading">
       <!-- 顶部信息栏 -->
       <div class="detail-header">
         <div class="header-left">
-          <el-button icon="ArrowLeft" @click="goBack">返回</el-button>
+          <el-button v-if="!embedded" icon="ArrowLeft" @click="goBack">返回</el-button>
           <div class="contract-info">
             <span class="info-label">合同号：</span>
             <span class="info-value contract-no">{{ contractNo }}</span>
@@ -105,11 +105,12 @@
       </el-table>
     </el-card>
 
-    <!-- 业绩调整弹窗 -->
+    <!-- 业绩调整弹窗（append-to-body：嵌入父级弹窗时避免被裁切） -->
     <el-dialog
       v-model="adjustDialog.visible"
       title="明细业绩调整"
       width="480px"
+      append-to-body
       destroy-on-close
     >
       <el-form
@@ -188,13 +189,20 @@ import { checkPermi } from '@/utils/permission';
 const router = useRouter();
 const route = useRoute();
 
+// 嵌入模式：由父级弹窗通过 props 传入合同号/期间；独立页面时取路由 query
+const props = defineProps<{
+  embedded?: boolean;
+  contractNo?: string;
+  period?: string;
+}>();
+
 const userStore = useUserStore();
 const isBroker = computed(() => userStore.roles.includes('agent'));
 const canVoid = computed(() => checkPermi(['perf:fact:void']));
 
-// ==================== 路由参数 ====================
-const contractNo = ref(String(route.query.contractNo || ''));
-const period = ref(String(route.query.period || ''));
+// ==================== 路由参数 / 嵌入 props ====================
+const contractNo = ref(String(props.contractNo || route.query.contractNo || ''));
+const period = ref(String(props.period || route.query.period || ''));
 
 // ==================== 数据 ====================
 const loading = ref(false);
@@ -420,6 +428,10 @@ onMounted(async () => {
 <style lang="scss" scoped>
 .contract-detail-page {
   padding: 16px;
+}
+
+.contract-detail-page.embedded {
+  padding: 0;
 }
 
 .page-card {
