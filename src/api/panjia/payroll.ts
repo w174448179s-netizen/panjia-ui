@@ -213,6 +213,8 @@ export interface CommissionTraceItem {
   roleType?: string;
   feeItem?: string;
   amount: number;
+  /** 结佣业绩折算后金额（amount × conversionFactor） */
+  convertedAmount?: number;
   status?: string;
   source?: string;
 }

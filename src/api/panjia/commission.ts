@@ -10,6 +10,10 @@ export interface CommissionAdjust {
   adjustType: string;    // DISCOUNT / DIFF / VOID
   newAmount?: number;
   diffAmount?: number;
+  /** 折算后折后金额（newAmount × 当前生效折算因子，后端按明细 bizType 计算） */
+  convertedNewAmount?: number;
+  /** 折算后差额金额（diffAmount × 当前生效折算因子） */
+  convertedDiffAmount?: number;
   targetPeriod?: string;
   reason: string;
   status: string;        // SUBMITTED / APPROVED / REJECTED / CANCELLED / EXECUTED
@@ -99,10 +103,16 @@ export interface CommissionItemDetail {
   roleName?: string;
   /** 角色占比 */
   shareRatio?: number;
+  /** 业务类型（取折算因子的键） */
+  bizType?: string;
   /** 新签业绩（同 sourceKey 的 PERF_EXPECT 事实金额） */
   expectedAmount?: number;
   /** 结佣业绩 */
   amount: number;
+  /** 新签业绩折算后金额（expectedAmount × 当前生效折算因子） */
+  expectedConvertedAmount?: number;
+  /** 结佣业绩折算后金额（amount × 当前生效折算因子） */
+  convertedAmount?: number;
   feeItem?: string;
   status: string;        // DRAFT / PENDING / APPROVED / REVERSED
 }
@@ -132,7 +142,11 @@ export interface CommissionContractVO {
   propertyAddress?: string;
   businessDate?: string;
   amount: number;
+  /** 结佣业绩折算后金额（amount × 当前生效折算因子） */
+  convertedAmount?: number;
   expectedAmount?: number;   // 应收合计
+  /** 新签业绩折算后金额（expectedAmount × 当前生效折算因子） */
+  expectedConvertedAmount?: number;
   expectedAdjusted?: boolean; // 应收已被调整
   aligned?: boolean;
   currentNode?: string;      // DIRECTOR / FINANCE / null（T-04 后实收==应收时财务节点跳过，流程直接结束）

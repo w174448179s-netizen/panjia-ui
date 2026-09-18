@@ -53,6 +53,8 @@ export interface PerformanceAdjust {
   contractNo?: string;
   originalAmount?: number;    // 调整前原始金额（创建时快照）
   targetAmount?: number;      // 调整后目标金额（用户录入的最终金额）
+  convertedOriginalAmount?: number; // 折算后原始金额（originalAmount × factor）
+  convertedTargetAmount?: number;    // 折算后目标金额（targetAmount × factor）
   targetDeptId?: string;
   targetDeptName?: string;
   reason: string;
@@ -92,6 +94,8 @@ export interface AdjustFactDetailVO {
   expectedAmount?: number;     // 对侧口径金额（应收调整时=实收，实收调整时=应收）
   amount?: number;             // 当前口径金额（调整前的 performance_amount）
   afterAmount?: number;
+  convertedAmount?: number;    // 折算后当前金额（amount × factor）
+  convertedAfterAmount?: number; // 折算后调整后金额（afterAmount × factor）
   deltaAmount?: number;
   target?: boolean;
   factStatus?: string;
@@ -167,6 +171,8 @@ export interface PerformanceManageRow {
   shareRatio?: number;       // 角色占比
   amount: number;            // 业绩金额（调整后，PERF_EXPECT=应收 / PERF_REAL=实收）
   originalAmount: number;    // 原始金额（调整前，未调整时 = amount）
+  convertedAmount?: number;  // 折算后金额（amount × conversionFactor）
+  originalConvertedAmount?: number; // 折算后原始金额（originalAmount × conversionFactor）
   settled: boolean;          // 是否已结算
   settleDate?: string;       // 结算日期
   sourceKey: string;
@@ -229,6 +235,8 @@ export interface PerformanceManageContract {
   businessDate?: string;     // 签约/认购日期
   amount: number;            // 合同金额合计（调整后，PERF_EXPECT=应收 / PERF_REAL=实收）
   originalAmount: number;    // 原始金额合计（调整前，未调整时 = amount）
+  convertedAmount?: number;  // 折算后金额合计（amount × conversionFactor）
+  originalConvertedAmount?: number; // 折算后原始金额合计（originalAmount × conversionFactor）
   employeeCount: number;     // 涉及签约人数
   detailCount: number;       // 明细条数
   unsettledCount: number;    // 未结算条数

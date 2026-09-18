@@ -16,9 +16,11 @@
         <el-descriptions-item label="审批时间">{{ formatDateTime(detail.approveTime) }}</el-descriptions-item>
         <el-descriptions-item label="结佣合计">
           <span class="amount amount-red">¥{{ formatAmount(detail.totalAmount) }}</span>
+          <span class="amount amount-gray" style="margin-left: 8px">折算后 ¥{{ formatAmount(totalConvertedAmount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="应收合计" :span="2">
           ¥{{ formatAmount(detail.expectedAmount) }}
+          <span class="amount amount-gray" style="margin-left: 8px">折算后 ¥{{ formatAmount(totalExpectedConvertedAmount) }}</span>
           <el-tag v-if="detail.expectedAdjusted" type="warning" size="small" effect="plain" style="margin-left: 6px">已调整</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="房源地址" :span="3">{{ detail.propertyAddress || '—' }}</el-descriptions-item>
@@ -56,9 +58,19 @@
               <span class="amount">{{ formatAmount(scope.row.expectedAmount) }}</span>
             </template>
           </el-table-column>
+          <el-table-column label="折算后" align="right" width="120">
+            <template #default="scope">
+              <span class="amount amount-ink">¥{{ formatAmount(scope.row.expectedConvertedAmount) }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="结佣业绩" align="right" width="120">
             <template #default="scope">
               <span class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="折算后" align="right" width="120">
+            <template #default="scope">
+              <span class="amount amount-ink">¥{{ formatAmount(scope.row.convertedAmount) }}</span>
             </template>
           </el-table-column>
           <template #empty>
@@ -71,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { commissionApi, type CommissionApplication, type CommissionItemDetail } from '@/api/panjia/commission';
 import { useEmployeeMap } from '../useEmployeeMap';
 
@@ -83,6 +95,10 @@ const detail = ref<CommissionApplication | null>(null);
 const items = ref<CommissionItemDetail[]>([]);
 
 const { load: loadEmployees, name: employeeName } = useEmployeeMap();
+
+/** 头部「折算后合计」：按明细逐行折算后金额求和，与表格同源，避免合计与明细对不上 */
+const totalConvertedAmount = computed(() => items.value.reduce((s, it) => s + num(it.convertedAmount), 0));
+const totalExpectedConvertedAmount = computed(() => items.value.reduce((s, it) => s + num(it.expectedConvertedAmount), 0));
 
 const num = (v: number | string | null | undefined): number => {
   if (v === undefined || v === null || v === '') return 0;
@@ -153,6 +169,13 @@ onMounted(async () => {
 }
 .amount-red {
   color: #f56c6c;
+}
+.amount-ink {
+  color: #303133;
+}
+.amount-gray {
+  color: #909399;
+  font-weight: 400;
 }
 .detail-table-wrap {
   margin-top: 16px;

@@ -42,7 +42,7 @@
       </div>
       <div v-if="row.commissionIncome" class="trace-action">
         <el-button size="small" type="primary" plain :loading="traceLoading" @click="openTraceDialog">
-          查看结佣明细（¥{{ fmt(row.commissionIncome) }} 提成对应的每笔结佣）
+          查看结佣明细（¥{{ fmt(row.commissionIncome) }} 提成对应的每笔结佣业绩）
         </el-button>
       </div>
     </div>
@@ -78,9 +78,14 @@
       <el-table-column label="角色占比" width="90" align="center">
         <template #default="{ row: it }">{{ it.shareRatio != null ? (Number(it.shareRatio) * 100).toFixed(2) + '%' : '—' }}</template>
       </el-table-column>
-      <el-table-column label="结佣金额" align="right" width="130">
+      <el-table-column label="结佣业绩" align="right" width="130">
         <template #default="{ row: it }">
           <span :class="{ 'deduct-text': Number(it.amount) < 0 }">¥{{ fmt(it.amount) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="折算后" align="right" width="130">
+        <template #default="{ row: it }">
+          <span :class="{ 'deduct-text': Number(it.convertedAmount) < 0 }">¥{{ fmt(it.convertedAmount) }}</span>
         </template>
       </el-table-column>
       <el-table-column label="结算日期" width="110" align="center">
@@ -116,13 +121,16 @@
         <el-table-column label="角色占比" width="90" align="center">
           <template #default="{ row: it }">{{ it.shareRatio != null ? (Number(it.shareRatio) * 100).toFixed(2) + '%' : '—' }}</template>
         </el-table-column>
-        <el-table-column label="新签金额" align="right" width="130">
+        <el-table-column label="新签业绩" align="right" width="130">
           <template #default="{ row: it }">¥{{ fmt(it.amount) }}</template>
+        </el-table-column>
+        <el-table-column label="折算后" align="right" width="130">
+          <template #default="{ row: it }">¥{{ fmt(it.convertedAmount) }}</template>
         </el-table-column>
       </el-table>
     </template>
     <div class="trace-footnote">
-      结佣金额 = 已审批结佣金额；新签金额 = 应收业绩（门店团队成员）；签约/认购时间、房源地址、角色占比由业绩事实 enrich。
+      结佣业绩 = 已审批结佣业绩；新签业绩 = 应收业绩（门店团队成员）；折算后 = 业绩金额 × 当前生效折算因子（折算只作用于新签，结佣是贝壳实收到手值、原样取用，此列仅供对照）；签约/认购时间、房源地址、角色占比由业绩事实 enrich。
     </div>
   </el-dialog>
   </div>
@@ -157,15 +165,15 @@ const INCOME_COLS: ColDef[] = [
   { prop: 'commissionIncome', label: '业绩提成', source: (r) => {
     const rate = Number(r.finalRate) || 0;
     const base = rate > 0 ? Number(r.commissionIncome) / rate : 0;
-    return `结佣计薪业绩 ¥${fmt(base)} × 快照提点 ${(rate * 100).toFixed(1)}% = ¥${fmt(r.commissionIncome)}`;
+    return `结佣业绩 ¥${fmt(base)} × 快照提点 ${(rate * 100).toFixed(1)}% = ¥${fmt(r.commissionIncome)}`;
   } },
   { prop: 'teamIncome', label: '团队提成', source: (r) => {
     const base = Number(r.teamIncome) / 0.1;
-    return `团队新签计薪业绩 ¥${fmt(base)} × 10% = ¥${fmt(r.teamIncome)}`;
+    return `团队新签业绩 ¥${fmt(base)} × 10% = ¥${fmt(r.teamIncome)}`;
   } },
   { prop: 'personalNewsignIncome', label: '个人新签', source: (r) => {
     const base = Number(r.personalNewsignIncome) / 0.7;
-    return `本人新签计薪业绩 ¥${fmt(base)} × 70% = ¥${fmt(r.personalNewsignIncome)}`;
+    return `本人新签业绩 ¥${fmt(base)} × 70% = ¥${fmt(r.personalNewsignIncome)}`;
   } },
   { prop: 'storeIncome', label: '门店提成', source: '各门店新签业绩 × 跳点比例' },
   { prop: 'baseSalary', label: '底薪/保底', source: (r) => `职级规则快照：¥${fmt(r.baseSalary)}` },
@@ -242,13 +250,15 @@ const openTraceDialog = async () => {
   }
 };
 
-/** 弹窗合计行：结佣金额合计 */
+/** 弹窗合计行：结佣业绩/折算后合计 */
 const traceSummary = ({ columns, data }: any) => {
   const sums: string[] = [];
   columns.forEach((_col: any, idx: number) => {
     if (idx === 0) { sums[idx] = '合计'; return; }
     if (idx === 6) {
       sums[idx] = `¥${fmt(data.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0))}`;
+    } else if (idx === 7) {
+      sums[idx] = `¥${fmt(data.reduce((s: number, r: any) => s + (Number(r.convertedAmount) || 0), 0))}`;
     } else {
       sums[idx] = '';
     }
@@ -263,6 +273,8 @@ const teamSummary = ({ columns, data }: any) => {
     if (idx === 0) { sums[idx] = '合计'; return; }
     if (idx === 7) {
       sums[idx] = `¥${fmt(data.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0))}`;
+    } else if (idx === 8) {
+      sums[idx] = `¥${fmt(data.reduce((s: number, r: any) => s + (Number(r.convertedAmount) || 0), 0))}`;
     } else {
       sums[idx] = '';
     }
@@ -289,6 +301,7 @@ const teamSummary = ({ columns, data }: any) => {
 .net-val { font-weight: 700; color: #0a7d43; font-size: 15px; }
 .muted { color: #909399; font-size: 12px; white-space: normal; }
 .deduct-text { color: #c0392b; }
+.amount-ink { color: #595959; }
 
 .trace-action { margin-top: 8px; }
 .trace-section-title { font-weight: 600; font-size: 13px; color: #303133; margin-bottom: 8px; }

@@ -66,6 +66,13 @@
             <span v-else>—</span>
           </template>
         </el-table-column>
+        <el-table-column label="折算后" width="130" align="right">
+          <template #default="{ row }">
+            <span v-if="row.adjustType === 'DISCOUNT'" class="text-ink">¥{{ fmt(row.convertedNewAmount) }}</span>
+            <span v-else-if="row.adjustType === 'DIFF'" class="text-ink">¥{{ fmt(row.convertedDiffAmount) }}</span>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="目标月" prop="targetPeriod" width="100">
           <template #default="{ row }">{{ row.targetPeriod || '—' }}</template>
         </el-table-column>
@@ -150,7 +157,13 @@
         <el-descriptions-item label="期间">{{ detailData.period || '—' }}</el-descriptions-item>
         <el-descriptions-item label="目标月">{{ detailData.targetPeriod || '—' }}</el-descriptions-item>
         <el-descriptions-item v-if="detailData.adjustType === 'DISCOUNT'" label="折后金额">¥{{ fmt(detailData.newAmount) }}</el-descriptions-item>
+        <el-descriptions-item v-if="detailData.adjustType === 'DISCOUNT'" label="折算后金额">
+          <span class="text-ink">¥{{ fmt(detailData.convertedNewAmount) }}</span>
+        </el-descriptions-item>
         <el-descriptions-item v-if="detailData.adjustType === 'DIFF'" label="差额金额">¥{{ fmt(detailData.diffAmount) }}</el-descriptions-item>
+        <el-descriptions-item v-if="detailData.adjustType === 'DIFF'" label="折算后金额">
+          <span class="text-ink">¥{{ fmt(detailData.convertedDiffAmount) }}</span>
+        </el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="statusTagType(detailData.status)" size="small">{{ statusLabel(detailData.status) }}</el-tag>
         </el-descriptions-item>
@@ -367,7 +380,7 @@ const openFromWorkflow = async () => {
 };
 
 // 页签缓存复用场景下补开单据（详见 useWorkflowRouteOpen 注释）
-useWorkflowRouteOpen('/performance/adjust', openFromWorkflow);
+useWorkflowRouteOpen('/commission/adjust', openFromWorkflow);
 
 onMounted(() => {
   getList();
@@ -388,4 +401,9 @@ onMounted(() => {
 }
 .text-success { color: var(--el-color-success); font-weight: 600; }
 .text-danger { color: var(--el-color-danger); font-weight: 600; }
+.text-ink {
+  color: #303133;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
 </style>

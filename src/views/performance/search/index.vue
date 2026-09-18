@@ -83,9 +83,19 @@
               <span :class="{ 'amount-gray': row.expectOriginalAmount === 0 }">{{ formatMoney(row.expectOriginalAmount) }}</span>
             </template>
           </el-table-column>
+          <el-table-column label="折算后" align="right" width="120">
+            <template #default="{ row }">
+              <span class="amount-ink">{{ formatMoney(row.expectConvertedAmount) }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="实收业绩" align="right" width="130">
             <template #default="{ row }">
               <span class="amount-red">{{ formatMoney(row.realAmount) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="折算后" align="right" width="120">
+            <template #default="{ row }">
+              <span class="amount-ink">{{ formatMoney(row.realConvertedAmount) }}</span>
             </template>
           </el-table-column>
 
@@ -95,9 +105,15 @@
               <span v-else class="amount-gray">—</span>
             </template>
           </el-table-column>
-          <el-table-column label="调整后业绩" align="right" width="130">
+          <el-table-column label="调整业绩" align="right" width="130">
             <template #default="{ row }">
               <span v-if="row.hasAdjust" class="amount-red">{{ formatMoney(row.expectAmount) }}</span>
+              <span v-else class="amount-gray">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="折算后" align="right" width="120">
+            <template #default="{ row }">
+              <span v-if="row.hasAdjust" class="amount-ink">{{ formatMoney(row.adjustedConvertedAmount) }}</span>
               <span v-else class="amount-gray">—</span>
             </template>
           </el-table-column>
@@ -139,6 +155,12 @@
           <el-table-column label="结佣业绩" align="right" width="130">
             <template #default="{ row }">
               <span v-if="row.commissionAmount != null" class="amount-red">{{ formatMoney(row.commissionAmount) }}</span>
+              <span v-else class="amount-gray">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="折算后" align="right" width="120">
+            <template #default="{ row }">
+              <span v-if="row.commissionConvertedAmount != null" class="amount-ink">{{ formatMoney(row.commissionConvertedAmount) }}</span>
               <span v-else class="amount-gray">—</span>
             </template>
           </el-table-column>
@@ -185,16 +207,19 @@
         <el-descriptions-item label="物业地址" :span="3">{{ detailDialog.row.propertyAddress || '—' }}</el-descriptions-item>
         <el-descriptions-item label="签约时间">{{ formatDate(detailDialog.row.signDate) }}</el-descriptions-item>
         <el-descriptions-item label="最近期间">{{ detailDialog.row.period }}</el-descriptions-item>
-        <el-descriptions-item label="新签业绩（应收）">
+        <el-descriptions-item label="新签业绩">
           <span class="amount-red">{{ formatMoney(detailDialog.row.expectOriginalAmount) }}</span>
+          <span class="amount-gray" style="margin-left: 8px">折算后 {{ formatMoney(detailDialog.row.expectConvertedAmount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="实收业绩">
           <span class="amount-red">{{ formatMoney(detailDialog.row.realAmount) }}</span>
+          <span class="amount-gray" style="margin-left: 8px">折算后 {{ formatMoney(detailDialog.row.realConvertedAmount) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="调整后业绩">
+        <el-descriptions-item label="调整业绩">
           <span :class="detailDialog.row.hasAdjust ? 'amount-red' : 'amount-gray'">
             {{ detailDialog.row.hasAdjust ? formatMoney(detailDialog.row.expectAmount) : '—' }}
           </span>
+          <span v-if="detailDialog.row.hasAdjust" class="amount-gray" style="margin-left: 8px">折算后 {{ formatMoney(detailDialog.row.adjustedConvertedAmount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="调整单状态">
           <el-tag v-if="detailDialog.row.adjustStatus" :type="adjustStatusTagType(detailDialog.row.adjustStatus)" size="small">
@@ -224,6 +249,7 @@
         <el-descriptions-item label="结佣业绩">
           <span v-if="detailDialog.row.commissionAmount != null" class="amount-red">{{ formatMoney(detailDialog.row.commissionAmount) }}</span>
           <span v-else class="amount-gray">—</span>
+          <span v-if="detailDialog.row.commissionConvertedAmount != null" class="amount-gray" style="margin-left: 8px">折算后 {{ formatMoney(detailDialog.row.commissionConvertedAmount) }}</span>
         </el-descriptions-item>
       </el-descriptions>
 
@@ -235,12 +261,15 @@
         </span>
         <span class="summary-amount">
           新签业绩合计：<b class="amount-red">{{ formatMoney(detailSummary.totalExpectOriginal) }}</b>
+          <span class="amount-gray" style="margin-left: 4px">折算后 {{ formatMoney(detailSummary.totalExpectConverted) }}</span>
           <template v-if="detailSummary.hasAdjustRow">
             <span class="summary-sep">|</span>
-            调整后业绩合计：<b class="amount-red">{{ formatMoney(detailSummary.totalExpect) }}</b>
+            调整业绩合计：<b class="amount-red">{{ formatMoney(detailSummary.totalExpect) }}</b>
+            <span class="amount-gray" style="margin-left: 4px">折算后 {{ formatMoney(detailSummary.totalExpectConv) }}</span>
           </template>
           <span class="summary-sep">|</span>
           实收合计：<b class="amount-red">{{ formatMoney(detailSummary.totalReal) }}</b>
+          <span class="amount-gray" style="margin-left: 4px">折算后 {{ formatMoney(detailSummary.totalRealConverted) }}</span>
         </span>
       </div>
 
@@ -270,10 +299,23 @@
             <span class="amount-red">{{ formatMoney(row.originalExpectAmount ?? row.expectAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="调整后业绩" align="right" width="130">
+        <el-table-column label="折算后" align="right" width="120">
+          <template #default="{ row }">
+            <span class="amount-ink">{{ formatMoney(row.originalExpectConvertedAmount ?? row.expectConvertedAmount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="调整业绩" align="right" width="130">
           <template #default="{ row }">
             <span v-if="Number(row.expectAmount) !== Number(row.originalExpectAmount ?? row.expectAmount)" class="amount-red">
               {{ formatMoney(row.expectAmount) }}
+            </span>
+            <span v-else class="amount-gray">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="折算后" align="right" width="120">
+          <template #default="{ row }">
+            <span v-if="Number(row.expectAmount) !== Number(row.originalExpectAmount ?? row.expectAmount)" class="amount-ink">
+              {{ formatMoney(row.expectConvertedAmount) }}
             </span>
             <span v-else class="amount-gray">—</span>
           </template>
@@ -282,6 +324,11 @@
           <template #default="{ row }">
             <span :class="row.realAmount < 0 ? 'amount-red' : 'amount-ink'">{{ formatMoney(row.realAmount) }}</span>
             <el-tag v-if="row.realAmount < 0" type="danger" size="small" effect="plain" class="adjust-tag">红冲</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="折算后" align="right" width="120">
+          <template #default="{ row }">
+            <span :class="row.realAmount < 0 ? 'amount-red' : 'amount-ink'">{{ formatMoney(row.realConvertedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="结算" align="center" width="120">
@@ -468,11 +515,13 @@ const detailSummary = computed(() => {
   const list = detailList.value;
   return {
     employeeCount: new Set(list.map((r) => r.employeeId)).size,
-    // 新签业绩合计取调整前（未调整时与当前一致）；有调整的行才计入调整后合计
     totalExpectOriginal: list.reduce((s, r) => s + Number(r.originalExpectAmount ?? r.expectAmount ?? 0), 0),
+    totalExpectConverted: list.reduce((s, r) => s + Number(r.originalExpectConvertedAmount ?? r.expectConvertedAmount ?? 0), 0),
     totalExpect: list.reduce((s, r) => s + Number(r.expectAmount || 0), 0),
+    totalExpectConv: list.reduce((s, r) => s + Number(r.expectConvertedAmount ?? 0), 0),
     hasAdjustRow: list.some((r) => Number(r.expectAmount) !== Number(r.originalExpectAmount ?? r.expectAmount)),
     totalReal: list.reduce((s, r) => s + Number(r.realAmount || 0), 0),
+    totalRealConverted: list.reduce((s, r) => s + Number(r.realConvertedAmount ?? 0), 0),
   };
 });
 

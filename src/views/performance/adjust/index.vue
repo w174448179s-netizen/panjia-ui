@@ -139,11 +139,21 @@
               <span class="origin-amount">{{ formatOrigin(scope.row.originalAmount) }}</span>
             </template>
           </el-table-column>
+          <el-table-column label="折算后" align="right" width="130">
+            <template #default="scope">
+              <span class="amount-ink">{{ formatOrigin(scope.row.convertedOriginalAmount) }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="调整后业绩" align="right" width="140">
             <template #default="scope">
               <span class="amount-red">
                 {{ formatOrigin(scope.row.targetAmount) }}
               </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="折算后" align="right" width="130">
+            <template #default="scope">
+              <span class="amount-ink">{{ formatOrigin(scope.row.convertedTargetAmount) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="原因" align="center" prop="reason" min-width="180" show-overflow-tooltip />
@@ -676,6 +686,12 @@ onMounted(() => {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: var(--el-text-color-primary);
+  }
+
+  .amount-ink {
+    color: #303133;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
   }
 
   .transfer-arrow {

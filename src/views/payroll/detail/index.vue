@@ -275,13 +275,13 @@ const viewDetails = computed(() => {
 interface ColDef { prop: string; label: string; width: number; roles?: string[]; source: string }
 
 const INCOME_COLS: ColDef[] = [
-  { prop: 'commissionIncome', label: '业绩提成', width: 110, source: '结佣计薪业绩 × 快照提点' },
-  { prop: 'teamIncome', label: '团队提成', width: 105, roles: ['MANAGER'], source: '团队新签计薪业绩 × 10%' },
-  { prop: 'personalNewsignIncome', label: '个人新签', width: 105, roles: ['MANAGER'], source: '本人新签计薪业绩 × 70%' },
+  { prop: 'commissionIncome', label: '业绩提成', width: 110, source: '结佣业绩 × 快照提点' },
+  { prop: 'teamIncome', label: '团队提成', width: 105, roles: ['MANAGER'], source: '团队新签业绩 × 10%' },
+  { prop: 'personalNewsignIncome', label: '个人新签', width: 105, roles: ['MANAGER'], source: '本人新签业绩 × 70%' },
   { prop: 'storeIncome', label: '门店提成', width: 105, roles: ['DIRECTOR'], source: '各门店新签业绩 × 跳点比例' },
   { prop: 'baseSalary', label: '底薪/保底', width: 100, source: '职级规则配置（历史快照）' },
   { prop: 'guaranteeFill', label: '保底补足', width: 100, roles: ['MANAGER'], source: 'MAX(保底, 团队+个人新签) 补足部分' },
-  { prop: 'mentorBonus', label: '招聘奖励', width: 95, source: '师徒关系档案：徒弟结佣 × 2%' },
+  { prop: 'mentorBonus', label: '招聘奖励', width: 95, source: '师徒关系档案：徒弟结佣业绩 × 2%' },
   { prop: 'bonus', label: '奖金', width: 90, source: '奖金审批单' },
   { prop: 'otherIncome', label: '其他收入', width: 95, source: '收入录入记录（补贴/补发等）' },
 ];

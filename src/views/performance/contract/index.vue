@@ -95,9 +95,20 @@
             <span class="amount-original">{{ formatAmount(scope.row.originalAmount) }}</span>
           </template>
         </el-table-column>
+        <el-table-column label="折算后" align="right" width="110" fixed="left">
+          <template #default="scope">
+            <span class="amount amount-ink">{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="调整后业绩" align="right" width="110" fixed="left">
           <template #default="scope">
             <span v-if="scope.row.amount !== scope.row.originalAmount" class="amount amount-contract">{{ formatAmount(scope.row.amount) }}</span>
+            <span v-else class="amount-none">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="折算后" align="right" width="110" fixed="left">
+          <template #default="scope">
+            <span v-if="scope.row.amount !== scope.row.originalAmount" class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
             <span v-else class="amount-none">—</span>
           </template>
         </el-table-column>
@@ -252,10 +263,16 @@
         <span class="summary-amount">
           新签业绩合计：
           <b :class="{ 'amount-negative': detailSummary.totalOriginalAmount < 0 }">{{ formatAmount(detailSummary.totalOriginalAmount) }}</b>
+          <span class="summary-sep">|</span>
+          折算后：
+          <b :class="{ 'amount-negative': detailSummary.totalOriginalConvertedAmount < 0 }">{{ formatAmount(detailSummary.totalOriginalConvertedAmount) }}</b>
           <template v-if="detailSummary.hasAdjustRow">
             <span class="summary-sep">|</span>
             调整后业绩合计：
             <b :class="{ 'amount-negative': detailSummary.totalAmount < 0 }">{{ formatAmount(detailSummary.totalAmount) }}</b>
+            <span class="summary-sep">|</span>
+            折算后：
+            <b :class="{ 'amount-negative': detailSummary.totalConvertedAmount < 0 }">{{ formatAmount(detailSummary.totalConvertedAmount) }}</b>
           </template>
         </span>
       </div>
@@ -290,6 +307,11 @@
             <span class="amount-original">{{ formatAmount(scope.row.originalAmount) }}</span>
           </template>
         </el-table-column>
+        <el-table-column label="折算后" align="right" width="120">
+          <template #default="scope">
+            <span class="amount amount-ink">{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="调整后业绩" align="right" width="130">
           <template #default="scope">
             <span v-if="scope.row.amount !== scope.row.originalAmount" class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
@@ -297,6 +319,12 @@
             <div class="amount-tags">
               <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
             </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="折算后" align="right" width="120">
+          <template #default="scope">
+            <span v-if="scope.row.amount !== scope.row.originalAmount" class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
+            <span v-else class="amount-none">—</span>
           </template>
         </el-table-column>
         <el-table-column label="状态" align="center" width="80">
@@ -483,6 +511,8 @@ const detailSummary = computed(() => {
     employeeCount: new Set(list.map(r => r.employeeId)).size,
     totalAmount: list.reduce((sum, r) => sum + num(r.amount), 0),
     totalOriginalAmount: list.reduce((sum, r) => sum + num(r.originalAmount), 0),
+    totalConvertedAmount: list.reduce((sum, r) => sum + num(r.convertedAmount), 0),
+    totalOriginalConvertedAmount: list.reduce((sum, r) => sum + num(r.originalConvertedAmount), 0),
     hasAdjustRow: list.some(r => num(r.amount) !== num(r.originalAmount)),
   };
 });
@@ -1000,6 +1030,11 @@ onMounted(async () => {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   color: #909399;
+}
+.amount-ink {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: #303133;
 }
 .amount-red {
   font-variant-numeric: tabular-nums;

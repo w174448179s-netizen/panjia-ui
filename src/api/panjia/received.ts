@@ -18,6 +18,10 @@ export interface ReceivedApply {
   expectedAdjusted?: boolean;
   /** 提交时快照应收（展示「调整前」值） */
   originalExpectedAmount?: number;
+  /** 新签业绩折算后金额（expectedAmount × 当前生效折算因子） */
+  expectedConvertedAmount?: number;
+  /** 实收业绩折算后金额（receivedAmount × 当前生效折算因子） */
+  receivedConvertedAmount?: number;
   itemCount: number;
   /** 业务类型（列表接口按 (期间,合同号) 从 ACTIVE PERF_REAL 事实回填） */
   bizType?: string;
@@ -54,6 +58,10 @@ export interface ReceivedFact {
   expectedAdjusted?: boolean;
   /** 实收业绩（PERF_REAL 事实金额） */
   amount: number;
+  /** 新签业绩折算后金额（expectedAmount × 当前生效折算因子） */
+  expectedConvertedAmount?: number;
+  /** 实收业绩折算后金额（amount × 当前生效折算因子） */
+  convertedAmount?: number;
 }
 
 export interface ReceivedQuery extends PageQuery {
