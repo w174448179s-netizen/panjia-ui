@@ -178,25 +178,16 @@
       </div>
     </el-card>
 
-    <!-- 详情弹窗：复用 WorkflowHandle/details/CommissionApplyDetail（与实收详情同款容器、字段、样式） -->
-    <el-dialog v-model="showDetail" title="结佣明细详情" width="1100px" top="5vh" append-to-body destroy-on-close>
-      <CommissionApplyDetail v-if="showDetail" :business-id="detailApplicationId!" />
-      <template #footer>
-        <el-button @click="showDetail = false">关闭</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 未发起行：合同业绩明细弹窗（复用合同业绩详情页组件，嵌入模式不跳页） -->
-    <el-dialog v-model="showContractDetail" title="合同业绩明细" width="1100px" top="5vh" append-to-body destroy-on-close>
-      <ContractDetail
-        v-if="showContractDetail && detailContract"
-        embedded
-        :key="`${detailContract.contractNo}-${detailContract.period}`"
-        :contract-no="detailContract.contractNo"
-        :period="detailContract.period"
+    <!-- 详情弹窗：统一复用 CommissionApplyDetail——已发起显示结佣审批详情，未发起以同款骨架展示业绩构成 -->
+    <el-dialog v-model="showDetail" title="结佣详情" width="1100px" top="5vh" append-to-body destroy-on-close>
+      <CommissionApplyDetail
+        v-if="showDetail"
+        :business-id="detailApplicationId ?? undefined"
+        :summary="detailSummary"
+        :biz-no="detailBizNo ?? undefined"
       />
       <template #footer>
-        <el-button @click="showContractDetail = false">关闭</el-button>
+        <el-button @click="showDetail = false">关闭</el-button>
       </template>
     </el-dialog>
 
@@ -334,7 +325,6 @@ import { resolveBizNo, findDeptSubtree } from '@/utils/panjiaBiz';
 import { useUserStore } from '@/store/modules/user';
 import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
 import CommissionApplyDetail from '@/components/WorkflowHandle/details/CommissionApplyDetail.vue';
-import ContractDetail from '@/views/performance/contract/detail.vue';
 
 const route = useRoute();
 const userStore = useUserStore();
@@ -620,27 +610,20 @@ const cancel = async (row: CommissionContractVO) => {
   } catch { /* 拦截器处理 */ }
 };
 
-// 详情
+// 详情：统一入口——已发起行显示结佣审批详情，未发起行以同款骨架展示业绩构成
 const showDetail = ref(false);
-// 传给 CommissionApplyDetail 的业务 ID（已发起行才设；未发起行打开合同业绩明细弹窗）
+// 传给 CommissionApplyDetail 的业务 ID（已发起行才设）
 const detailApplicationId = ref<number | string | null>(null);
+// 未发起行的合同摘要 + 查询号（合同号，一手房无合同号时为订单号）
+const detailSummary = ref<CommissionContractVO | null>(null);
+const detailBizNo = ref<string | null>(null);
 
-// 未发起行：合同业绩明细弹窗（原地查看，不跳页）
-const showContractDetail = ref(false);
-const detailContract = ref<{ contractNo: string; period: string } | null>(null);
-
-const viewDetail = async (row: CommissionContractVO) => {
-  // 未发起：弹窗查看合同金额/累计结佣/业绩构成（复用合同业绩明细组件）
-  if (!row.applicationId) {
-    detailContract.value = {
-      contractNo: resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo,
-      period: row.period,
-    };
-    showContractDetail.value = true;
-    return;
-  }
-  // 已发起：打开结佣申请详情对话框（复用 WorkflowHandle/details/CommissionApplyDetail，与实收详情同款）
-  detailApplicationId.value = row.applicationId;
+const viewDetail = (row: CommissionContractVO) => {
+  detailSummary.value = row.applicationId ? null : row;
+  detailBizNo.value = row.applicationId
+    ? null
+    : (resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || null);
+  detailApplicationId.value = row.applicationId ?? null;
   showDetail.value = true;
 };
 
