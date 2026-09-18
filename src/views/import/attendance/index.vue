@@ -25,7 +25,7 @@
                 ref="uploadRef"
                 :show-file-list="false"
                 :auto-upload="true"
-                accept=".xlsx,.xls,.csv"
+                accept=".xlsx,.xls"
                 :before-upload="beforeUpload"
                 :http-request="handleUpload"
               >
@@ -39,9 +39,14 @@
                   上传文件
                 </el-button>
               </el-upload>
-              <el-button icon="Download" @click="handleDownloadTemplate">下载模板</el-button>
             </el-form-item>
           </el-form>
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            title="请直接上传钉钉考勤后台导出的《月度汇总》Excel 原文件（无需下载模板改写），归属月选择文件统计日期所在月份；员工工号需与员工档案一致。"
+          />
         </div>
 
         <!-- 上传结果 -->
@@ -108,7 +113,7 @@
                 </template>
                 <!-- 终态（FAILED）：保留"问题"排查失败原因 + "下载"留档 -->
                 <template v-else-if="scope.row.status === 'FAILED'">
-                  <el-tooltip v-if="hasIssues(scope.row)" content="查看失败问题清单" placement="top">
+                  <el-tooltip v-if="hasIssues(scope.row as ImportBatch)" content="查看失败问题清单" placement="top">
                     <a class="action-btn" @click="openIssues(scope.row.id, scope.row.batchNo)">
                       <el-icon><Warning /></el-icon>
                     </a>
@@ -126,7 +131,7 @@
                 </template>
                 <!-- 中间态：按状态机判定 -->
                 <template v-else>
-                  <el-tooltip v-if="hasIssues(scope.row)" content="查看问题清单" placement="top">
+                  <el-tooltip v-if="hasIssues(scope.row as ImportBatch)" content="查看问题清单" placement="top">
                     <a class="action-btn" @click="openIssues(scope.row.id, scope.row.batchNo)">
                       <el-icon><Warning /></el-icon>
                     </a>
@@ -226,14 +231,10 @@ interface UploadResult {
 }
 const uploadResult = ref<UploadResult | null>(null);
 
-const handleDownloadTemplate = () => {
-  importApi.downloadTemplate('ATTENDANCE', '考勤导入模板.xlsx');
-};
-
 const beforeUpload = (file: File): boolean => {
-  const ok = /\.(xlsx|xls|csv)$/i.test(file.name);
+  const ok = /\.(xlsx|xls)$/i.test(file.name);
   if (!ok) {
-    modal.msgWarning('仅支持 .xlsx / .xls / .csv 格式文件');
+    modal.msgWarning('仅支持钉钉导出的 .xlsx / .xls 格式文件');
     return false;
   }
   return true;
@@ -379,6 +380,22 @@ const handleArchive = async (row: ImportBatch) => {
     await getList();
   } finally {
     actingId.value = '';
+  }
+};
+
+// ==================== 下载原文件 ====================
+const rowDownloadingId = ref<string>('');
+
+const handleDownloadFile = async (row: ImportBatch) => {
+  rowDownloadingId.value = row.id;
+  try {
+    const fileName = `${row.batchNo}_${row.fileName ?? '原始文件'}`;
+    await importApi.downloadOriginalFile(row.id, fileName);
+    modal.msgSuccess('已开始下载原文件');
+  } catch (e: any) {
+    modal.msgError(e?.message || '原文件下载失败');
+  } finally {
+    rowDownloadingId.value = '';
   }
 };
 
