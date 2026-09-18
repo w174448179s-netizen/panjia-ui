@@ -26,18 +26,24 @@
           <b>{{ detailList.length }}</b> 条明细
         </span>
         <span class="summary-amount">
-          新签业绩合计：
-          <b :class="{ 'amount-negative': totalOriginalAmount < 0 }">{{ formatAmount(totalOriginalAmount) }}</b>
-          <span class="summary-sep">|</span>
-          折算后：
-          <b :class="{ 'amount-negative': totalOriginalConvertedAmount < 0 }">{{ formatAmount(totalOriginalConvertedAmount) }}</b>
+          <!-- 存在已调整明细时，合计按「原合计 → 调整后合计」展示，与明细列同形式 -->
           <template v-if="hasAdjustRow">
-            <span class="summary-sep">|</span>
-            调整后业绩合计：
+            新签业绩合计：
+            <b class="summary-struck">{{ formatAmount(totalOriginalAmount) }}</b>
+            <span class="summary-arrow">→</span>
             <b :class="{ 'amount-negative': totalAmount < 0 }">{{ formatAmount(totalAmount) }}</b>
             <span class="summary-sep">|</span>
             折算后：
+            <b class="summary-struck">{{ formatAmount(totalOriginalConvertedAmount) }}</b>
+            <span class="summary-arrow">→</span>
             <b :class="{ 'amount-negative': totalConvertedAmount < 0 }">{{ formatAmount(totalConvertedAmount) }}</b>
+          </template>
+          <template v-else>
+            新签业绩合计：
+            <b :class="{ 'amount-negative': totalOriginalAmount < 0 }">{{ formatAmount(totalOriginalAmount) }}</b>
+            <span class="summary-sep">|</span>
+            折算后：
+            <b :class="{ 'amount-negative': totalOriginalConvertedAmount < 0 }">{{ formatAmount(totalOriginalConvertedAmount) }}</b>
           </template>
         </span>
       </div>
@@ -67,29 +73,26 @@
         <el-table-column label="角色占比" align="center" width="90">
           <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
         </el-table-column>
-        <el-table-column label="新签业绩" align="right" width="120">
+        <!-- 新签业绩：已调整时在原值后追加「→ 调整后业绩」，未调整不展示调整后值 -->
+        <el-table-column label="新签业绩" align="right" width="200">
           <template #default="scope">
-            <span class="amount-original">{{ formatAmount(scope.row.originalAmount) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="折算后" align="right" width="120">
-          <template #default="scope">
-            <span class="amount amount-ink">{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="调整后业绩" align="right" width="130">
-          <template #default="scope">
-            <span v-if="scope.row.amount !== scope.row.originalAmount" class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
-            <span v-else class="amount-none">—</span>
-            <div class="amount-tags">
+            <template v-if="isAdjusted(scope.row)">
+              <span class="amount-strike">{{ formatAmount(scope.row.originalAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
               <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
-            </div>
+            </template>
+            <span v-else class="amount-original">{{ formatAmount(scope.row.originalAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="折算后" align="right" width="120">
+        <el-table-column label="折算后" align="right" width="180">
           <template #default="scope">
-            <span v-if="scope.row.amount !== scope.row.originalAmount" class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
-            <span v-else class="amount-none">—</span>
+            <template v-if="isAdjusted(scope.row)">
+              <span class="amount-strike">{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
+            </template>
+            <span v-else class="amount amount-ink">{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="状态" align="center" width="80">
@@ -243,7 +246,7 @@ const totalAmount = computed(() => activeList.value.reduce((sum, r) => sum + num
 const totalOriginalAmount = computed(() => activeList.value.reduce((sum, r) => sum + num(r.originalAmount), 0));
 const totalConvertedAmount = computed(() => activeList.value.reduce((sum, r) => sum + num(r.convertedAmount), 0));
 const totalOriginalConvertedAmount = computed(() => activeList.value.reduce((sum, r) => sum + num(r.originalConvertedAmount), 0));
-// 有调整的行才显示「调整后业绩」与对应合计，未调整时保持 — 避免歧义
+// 存在已调整的行时，合计与明细列均按「原值 → 调整后」展示；未调整时不展示调整后值
 const hasAdjustRow = computed(() => activeList.value.some(r => num(r.amount) !== num(r.originalAmount)));
 
 // ==================== 工具 ====================
@@ -252,6 +255,14 @@ const num = (v: number | string | undefined | null): number => {
   const n = Number(v);
   return Number.isNaN(n) ? 0 : n;
 };
+
+/**
+ * 是否已调整：调整后金额与原值不等即为已调整。
+ * 统一走 num() 做数值比较（避免后端 number/string 混用导致的误判），
+ * 与汇总条 hasAdjustRow 同口径 —— 未调整的行不展示「调整后」值。
+ */
+const isAdjusted = (row: { amount?: number | string | null; originalAmount?: number | string | null }): boolean =>
+  num(row.amount) !== num(row.originalAmount);
 
 const formatAmount = (val: number | string | undefined | null): string => {
   if (val === undefined || val === null || val === '') return '—';
@@ -551,6 +562,17 @@ onMounted(async () => {
     .amount-negative {
       color: #67c23a;
     }
+
+    /* 被调整掉的原合计：置灰 + 删除线，与明细列「原值 → 调整后」同形式 */
+    b.summary-struck {
+      color: #c0c4cc;
+      font-size: 14px;
+      text-decoration: line-through;
+    }
+    .summary-arrow {
+      color: #c0c4cc;
+      margin: 0 4px;
+    }
   }
   .summary-sep {
     color: #dcdfe6;
@@ -595,18 +617,19 @@ onMounted(async () => {
     color: #c0c4cc;
     font-size: 13px;
   }
-  .amount-redink {
-    color: #f56c6c;
-  }
-  .amount-none {
+  /* 「原值 → 调整后」：被调整掉的原值置灰加删除线（同实收详情「应收合计」） */
+  .amount-strike {
     color: #c0c4cc;
+    font-size: 13px;
+    text-decoration: line-through;
     font-variant-numeric: tabular-nums;
   }
-  .amount-tags {
-    display: flex;
-    gap: 4px;
-    margin-top: 2px;
-    justify-content: flex-end;
+  .amount-arrow {
+    margin: 0 4px;
+    color: #c0c4cc;
+  }
+  .amount-redink {
+    color: #f56c6c;
   }
   .redink-tag {
     margin-left: 0;
