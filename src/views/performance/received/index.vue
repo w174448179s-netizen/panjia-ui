@@ -128,12 +128,12 @@
         <el-table-column label="发起人" align="center" width="100">
           <template #default="{ row }">{{ applicantName(row.applicantName, row.applicantId) }}</template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="260" fixed="right">
+        <el-table-column label="操作" align="center" width="170" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
               <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
               <el-button v-if="row.status === 'SUBMITTED' && checkPermi(['perf:received:approve'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.id)">审批</el-button>
-              <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重新提交</el-button>
+              <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重提</el-button>
               <el-button v-if="(row.status === 'DRAFT' || row.status === 'SUBMITTED') && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
             </div>
           </template>
@@ -227,6 +227,16 @@
           <el-table-column label="角色占比" align="center" width="90">
             <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
           </el-table-column>
+          <el-table-column label="实收业绩" align="right" width="120">
+            <template #default="scope">
+              <span class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="折算后" align="right" width="120">
+            <template #default="scope">
+              <span class="amount amount-ink">¥{{ formatAmount(scope.row.convertedAmount) }}</span>
+            </template>
+          </el-table-column>
           <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值 -->
           <el-table-column label="新签业绩" align="right" width="200">
             <template #default="scope">
@@ -246,16 +256,6 @@
                 <span class="amount amount-ink">¥{{ formatAmount(scope.row.expectedConvertedAmount) }}</span>
               </template>
               <span v-else class="amount amount-ink">¥{{ formatAmount(scope.row.expectedConvertedAmount) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="实收业绩" align="right" width="120">
-            <template #default="scope">
-              <span class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="折算后" align="right" width="120">
-            <template #default="scope">
-              <span class="amount amount-ink">¥{{ formatAmount(scope.row.convertedAmount) }}</span>
             </template>
           </el-table-column>
           <template #empty>
@@ -576,7 +576,7 @@ const cancel = async (row: ReceivedApply) => {
 const resubmit = async (row: ReceivedApply) => {
   try {
     await receivedApi.resubmit(row.id);
-    ElMessage.success('已重新提交');
+    ElMessage.success('已重提');
     getList();
   } catch { /* 拦截器处理 */ }
 };

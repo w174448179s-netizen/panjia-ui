@@ -136,7 +136,7 @@
         <el-table-column label="操作" align="center" width="200" fixed="right">
           <template #default="scope">
             <el-button link type="primary" @click="goDetail(scope.row as PerformanceManageContract)">详情</el-button>
-            <el-button v-if="!isBroker" link type="warning" @click="openAdjustDialog(scope.row as PerformanceManageContract)">调整</el-button>
+            <el-button v-if="!isBroker && scope.row.factStatus !== 'VOIDED'" link type="warning" @click="openAdjustDialog(scope.row as PerformanceManageContract)">调整</el-button>
             <el-button
               v-if="canVoid && scope.row.factStatus !== 'VOIDED'"
               link
@@ -349,7 +349,7 @@
         </el-table-column>
         <el-table-column v-if="!isBroker" label="操作" align="center" width="90" fixed="right">
           <template #default="scope">
-            <el-button type="primary" link size="small" @click="openDetailAdjustDialog(scope.row as PerformanceManageRow)">调整</el-button>
+            <el-button v-if="scope.row.factStatus !== 'VOIDED'" type="primary" link size="small" @click="openDetailAdjustDialog(scope.row as PerformanceManageRow)">调整</el-button>
           </template>
         </el-table-column>
         <template #empty>

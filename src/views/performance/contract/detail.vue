@@ -103,10 +103,10 @@
             <el-tag v-else type="success" size="small">有效</el-tag>
           </template>
         </el-table-column>
-        <!-- 操作列：明细级业绩调整（作废/恢复为合同级操作，在页头） -->
+        <!-- 操作列：明细级业绩调整（作废/恢复为合同级操作，在页头；已作废行不可调整） -->
         <el-table-column v-if="!isBroker" label="操作" align="center" width="90" fixed="right">
           <template #default="scope">
-            <el-button type="primary" link @click="openAdjustDialog(scope.row as PerformanceManageRow)">调整</el-button>
+            <el-button v-if="scope.row.factStatus !== 'VOIDED'" type="primary" link @click="openAdjustDialog(scope.row as PerformanceManageRow)">调整</el-button>
           </template>
         </el-table-column>
         <template #empty>
