@@ -377,11 +377,11 @@ export const performanceApi = {
   getSearchDetails: (params: { bizNo: string }) =>
     panjiaRequest.get<PerformanceSearchDetailRow[]>('/perf/fact/search/details', params),
 
-  // 作废业绩事实（ACTIVE → VOIDED）
-  voidFact: (id: string | number, reason: string) =>
-    panjiaRequest.post<void>(`/perf/fact/void/${id}?reason=${encodeURIComponent(reason)}`),
+  // 合同级作废：该合同该期间全部有效业绩一次性作废（不区分人员/角色）
+  voidByContract: (period: string, factType: string, contractNo: string, reason: string) =>
+    panjiaRequest.post<number>(`/perf/fact/void-contract?period=${period}&factType=${factType}&contractNo=${encodeURIComponent(contractNo)}&reason=${encodeURIComponent(reason)}`),
 
-  // 恢复业绩事实（VOIDED → ACTIVE）
-  restoreFact: (id: string | number, reason: string) =>
-    panjiaRequest.post<void>(`/perf/fact/restore/${id}?reason=${encodeURIComponent(reason)}`),
+  // 合同级恢复：该合同该期间全部已作废业绩一次性恢复（period 改为当前月）
+  restoreByContract: (period: string, factType: string, contractNo: string, reason: string) =>
+    panjiaRequest.post<number>(`/perf/fact/restore-contract?period=${period}&factType=${factType}&contractNo=${encodeURIComponent(contractNo)}&reason=${encodeURIComponent(reason)}`),
 };

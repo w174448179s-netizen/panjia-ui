@@ -132,11 +132,23 @@
             <el-tag v-else type="success" size="small">有效</el-tag>
           </template>
         </el-table-column>
-        <!-- 操作列：详情 + 合同级业绩调整（经纪人无调整权限） -->
-        <el-table-column label="操作" align="center" width="120" fixed="right">
+        <!-- 操作列：详情 + 合同级调整 + 合同级作废/恢复（作废以合同为维度，不区分人员） -->
+        <el-table-column label="操作" align="center" width="200" fixed="right">
           <template #default="scope">
             <el-button link type="primary" @click="goDetail(scope.row as PerformanceManageContract)">详情</el-button>
             <el-button v-if="!isBroker" link type="warning" @click="openAdjustDialog(scope.row as PerformanceManageContract)">调整</el-button>
+            <el-button
+              v-if="canVoid && scope.row.factStatus !== 'VOIDED'"
+              link
+              type="danger"
+              @click="handleVoidContract(scope.row as PerformanceManageContract)"
+            >作废</el-button>
+            <el-button
+              v-else-if="canVoid && scope.row.factStatus === 'VOIDED'"
+              link
+              type="success"
+              @click="handleRestoreContract(scope.row as PerformanceManageContract)"
+            >恢复</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -335,23 +347,9 @@
             <el-tag v-else type="success" size="small">有效</el-tag>
           </template>
         </el-table-column>
-        <el-table-column v-if="!isBroker" label="操作" align="center" width="160" fixed="right">
+        <el-table-column v-if="!isBroker" label="操作" align="center" width="90" fixed="right">
           <template #default="scope">
             <el-button type="primary" link size="small" @click="openDetailAdjustDialog(scope.row as PerformanceManageRow)">调整</el-button>
-            <el-button
-              v-if="canVoid && scope.row.factStatus !== 'VOIDED'"
-              type="danger"
-              link
-              size="small"
-              @click="handleVoid(scope.row as PerformanceManageRow)"
-            >作废</el-button>
-            <el-button
-              v-else-if="canVoid && scope.row.factStatus === 'VOIDED'"
-              type="success"
-              link
-              size="small"
-              @click="handleRestore(scope.row as PerformanceManageRow)"
-            >恢复</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -549,19 +547,22 @@ const loadDetailList = async () => {
   }
 };
 
-// ==================== 作废/恢复 ====================
-const handleVoid = async (row: PerformanceManageRow) => {
+// ==================== 作废/恢复（合同级：整张合同业绩一次性作废/恢复，不区分人员/角色） ====================
+const handleVoidContract = async (row: PerformanceManageContract) => {
   try {
-    const { value } = await ElMessageBox.prompt('请输入作废原因', '作废业绩', {
-      confirmButtonText: '确定作废',
-      cancelButtonText: '取消',
-      inputType: 'textarea',
-      inputPlaceholder: '必填，如：录入错误、重复录入等',
-      inputValidator: (v) => !!v?.trim() || '请输入作废原因',
-    });
-    await performanceApi.voidFact(row.id, value.trim());
+    const { value } = await ElMessageBox.prompt(
+      `将作废合同「${row.contractNo}」本期全部有效明细（共 ${row.detailCount} 条，不区分人员/角色），作废后不参与算薪/结佣。`,
+      '作废合同业绩',
+      {
+        confirmButtonText: '确定作废',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputPlaceholder: '必填，如：录入错误、重复录入等',
+        inputValidator: (v) => !!v?.trim() || '请输入作废原因',
+      },
+    );
+    await performanceApi.voidByContract(queryParams.period, 'PERF_EXPECT', row.contractNo, value.trim());
     ElMessage.success('已作废');
-    await loadDetailList();
     getList();
   } catch (e: any) {
     if (e !== 'cancel' && e?.message !== 'cancel') {
@@ -570,18 +571,21 @@ const handleVoid = async (row: PerformanceManageRow) => {
   }
 };
 
-const handleRestore = async (row: PerformanceManageRow) => {
+const handleRestoreContract = async (row: PerformanceManageContract) => {
   try {
-    const { value } = await ElMessageBox.prompt('请输入恢复原因（恢复后业绩计入当前月）', '恢复业绩', {
-      confirmButtonText: '确定恢复',
-      cancelButtonText: '取消',
-      inputType: 'textarea',
-      inputPlaceholder: '必填，如：误操作作废等',
-      inputValidator: (v) => !!v?.trim() || '请输入恢复原因',
-    });
-    await performanceApi.restoreFact(row.id, value.trim());
+    const { value } = await ElMessageBox.prompt(
+      `将恢复合同「${row.contractNo}」本期全部已作废明细，恢复后业绩计入当前月。`,
+      '恢复合同业绩',
+      {
+        confirmButtonText: '确定恢复',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputPlaceholder: '必填，如：误操作作废等',
+        inputValidator: (v) => !!v?.trim() || '请输入恢复原因',
+      },
+    );
+    await performanceApi.restoreByContract(queryParams.period, 'PERF_EXPECT', row.contractNo, value.trim());
     ElMessage.success('已恢复，业绩计入当前月');
-    await loadDetailList();
     getList();
   } catch (e: any) {
     if (e !== 'cancel' && e?.message !== 'cancel') {
