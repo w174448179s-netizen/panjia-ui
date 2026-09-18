@@ -127,16 +127,6 @@
               <span v-else class="amount-gray">—</span>
             </template>
           </el-table-column>
-          <el-table-column label="实收/应收" align="right" width="150">
-            <template #default="{ row }">
-              <div v-if="row.receivedRealAmount != null">
-                <span class="amount-red">{{ formatMoney(row.receivedRealAmount) }}</span>
-                <span class="amount-gray"> / {{ formatMoney(row.receivedExpectedAmount) }}</span>
-              </div>
-              <span v-else class="amount-gray">—</span>
-            </template>
-          </el-table-column>
-
           <el-table-column label="结佣状态" align="center" width="110">
             <template #default="{ row }">
               <el-tag v-if="row.commissionStatus" :type="commissionStatusTagType(row.commissionStatus)" size="small">
@@ -229,13 +219,6 @@
           <el-tag v-if="detailDialog.row.receivedStatus" :type="receivedStatusTagType(detailDialog.row.receivedStatus)" size="small">
             {{ receivedStatusMap[detailDialog.row.receivedStatus] ?? detailDialog.row.receivedStatus }}
           </el-tag>
-          <span v-else class="amount-gray">—</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="实收/应收">
-          <template v-if="detailDialog.row.receivedRealAmount != null">
-            <span class="amount-red">{{ formatMoney(detailDialog.row.receivedRealAmount) }}</span>
-            <span class="amount-gray"> / {{ formatMoney(detailDialog.row.receivedExpectedAmount) }}</span>
-          </template>
           <span v-else class="amount-gray">—</span>
         </el-descriptions-item>
         <el-descriptions-item label="结佣状态">
