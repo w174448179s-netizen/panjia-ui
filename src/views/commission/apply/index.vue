@@ -138,7 +138,7 @@
         </el-table-column>
         <el-table-column label="状态" align="center" width="100">
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+            <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="发起人" align="center" width="100">
@@ -439,7 +439,18 @@ const loadDeptTree = async () => {
 
 // 状态映射
 const STATUS_MAP: Record<string, string> = {
-  NONE: '未发起', DRAFT: '草稿', SUBMITTED: '已提交', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
+  NONE: '未发起', DRAFT: '草稿', SUBMITTED: '审批中', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
+};
+/**
+ * SUBMITTED 按当前审批节点细分（与「我发起的」工作流状态、详情弹窗同一语义）：
+ * - 总监初审前（currentNode=DIRECTOR）→ 待审批；
+ * - 总监已审（财务复核 currentNode=FINANCE，或 T-04 财务节点跳过 currentNode 为空）→ 审批中。
+ */
+const statusLabel = (row: CommissionContractVO) => {
+  if (row.status === 'SUBMITTED') {
+    return row.currentNode === 'DIRECTOR' ? '待审批' : '审批中';
+  }
+  return STATUS_MAP[row.status] || row.status || '—';
 };
 // 筛选下拉只列实际会出现在列表中的状态：
 // DRAFT（发起即提交，无保存草稿入口）、APPROVED（审批通过直接落 LOCKED，不经过 APPROVED）不会出现
@@ -447,7 +458,6 @@ const HIDDEN_FILTER_STATUS = ['DRAFT', 'APPROVED'];
 const statusOptions = Object.entries(STATUS_MAP)
   .filter(([value]) => !HIDDEN_FILTER_STATUS.includes(value))
   .map(([value, label]) => ({ value, label }));
-const statusLabel = (s: string) => STATUS_MAP[s] || s || '—';
 const statusTagType = (s: string) => {
   const map: Record<string, string> = {
     NONE: 'info', DRAFT: 'info', SUBMITTED: 'warning', APPROVED: 'primary', LOCKED: 'success', REJECTED: 'danger', CANCELLED: 'info',
@@ -645,6 +655,12 @@ const viewDetail = async (row: CommissionContractVO) => {
 // 发起并提交一步到位：后端 POST /commission/apply 一次完成发起+提交，并自动处理驳回单重提（不新建单）
 const onSubmit = async (row: CommissionContractVO) => {
   const no = contractOrOrderNo(row);
+  if (!no || no === '—') {
+    ElMessage.warning('该合同缺少合同号/订单号，无法发起');
+    return;
+  }
+  // 提交中拦截：防止连点重复弹出确认框/重复提交
+  if (submittingMap[no]) return;
   const isResubmit = row.status === 'REJECTED';
   const action = isResubmit ? '重新提交' : '发起并提交';
   try {
@@ -659,16 +675,16 @@ const onSubmit = async (row: CommissionContractVO) => {
   } catch {
     return;
   }
-  // 业务键口径：与后端 selectContractSummaries 输出的 contractNo（= 发起/幂等/单据存储键）一致
-  const bizNo = resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo;
-  submittingMap[bizNo] = true;
+  submittingMap[no] = true;
   try {
     // 后端已合并发起+提交为一次调用；驳回单后端识别后重提，不新建单
-    await commissionApi.createApplication({ period: row.period, contractNo: bizNo });
+    await commissionApi.createApplication({ period: row.period, contractNo: no });
     ElMessage.success(`${action}成功`);
-    getList();
+    // 等列表刷新完成再结束转圈：行状态即时变为「审批中」，按钮随之消失，
+    // 避免转圈结束后列表仍是旧状态导致用户以为没点上而重复提交
+    await getList();
   } catch { /* 拦截器处理（含部分失败提示） */ } finally {
-    submittingMap[bizNo] = false;
+    submittingMap[no] = false;
   }
 };
 
