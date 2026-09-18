@@ -54,7 +54,9 @@
     width="1100px"
     destroy-on-close
   >
-    <el-table :data="traceItems" size="small" border max-height="460" show-summary :summary-method="traceSummary">
+    <!-- 第一部分：个人结佣明细 -->
+    <div class="trace-section-title">个人结佣明细</div>
+    <el-table :data="traceItems" size="small" border max-height="300" show-summary :summary-method="traceSummary">
       <el-table-column label="签约/认购时间" width="170" align="center">
         <template #default="{ row: it }">{{ formatDate(it.signDate) || it.businessDate || '—' }}</template>
       </el-table-column>
@@ -85,15 +87,49 @@
         <template #default="{ row: it }">{{ it.approvedMonth || '—' }}</template>
       </el-table-column>
     </el-table>
+
+    <!-- 第二部分：门店新签明细（店长） -->
+    <template v-if="isManager && teamNewSignItems.length">
+      <div class="trace-section-title" style="margin-top: 16px">门店新签明细</div>
+      <el-table :data="teamNewSignItems" size="small" border max-height="300" show-summary :summary-method="teamSummary">
+        <el-table-column label="签约/认购时间" width="170" align="center">
+          <template #default="{ row: it }">{{ formatDate(it.signDate) || it.businessDate || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="合同号/订单号" min-width="180" show-overflow-tooltip>
+          <template #default="{ row: it }">
+            <div class="contract-cell">
+              <span class="contract-no">{{ it.contractNo || '—' }}</span>
+              <span v-if="it.orderNo" class="order-no">/{{ it.orderNo }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="类型" prop="bizType" width="100" show-overflow-tooltip />
+        <el-table-column label="房源地址" min-width="200" show-overflow-tooltip>
+          <template #default="{ row: it }">{{ it.propertyAddress || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="员工工号" prop="employeeCode" width="100" align="center">
+          <template #default="{ row: it }">{{ it.employeeCode || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="所属角色" prop="roleType" width="90" align="center">
+          <template #default="{ row: it }">{{ it.roleType || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="角色占比" width="90" align="center">
+          <template #default="{ row: it }">{{ it.shareRatio != null ? (Number(it.shareRatio) * 100).toFixed(2) + '%' : '—' }}</template>
+        </el-table-column>
+        <el-table-column label="新签金额" align="right" width="130">
+          <template #default="{ row: it }">¥{{ fmt(it.amount) }}</template>
+        </el-table-column>
+      </el-table>
+    </template>
     <div class="trace-footnote">
-      结佣金额 = 已审批结佣金额；签约/认购日期、房源地址、角色占比由业绩事实 enrich。
+      结佣金额 = 已审批结佣金额；新签金额 = 应收业绩（门店团队成员）；签约/认购时间、房源地址、角色占比由业绩事实 enrich。
     </div>
   </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Tickets } from '@element-plus/icons-vue';
 import { mySalaryApi, orgCommissionTraceApi, type CommissionTraceItem, type PayrollDetail } from '@/api/panjia/payroll';
@@ -177,18 +213,30 @@ const traceLoading = ref(false);
 const traceItems = ref<CommissionTraceItem[]>([]);
 const traceDialogVisible = ref(false);
 
+/** 店长角色：弹窗追加门店新签明细 */
+const isManager = computed(() => props.row.employeeRole === 'MANAGER');
+const teamNewSignItems = ref<CommissionTraceItem[]>([]);
+
 const openTraceDialog = async () => {
   if (traceLoading.value) return;
   traceLoading.value = true;
   try {
-    const res: any = props.myMode
-      ? await mySalaryApi.myCommissionTrace(props.period)
-      : await orgCommissionTraceApi.list(props.period, props.row.employeeId);
-    traceItems.value = (res?.data ?? []) as CommissionTraceItem[];
+    const [commRes, teamRes] = await Promise.all([
+      props.myMode
+        ? mySalaryApi.myCommissionTrace(props.period)
+        : orgCommissionTraceApi.list(props.period, props.row.employeeId),
+      isManager.value
+        ? (props.myMode
+            ? mySalaryApi.myTeamNewSign(props.period)
+            : orgCommissionTraceApi.teamNewSign(props.period, props.row.deptId))
+        : Promise.resolve(null),
+    ]);
+    traceItems.value = ((commRes as any)?.data ?? []) as CommissionTraceItem[];
+    teamNewSignItems.value = ((teamRes as any)?.data ?? []) as CommissionTraceItem[];
     traceDialogVisible.value = true;
-    if (!traceItems.value.length) ElMessage.info('当月无结佣明细数据');
+    if (!traceItems.value.length && !teamNewSignItems.value.length) ElMessage.info('当月无结佣/新签明细数据');
   } catch {
-    ElMessage.warning('结佣明细加载失败，请稍后重试');
+    ElMessage.warning('明细加载失败，请稍后重试');
   } finally {
     traceLoading.value = false;
   }
@@ -200,6 +248,20 @@ const traceSummary = ({ columns, data }: any) => {
   columns.forEach((_col: any, idx: number) => {
     if (idx === 0) { sums[idx] = '合计'; return; }
     if (idx === 6) {
+      sums[idx] = `¥${fmt(data.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0))}`;
+    } else {
+      sums[idx] = '';
+    }
+  });
+  return sums;
+};
+
+/** 门店新签明细合计行 */
+const teamSummary = ({ columns, data }: any) => {
+  const sums: string[] = [];
+  columns.forEach((_col: any, idx: number) => {
+    if (idx === 0) { sums[idx] = '合计'; return; }
+    if (idx === 7) {
       sums[idx] = `¥${fmt(data.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0))}`;
     } else {
       sums[idx] = '';
@@ -229,6 +291,7 @@ const traceSummary = ({ columns, data }: any) => {
 .deduct-text { color: #c0392b; }
 
 .trace-action { margin-top: 8px; }
+.trace-section-title { font-weight: 600; font-size: 13px; color: #303133; margin-bottom: 8px; }
 .trace-footnote { margin-top: 6px; font-size: 11px; color: #b0b3b8; line-height: 1.6; }
 .contract-cell { display: flex; align-items: baseline; gap: 0; }
 .contract-no { font-weight: 600; }

@@ -231,11 +231,18 @@ export const mySalaryApi = {
   myCommissionTrace(period: string) {
     return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/my/commission-trace', { period });
   },
+  /** 我的门店新签明细（店长查看所在门店团队成员新签业绩） */
+  myTeamNewSign(period: string) {
+    return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/my/team-newsign', { period });
+  },
 };
 
 /** 组织视角结佣追溯（总监/财务查指定员工） */
 export const orgCommissionTraceApi = {
   list(period: string, employeeId: number | string) {
     return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/commission-trace', { period, employeeId });
+  },
+  teamNewSign(period: string, deptId: number | string) {
+    return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/team-newsign', { period, deptId });
   },
 };
