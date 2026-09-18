@@ -154,7 +154,8 @@
                 link type="warning"
                 :loading="submittingMap[contractOrOrderNo(row)]"
                 @click="onSubmit(row as CommissionContractVO)">{{ row.status === 'REJECTED' ? '重提' : '提交' }}</el-button>
-              <el-button v-if="['DRAFT', 'SUBMITTED', 'REJECTED'].includes(row.status) && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
+              <!-- 可作废：未发起（占位作废，本期不再发起）/ 审批中 / 已驳回；已锁定、已作废除外 -->
+              <el-button v-if="['NONE', 'DRAFT', 'SUBMITTED', 'REJECTED'].includes(row.status) && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
             </div>
           </template>
         </el-table-column>
@@ -341,9 +342,10 @@ const deptLocked = computed(() =>
 const defaultDeptId = (): string | undefined =>
   deptLocked.value && userStore.deptId !== '' ? String(userStore.deptId) : undefined;
 
-/** 是否可以作废：超管全部可操作，普通用户只能操作自己发起的单据 */
+/** 是否可以作废：超管全部可操作；未发起行无申请人（列表已按部门范围过滤），权限由后端门店校验；已发起单仅本人可操作 */
 const canCancel = (row: CommissionContractVO): boolean => {
   if (userStore.roles.includes('admin') || userStore.roles.includes('superadmin')) return true;
+  if (!row.applicationId) return true;
   return String(row.applicantId) === String(userStore.userId);
 };
 
@@ -596,15 +598,26 @@ const doBatchApprove = async () => {
   }
 };
 
-// 作废
+// 作废：未发起行创建 CANCELLED 占位单（本期不再发起，仍可重新发起）；已发起行走单据作废
 const cancel = async (row: CommissionContractVO) => {
+  const unapplied = !row.applicationId;
   try {
-    await ElMessageBox.confirm(`确认作废申请单「${row.applyNo}」？作废后不可恢复。`, '提示', { type: 'warning' });
+    await ElMessageBox.confirm(
+      unapplied
+        ? `确认作废合同「${resolveBizNo(row.bizType, row.contractNo, row.orderNo)}」本期结佣？作废后本期不再发起，仍可重新发起。`
+        : `确认作废申请单「${row.applyNo}」？作废后不可恢复。`,
+      '提示',
+      { type: 'warning' },
+    );
   } catch {
     return;
   }
   try {
-    await commissionApi.cancelApplication(row.applicationId);
+    if (unapplied) {
+      await commissionApi.cancelUnapplied(row.period, resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo);
+    } else {
+      await commissionApi.cancelApplication(row.applicationId);
+    }
     ElMessage.success('已作废');
     getList();
   } catch { /* 拦截器处理 */ }
