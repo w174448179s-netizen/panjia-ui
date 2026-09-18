@@ -317,30 +317,17 @@ import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Loading } from '@element-plus/icons-vue';
 import { commissionApi, type CommissionContractVO, type BatchResultDTO } from '@/api/panjia/commission';
-import { employeeApi } from '@/api/panjia/employee';
-import type { DeptNode } from '@/api/panjia/types';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { useBizApproval } from '@/hooks/workflow/useBizApproval';
+import { useDeptScope } from '@/hooks/useDeptScope';
 import { checkPermi } from '@/utils/permission';
-import { resolveBizNo, findDeptSubtree } from '@/utils/panjiaBiz';
+import { resolveBizNo } from '@/utils/panjiaBiz';
 import { useUserStore } from '@/store/modules/user';
 import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
 import CommissionApplyDetail from '@/components/WorkflowHandle/details/CommissionApplyDetail.vue';
 
 const route = useRoute();
 const userStore = useUserStore();
-/** 部门受限角色：总监/店长/经纪人默认选中本部门且只能在本部门子树内下钻；财务/超管全量 */
-const deptLocked = computed(() =>
-  !userStore.roles.includes('admin')
-  && !userStore.roles.includes('superadmin')
-  && !userStore.roles.includes('finance')
-  && (userStore.roles.includes('director')
-    || userStore.roles.includes('manager')
-    || userStore.roles.includes('agent'))
-);
-/** 受限角色的部门默认值（本部门 ID）；其余角色不预填 */
-const defaultDeptId = (): string | undefined =>
-  deptLocked.value && userStore.deptId !== '' ? String(userStore.deptId) : undefined;
 
 /** 是否可以作废：超管全部可操作；未发起行无申请人（列表已按部门范围过滤），权限由后端门店校验；已发起单仅本人可操作 */
 const canCancel = (row: CommissionContractVO): boolean => {
@@ -415,19 +402,8 @@ const isAdjusted = (
 const contractOrOrderNo = (row: CommissionContractVO): string =>
   resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—';
 
-// 部门树（用于顶部门店筛选；详情弹窗的归属门店翻译在 CommissionApplyDetail 内自处理）
-const deptTreeRaw = ref<DeptNode[]>([]);
-/** 受限角色只展示本部门子树；财务/超管展示全量 */
-const deptTreeData = computed<DeptNode[]>(() =>
-  deptLocked.value ? findDeptSubtree(deptTreeRaw.value, userStore.deptId) : deptTreeRaw.value
-);
-
-const loadDeptTree = async () => {
-  try {
-    const res: any = await employeeApi.deptTree();
-    deptTreeRaw.value = res.data ?? [];
-  } catch { /* ignore */ }
-};
+// 部门树（全系统统一口径：所有用户查本部门及以下；详情弹窗的归属门店翻译在 CommissionApplyDetail 内自处理）
+const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
 
 // 状态映射。SUBMITTED 全程统一叫「审批中」（发起后直到审批结束），
 // 与工作流系统页（我发起的/我的已办，全局字典 waiting）保持同一叫法——

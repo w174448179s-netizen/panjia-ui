@@ -70,12 +70,12 @@
           <el-form-item label="门店/组别" prop="deptId">
             <el-tree-select
               v-model="queryParams.deptId"
-              :data="deptTreeData"
+              :data="deptFilterTree"
               :props="{ label: 'deptName', children: 'children' }"
               value-key="deptId"
               node-key="deptId"
-              placeholder="全部门店/组别"
-              clearable
+              :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
+              :clearable="!deptLocked"
               check-strictly
               style="width: 220px"
               @change="handleQuery"
@@ -284,7 +284,7 @@
         <el-form-item v-if="formData.adjustType === 'TRANSFER'" label="目标门店" prop="targetDeptId">
           <el-tree-select
             v-model="formData.targetDeptId"
-            :data="deptTreeData"
+            :data="deptTreeRaw"
             :props="{ label: 'deptName', children: 'children' }"
             value-key="deptId"
             node-key="deptId"
@@ -343,12 +343,13 @@ import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceAdjust, AdjustQuery, AdjustCreateForm, PerformanceFact } from '@/api/panjia/performance';
 import AdjustDetailPanel from './components/AdjustDetailPanel.vue';
 import { employeeApi } from '@/api/panjia/employee';
-import type { DeptNode, Employee } from '@/api/panjia/types';
+import type { Employee } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
 import { useRoute } from 'vue-router';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { useBizApproval } from '@/hooks/workflow/useBizApproval';
 import { checkPermi } from '@/utils/permission';
+import { useDeptScope } from '@/hooks/useDeptScope';
 import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
 
 const route = useRoute();
@@ -388,16 +389,8 @@ const statusTagType = (status: string): TagType => {
   return map[status] ?? 'info';
 };
 
-// ==================== 部门树（与人员页同源） ====================
-const deptTreeData = ref<DeptNode[]>([]);
-const loadDeptTree = async () => {
-  try {
-    const res = await employeeApi.deptTree();
-    deptTreeData.value = res.data ?? [];
-  } catch (e) {
-    console.error('[adjust] 部门树加载失败', e);
-  }
-};
+// ==================== 部门树（全系统统一口径：所有用户查本部门及以下；划转目标门店保持全量） ====================
+const { deptLocked, defaultDeptId, deptTreeData: deptFilterTree, deptTreeRaw, loadDeptTree } = useDeptScope();
 
 // ==================== 员工远程搜索（筛选条用） ====================
 const employeeOptions = ref<Employee[]>([]);
@@ -439,7 +432,7 @@ const queryParams = reactive<AdjustQuery & { pageNum: number; pageSize: number }
   adjustType: undefined,
   status: undefined,
   employeeId: undefined,
-  deptId: undefined
+  deptId: defaultDeptId()
 });
 
 // ==================== 列表 ====================
@@ -477,7 +470,7 @@ const resetQuery = () => {
     adjustType: undefined,
     status: undefined,
     employeeId: undefined,
-    deptId: undefined,
+    deptId: defaultDeptId(),
     pageNum: 1
   });
   getList();

@@ -21,8 +21,8 @@
             :props="{ label: 'deptName', children: 'children' } as any"
             value-key="deptId"
             node-key="deptId"
-            placeholder="全部门店/组别"
-            clearable
+            :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
+            :clearable="!deptLocked"
             check-strictly
             style="width: 210px"
             @change="handleQuery"
@@ -437,15 +437,17 @@ import { Search } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceManageContract, PerformanceManageRow } from '@/api/panjia/performance';
-import { employeeApi } from '@/api/panjia/employee';
-import type { DeptNode } from '@/api/panjia/types';
 import { useUserStore } from '@/store/modules/user';
 import { resolveBizNo } from '@/utils/panjiaBiz';
 import { checkPermi } from '@/utils/permission';
+import { useDeptScope } from '@/hooks/useDeptScope';
 
 const userStore = useUserStore();
 const isBroker = computed(() => userStore.roles.includes('agent'));
 const canVoid = computed(() => checkPermi(['perf:fact:void']));
+
+// ==================== 门店/组别筛选（全系统统一口径：所有用户查本部门及以下） ====================
+const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
 
 // ==================== 筛选 ====================
 const queryParams = reactive<{
@@ -455,12 +457,10 @@ const queryParams = reactive<{
   factStatus: string;
 }>({
   period: '',
-  deptId: undefined,
+  deptId: defaultDeptId(),
   bizType: '',
   factStatus: '',
 });
-
-const deptTreeData = ref<DeptNode[]>([]);
 
 // ==================== 数据 ====================
 const loading = ref(false);
@@ -726,15 +726,6 @@ watch(keyword, () => {
 });
 
 // ==================== 加载 ====================
-const loadDeptTree = async () => {
-  try {
-    const res = await employeeApi.deptTree();
-    deptTreeData.value = res.data ?? [];
-  } catch (e) {
-    console.error('[performance-contract] 部门树加载失败', e);
-  }
-};
-
 const getList = async () => {
   if (!queryParams.period) {
     contractData.value = [];
@@ -775,7 +766,7 @@ const handleQuery = () => {
   getList();
 };
 const resetQuery = () => {
-  queryParams.deptId = undefined;
+  queryParams.deptId = defaultDeptId();
   queryParams.bizType = '';
   queryParams.factStatus = '';
   suppressKeywordWatch = true;

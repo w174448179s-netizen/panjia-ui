@@ -21,8 +21,8 @@
             :props="{ label: 'deptName', children: 'children' } as any"
             value-key="deptId"
             node-key="deptId"
-            placeholder="全部门店/组别"
-            clearable
+            :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
+            :clearable="!deptLocked"
             check-strictly
             style="width: 200px"
             @change="handleQuery"
@@ -358,9 +358,9 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { Loading } from '@element-plus/icons-vue';
 import { receivedApi, type ReceivedApply, type ReceivedFact, type BatchApproveResult } from '@/api/panjia/received';
 import { employeeApi } from '@/api/panjia/employee';
-import type { DeptNode } from '@/api/panjia/types';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { useBizApproval } from '@/hooks/workflow/useBizApproval';
+import { useDeptScope } from '@/hooks/useDeptScope';
 import { checkPermi } from '@/utils/permission';
 import { resolveBizNo } from '@/utils/panjiaBiz';
 import { useUserStore } from '@/store/modules/user';
@@ -395,25 +395,17 @@ const currentPeriod = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
+// ==================== 门店/组别筛选（全系统统一口径：所有用户查本部门及以下） ====================
+const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
+
 const queryParams = reactive({
   pageNum: 1,
   pageSize: 20,
   period: currentPeriod(),
   status: '',
   keyword: '',
-  deptId: undefined as string | undefined,
+  deptId: defaultDeptId(),
 });
-
-// ==================== 门店/组别筛选（与业绩查询/业绩明细同口径） ====================
-const deptTreeData = ref<DeptNode[]>([]);
-const loadDeptTree = async () => {
-  try {
-    const res = await employeeApi.deptTree();
-    deptTreeData.value = res.data ?? [];
-  } catch (e) {
-    console.error('[received] 部门树加载失败', e);
-  }
-};
 
 const num = (v: number | string | null | undefined): number => {
   if (v === undefined || v === null || v === '') return 0;
@@ -536,7 +528,7 @@ const contractOrOrderNo = (row: ReceivedApply): string =>
 const resetQuery = () => {
   Object.assign(queryParams, {
     period: currentPeriod(), status: '', keyword: '',
-    deptId: undefined, pageNum: 1,
+    deptId: defaultDeptId(), pageNum: 1,
   });
   getList();
 };

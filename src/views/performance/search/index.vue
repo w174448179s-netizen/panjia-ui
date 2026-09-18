@@ -339,24 +339,15 @@ import { Search, Refresh } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceFactSearch, PerformanceSearchDetailRow } from '@/api/panjia/performance';
-import { employeeApi } from '@/api/panjia/employee';
-import type { DeptNode } from '@/api/panjia/types';
-import { resolveBizNo, findDeptSubtree } from '@/utils/panjiaBiz';
+import { resolveBizNo } from '@/utils/panjiaBiz';
 import { useUserStore } from '@/store/modules/user';
+import { useDeptScope } from '@/hooks/useDeptScope';
 
 defineOptions({ name: 'PerformanceSearch' });
 
 const userStore = useUserStore();
 /** 经纪人：本人口径（后端强制按本人 employeeId 过滤），不展示门店/组别筛选 */
 const isAgent = computed(() => userStore.roles.includes('agent'));
-/** 部门受限角色：店长/总监默认选中本部门且只能在本部门子树内下钻；财务/超管全量 */
-const deptLocked = computed(() =>
-  !userStore.roles.includes('admin')
-  && !userStore.roles.includes('superadmin')
-  && !userStore.roles.includes('finance')
-  && !isAgent.value
-  && (userStore.roles.includes('manager') || userStore.roles.includes('director'))
-);
 
 const tableMaxHeight = ref(580);
 
@@ -366,24 +357,8 @@ const calcTableHeight = () => {
   });
 };
 
-// ==================== 部门树 ====================
-const deptTreeRaw = ref<DeptNode[]>([]);
-/** 受限角色只展示本部门子树；财务/超管/经纪人展示全量（经纪人不显示该筛选） */
-const deptTreeData = computed<DeptNode[]>(() =>
-  deptLocked.value ? findDeptSubtree(deptTreeRaw.value, userStore.deptId) : deptTreeRaw.value
-);
-const loadDeptTree = async () => {
-  try {
-    const res = await employeeApi.deptTree();
-    deptTreeRaw.value = res.data ?? [];
-  } catch (e) {
-    console.error('[search] 部门树加载失败', e);
-  }
-};
-
-/** 受限角色的部门默认值（本部门 ID）；其余角色不预填 */
-const defaultDeptId = (): string | undefined =>
-  deptLocked.value && userStore.deptId !== '' ? String(userStore.deptId) : undefined;
+// ==================== 部门树（全系统统一口径：所有用户查本部门及以下） ====================
+const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
 
 // ==================== 筛选 & 分页 ====================
 const queryParams = reactive({
