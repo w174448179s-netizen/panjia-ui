@@ -48,6 +48,24 @@ export interface PayrollDetail {
   perfGrade: string;
 }
 
+/** 本人工资查询用的员工主数据（后端 EmployeeMainDataDTO） */
+export interface MyPayrollEmployee {
+  employeeId: number | string;
+  employeeCode: string;
+  employeeName: string;
+  deptId: number | string;
+  deptName: string;
+  status?: string;
+  userId?: number | string;
+}
+
+/** GET /payroll/my/detail 返回体：批次 + 本人明细 + 员工主数据 */
+export interface MyPayrollDetailVO {
+  batch: PayrollBatch;
+  detail: PayrollDetail;
+  employee: MyPayrollEmployee;
+}
+
 export interface RankRule {
   id: number;
   levelCode: string;
@@ -173,5 +191,17 @@ export const payrollApi = {
   },
   getAdjust(id: number | string) {
     return panjiaRequest.get<PayrollAdjust>(`/payroll/adjust/${id}`);
+  },
+};
+
+/** 本人工资查询（综合查询 → 工资查询；员工身份后端按登录态解析） */
+export const mySalaryApi = {
+  /** 我有工资明细的批次（期间倒序） */
+  listBatches() {
+    return panjiaRequest.get<PayrollBatch[]>('/payroll/batch/my/batches');
+  },
+  /** 我在指定批次的工资明细 + 员工主数据 */
+  getDetail(batchId: number | string) {
+    return panjiaRequest.get<MyPayrollDetailVO>('/payroll/batch/my/detail', { batchId });
   },
 };

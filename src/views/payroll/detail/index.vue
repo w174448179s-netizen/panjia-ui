@@ -72,6 +72,19 @@
           </span>
         </div>
         <div class="toolbar-right">
+          <el-select
+            v-model="filterDeptId"
+            placeholder="门店"
+            clearable
+            filterable
+            size="small"
+            style="width: 170px"
+          >
+            <el-option v-for="d in deptOptions" :key="d.deptId" :label="d.deptName" :value="d.deptId" />
+          </el-select>
+          <el-input v-model="filterName" placeholder="员工姓名" clearable size="small" style="width: 130px" />
+          <el-input v-model="filterCode" placeholder="员工号" clearable size="small" style="width: 130px" />
+          <el-button size="small" :icon="RefreshLeft" @click="resetFilters">重置</el-button>
           <el-checkbox v-model="showAllColumns" size="small">显示全部金额列（含全零列）</el-checkbox>
         </div>
       </div>
@@ -89,96 +102,11 @@
       >
         <el-table-column type="expand" width="36">
           <template #default="{ row }">
-            <div class="trace-panel">
-              <!-- 左：工资构成 -->
-              <div class="trace-left">
-                <div class="trace-title">
-                  <el-icon><Tickets /></el-icon>
-                  {{ empOf(row).employeeName || `员工${row.employeeId}` }} · 工资构成（{{ currentBatch?.period }}）
-                </div>
-                <div class="compose-grid">
-                  <div class="compose-block income">
-                    <div class="compose-head">收入项 <span>应发 ¥{{ fmt(row.gross) }}</span></div>
-                    <div v-for="it in incomeItems(row)" :key="it.label" class="compose-item">
-                      <span class="compose-name">{{ it.label }}<i class="compose-src">{{ it.source }}</i></span>
-                      <span class="compose-val">+{{ fmt(it.value) }}</span>
-                    </div>
-                    <div v-if="!incomeItems(row).length" class="compose-empty">本期无收入项</div>
-                  </div>
-                  <div class="compose-block deduct">
-                    <div class="compose-head">扣款项 <span>合计 ¥{{ fmt(row.deduct) }} · 个税 ¥{{ fmt(row.tax) }}</span></div>
-                    <div v-for="it in deductItems(row)" :key="it.label" class="compose-item">
-                      <span class="compose-name">{{ it.label }}<i class="compose-src">{{ it.source }}</i></span>
-                      <span class="compose-val">-{{ fmt(it.value) }}</span>
-                    </div>
-                    <div v-if="!deductItems(row).length && !row.tax" class="compose-empty">本期无扣款项</div>
-                    <div v-if="row.tax" class="compose-item">
-                      <span class="compose-name">个税扣除<i class="compose-src">系统按累计预扣法计算</i></span>
-                      <span class="compose-val">-{{ fmt(row.tax) }}</span>
-                    </div>
-                  </div>
-                  <div class="compose-block result">
-                    <div class="compose-head">结果</div>
-                    <div class="compose-item">
-                      <span class="compose-name">实发工资</span>
-                      <span class="compose-val net-val">¥{{ fmt(row.net) }}</span>
-                    </div>
-                    <div class="compose-item">
-                      <span class="compose-name">公司承担社保</span>
-                      <span class="compose-val muted">¥{{ fmt(row.employerSocial) }}（不扣工资，计入部门收支）</span>
-                    </div>
-                    <div class="compose-item">
-                      <span class="compose-name">绩效等级 / 综合提点</span>
-                      <span class="compose-val muted">{{ row.perfGrade || '—' }} / {{ row.finalRate != null ? (Number(row.finalRate) * 100).toFixed(1) + '%' : '—' }}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 右：溯源链路 -->
-              <div class="trace-right">
-                <div class="trace-title">
-                  <el-icon><Link /></el-icon>
-                  溯源链路
-                </div>
-                <el-steps direction="vertical" :active="4" class="trace-steps">
-                  <el-step title="工资明细项" description="本批次计算结果（规则快照，锁定后不可改）" />
-                  <el-step title="结佣记录 / 录入单据" description="结佣审批单、奖金审批单、考勤/积分导入批次" />
-                  <el-step title="合同角色人业绩行" description="原始行 + 调整行版本链，原始行永不修改" />
-                  <el-step title="贝壳导入批次" description="理房通到账明细表原始数据（只读存档）" />
-                </el-steps>
-                <div v-if="row.commissionIncome" class="trace-action">
-                  <el-button size="small" type="primary" plain :loading="traceLoadingId === row.id" @click="loadCommissionTrace(row)">
-                    查看结佣明细（¥{{ fmt(row.commissionIncome) }} 提成对应的每笔结佣）
-                  </el-button>
-                </div>
-                <div v-if="traceMap[row.id]" class="trace-commission">
-                  <el-table :data="traceMap[row.id]" size="small" border max-height="260">
-                    <el-table-column label="业务类型" prop="bizType" width="90" />
-                    <el-table-column label="费用项目" prop="feeItem" min-width="100" show-overflow-tooltip />
-                    <el-table-column label="金额" align="right" width="110">
-                      <template #default="{ row: it }">
-                        <span :class="{ 'deduct-text': Number(it.amount) < 0 }">¥{{ fmt(it.amount) }}</span>
-                      </template>
-                    </el-table-column>
-                    <el-table-column label="状态" width="100" align="center">
-                      <template #default="{ row: it }">
-                        <el-tag v-if="it.originReversed" type="danger" size="small">红冲/退单</el-tag>
-                        <el-tag v-else-if="it.status === 'APPROVED'" type="success" size="small">已审批</el-tag>
-                        <el-tag v-else type="info" size="small">{{ it.status }}</el-tag>
-                      </template>
-                    </el-table-column>
-                    <el-table-column label="业绩事实" width="110" align="center">
-                      <template #default="{ row: it }">
-                        <span v-if="it.performanceFactId" class="fact-id">#{{ it.performanceFactId }}</span>
-                        <span v-else>—</span>
-                      </template>
-                    </el-table-column>
-                  </el-table>
-                  <div class="trace-footnote">金额为该员工在对应结佣审批单中的分摊金额；红冲行为退单回冲，可继续在「业绩明细 → 合同详情」中查看原始合同。</div>
-                </div>
-              </div>
-            </div>
+            <PayrollTracePanel
+              :row="(row as any)"
+              :employee-name="empOf(row).employeeName"
+              :period="currentBatch?.period || ''"
+            />
           </template>
         </el-table-column>
 
@@ -190,6 +118,11 @@
         </el-table-column>
         <el-table-column label="门店" fixed="left" min-width="110" show-overflow-tooltip>
           <template #default="{ row }">{{ empOf(row).deptName || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="工号" fixed="left" width="100">
+          <template #default="{ row }">
+            <span class="emp-code">{{ empOf(row).employeeCode || '—' }}</span>
+          </template>
         </el-table-column>
         <el-table-column label="职级" width="70" align="center">
           <template #default="{ row }">{{ row.levelCode || '—' }}</template>
@@ -269,11 +202,11 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
-import { Lock, Download, InfoFilled, Tickets, Link } from '@element-plus/icons-vue';
+import { Lock, Download, InfoFilled, RefreshLeft } from '@element-plus/icons-vue';
 import { payrollApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
-import { commissionApi, type CommissionItem } from '@/api/panjia/commission';
 import { employeeApi } from '@/api/panjia/employee';
 import type { Employee } from '@/api/panjia/types';
+import PayrollTracePanel from '../components/PayrollTracePanel.vue';
 
 /* ───────────── 基础状态 ───────────── */
 const batches = ref<PayrollBatch[]>([]);
@@ -283,9 +216,7 @@ const loading = ref(false);
 const viewRole = ref<'ALL' | 'AGENT' | 'MANAGER' | 'DIRECTOR'>('ALL');
 const showAllColumns = ref(false);
 
-const empMap = reactive<Record<number, { employeeName: string; deptName: string }>>({});
-const traceMap = reactive<Record<number, CommissionItem[]>>({});
-const traceLoadingId = ref<number | null>(null);
+const empMap = reactive<Record<number, { employeeName: string; employeeCode: string; deptId: number | string; deptName: string }>>({});
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: '草稿', CALCULATING: '计算中', CALCULATED: '已计算', FAILED: '失败',
@@ -302,14 +233,43 @@ const roleLabel = (r: string) => ({ AGENT: '经纪人', MANAGER: '店长', DIREC
 const fmt = (n: number | null | undefined) =>
   n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const isZero = (v: number | null | undefined) => !v || Number(v) === 0;
-const empOf = (row: PayrollDetail) => empMap[row.employeeId] || { employeeName: '', deptName: '' };
+const empOf = (row: any) =>
+  empMap[row.employeeId] || { employeeName: '', employeeCode: '', deptId: '', deptName: '' };
 
 const currentBatch = computed(() => batches.value.find((b) => b.id === selectedBatchId.value) || null);
 
-/** 当前角色视图下的明细（对应 Excel 分 sheet 的体验） */
-const viewDetails = computed(() =>
-  viewRole.value === 'ALL' ? details.value : details.value.filter((d) => d.employeeRole === viewRole.value)
-);
+/* ───────────── 筛选条件（门店/姓名/工号，总监·财务组织视角） ───────────── */
+const filterDeptId = ref<number | string>('');
+const filterName = ref('');
+const filterCode = ref('');
+
+/** 门店选项：从员工档案派生去重（避免依赖 system:dept:query 权限） */
+const deptOptions = computed(() => {
+  const map = new Map<string, string>();
+  Object.values(empMap).forEach((e) => {
+    if (e.deptId && e.deptName) map.set(String(e.deptId), e.deptName);
+  });
+  return Array.from(map, ([deptId, deptName]) => ({ deptId, deptName }));
+});
+
+const resetFilters = () => {
+  filterDeptId.value = '';
+  filterName.value = '';
+  filterCode.value = '';
+};
+
+/** 当前视图明细：角色 tab → 门店 → 姓名模糊 → 工号模糊（对应 Excel 分 sheet + 手工查找） */
+const viewDetails = computed(() => {
+  let list = viewRole.value === 'ALL' ? details.value : details.value.filter((d) => d.employeeRole === viewRole.value);
+  if (filterDeptId.value !== '') {
+    list = list.filter((d) => String(empOf(d).deptId) === String(filterDeptId.value));
+  }
+  const name = filterName.value.trim();
+  if (name) list = list.filter((d) => empOf(d).employeeName.includes(name));
+  const code = filterCode.value.trim();
+  if (code) list = list.filter((d) => (empOf(d).employeeCode || '').includes(code));
+  return list;
+});
 
 /* ───────────── 列定义（含适用角色与溯源口径） ───────────── */
 interface ColDef { prop: string; label: string; width: number; roles?: string[]; source: string }
@@ -349,18 +309,6 @@ function filterCols(cols: ColDef[]): ColDef[] {
   });
 }
 
-/** 展开面板：工资构成（只列非零项，附计算口径） */
-function incomeItems(row: PayrollDetail) {
-  return INCOME_COLS.filter((c) => !isZero((row as any)[c.prop])).map((c) => ({
-    label: c.label, value: Number((row as any)[c.prop]) || 0, source: c.source,
-  }));
-}
-function deductItems(row: PayrollDetail) {
-  return DEDUCT_COLS.filter((c) => !isZero((row as any)[c.prop])).map((c) => ({
-    label: c.label, value: Math.abs(Number((row as any)[c.prop])) || 0, source: c.source,
-  }));
-}
-
 /* ───────────── 数据加载 ───────────── */
 const loadBatches = async () => {
   try {
@@ -374,7 +322,6 @@ const loadBatches = async () => {
 };
 
 const loadDetails = async () => {
-  traceMapClear();
   if (!selectedBatchId.value) { details.value = []; return; }
   loading.value = true;
   try {
@@ -387,46 +334,20 @@ const loadDetails = async () => {
   }
 };
 
-function traceMapClear() {
-  Object.keys(traceMap).forEach((k) => delete traceMap[Number(k)]);
-  traceLoadingId.value = null;
-}
-
-/** 员工姓名/门店映射（替代裸的员工ID） */
+/** 员工姓名/工号/门店映射（替代裸的员工ID） */
 const loadEmployees = async () => {
   try {
     const res = await employeeApi.list({ pageNum: 1, pageSize: 1000 });
     const rows: Employee[] = ((res as any).data?.rows ?? (res as any).rows ?? []) as Employee[];
     rows.forEach((e) => {
-      empMap[Number(e.employeeId)] = { employeeName: e.employeeName, deptName: e.deptName };
+      empMap[Number(e.employeeId)] = {
+        employeeName: e.employeeName,
+        employeeCode: e.employeeCode || '',
+        deptId: e.deptId,
+        deptName: e.deptName,
+      };
     });
   } catch { /* 映射失败时回退显示员工ID */ }
-};
-
-/** 追溯：业绩提成 → 当月结佣审批单中该员工的每笔分摊明细 */
-const loadCommissionTrace = async (row: PayrollDetail) => {
-  if (!currentBatch.value || traceLoadingId.value) return;
-  traceLoadingId.value = row.id;
-  try {
-    const listRes: any = await commissionApi.getApplicationList({
-      period: currentBatch.value.period, pageNum: 1, pageSize: 200,
-    });
-    const apps = listRes?.data?.rows ?? listRes?.rows ?? [];
-    const items: CommissionItem[] = [];
-    for (const app of apps) {
-      const full: any = await commissionApi.getApplication(app.id);
-      const its: CommissionItem[] = full?.data?.items ?? full?.items ?? [];
-      its
-        .filter((it) => Number(it.employeeId) === Number(row.employeeId))
-        .forEach((it) => items.push(it));
-    }
-    traceMap[row.id] = items;
-    if (!items.length) ElMessage.info('当月结佣单中未找到该员工的分摊明细');
-  } catch {
-    ElMessage.warning('结佣明细加载失败，请稍后重试');
-  } finally {
-    traceLoadingId.value = null;
-  }
 };
 
 /* ───────────── 合计行 ───────────── */
@@ -456,7 +377,7 @@ const summaryMethod = ({ columns, data }: any) => {
 /* ───────────── 导出（按当前视图，含姓名/门店） ───────────── */
 const exportExcel = () => {
   if (!viewDetails.value.length) return;
-  const basicHeads = ['姓名', '门店', '职级', '角色', '兼职'];
+  const basicHeads = ['姓名', '门店', '工号', '职级', '角色', '兼职'];
   const incomeHeads = visibleIncomeCols.value.map((c) => c.label).concat(['应发合计']);
   const deductHeads = visibleDeductCols.value.map((c) => c.label).concat(['扣款合计', '个税']);
   const heads = [...basicHeads, ...incomeHeads, ...deductHeads, '实发'];
@@ -464,7 +385,7 @@ const exportExcel = () => {
   const rows = viewDetails.value.map((r: any) => {
     const basic = [
       empOf(r).employeeName || `员工${r.employeeId}`, empOf(r).deptName || '',
-      r.levelCode || '', roleLabel(r.employeeRole), r.isPartTime ? '是' : '否',
+      empOf(r).employeeCode || '', r.levelCode || '', roleLabel(r.employeeRole), r.isPartTime ? '是' : '否',
     ];
     const income = visibleIncomeCols.value.map((c) => num(r[c.prop])).concat([num(r.gross)]);
     const deduct = visibleDeductCols.value.map((c) => num(r[c.prop])).concat([num(r.deduct), num(r.tax)]);
@@ -537,34 +458,10 @@ onMounted(() => {
 .col-net { background: #f0f9eb !important; }
 
 /* 工具条 */
-.table-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.table-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 12px; flex-wrap: wrap; }
 .toolbar-left { display: flex; align-items: center; gap: 6px; color: #909399; font-size: 12px; }
+.toolbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .toolbar-icon { color: #409eff; }
 .toolbar-tip b { color: #606266; }
-
-/* 展开追溯面板 */
-.trace-panel { display: flex; gap: 24px; padding: 8px 12px 16px 40px; background: #fafbfc; }
-.trace-left { flex: 1.6; min-width: 0; }
-.trace-right { flex: 1; min-width: 300px; border-left: 1px dashed #dcdfe6; padding-left: 24px; }
-.trace-title { display: flex; align-items: center; gap: 6px; font-weight: 600; color: #1f2d3d; margin-bottom: 10px; }
-.compose-grid { display: flex; flex-direction: column; gap: 10px; }
-.compose-block { background: #fff; border: 1px solid #ebeef5; border-radius: 6px; padding: 10px 12px; }
-.compose-block.income { border-left: 3px solid #67c23a; }
-.compose-block.deduct { border-left: 3px solid #f56c6c; }
-.compose-block.result { border-left: 3px solid #409eff; }
-.compose-head { display: flex; justify-content: space-between; font-size: 12px; color: #909399; margin-bottom: 6px; }
-.compose-item { display: flex; justify-content: space-between; align-items: baseline; padding: 3px 0; font-size: 13px; gap: 12px; }
-.compose-name { color: #303133; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.compose-src { font-style: normal; font-size: 11px; color: #b0b3b8; }
-.compose-val { font-variant-numeric: tabular-nums; color: #303133; white-space: nowrap; }
-.compose-empty { color: #c0c4cc; font-size: 12px; padding: 4px 0; }
-.net-val { font-weight: 700; color: #0a7d43; font-size: 15px; }
-.muted { color: #909399; font-size: 12px; white-space: normal; }
-
-.trace-steps :deep(.el-step__title) { font-size: 13px; }
-.trace-steps :deep(.el-step__description) { font-size: 12px; }
-.trace-action { margin-top: 8px; }
-.trace-commission { margin-top: 10px; }
-.trace-footnote { margin-top: 6px; font-size: 11px; color: #b0b3b8; line-height: 1.6; }
-.fact-id { color: #909399; font-family: monospace; }
+.emp-code { color: #606266; font-variant-numeric: tabular-nums; }
 </style>
