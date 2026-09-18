@@ -33,28 +33,16 @@
         </el-table-column>
         <el-table-column label="算薪次数" prop="attempt" width="80" align="center" />
         <el-table-column label="创建时间" prop="createTime" width="170" />
-        <el-table-column label="操作" width="130" fixed="right">
+        <el-table-column label="操作" width="210" fixed="right">
           <template #default="{ row }">
-            <el-tooltip content="明细" placement="top">
-              <el-button link type="primary" icon="View" @click="viewDetail(row)"></el-button>
-            </el-tooltip>
-            <!-- 状态相关操作收进下拉，避免按钮过多换行重叠。
-                 审批通过/驳回/锁定已收敛到「我的待办」（payroll_batch 工作流节点办理），
-                 业务页不再提供直批入口 -->
-            <el-dropdown
-              v-if="canCalc(row.status) || row.status === 'LOCKED'"
-              trigger="click"
-              @command="(cmd: string) => handleRowAction(cmd, row)"
-            >
-              <el-button link type="primary">更多<el-icon><arrow-down /></el-icon></el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item v-if="canCalc(row.status)" command="calculate" icon="Calculator">算薪</el-dropdown-item>
-                  <el-dropdown-item v-if="row.status === 'CALCULATED'" command="submit" icon="Upload">提交审批</el-dropdown-item>
-                  <el-dropdown-item v-if="row.status === 'LOCKED'" command="pay" icon="Money">标记发放</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+            <div class="table-actions">
+              <el-button link type="primary" @click="viewDetail(row as PayrollBatch)">明细</el-button>
+              <!-- 审批通过/驳回/锁定已收敛到「我的待办」（payroll_batch 工作流节点办理），
+                   业务页仅保留算薪/提交/发放动作，按状态平铺 -->
+              <el-button v-if="canCalc(row.status)" link type="primary" @click="doAction(row as PayrollBatch, 'calculate')">算薪</el-button>
+              <el-button v-if="row.status === 'CALCULATED'" link type="success" @click="doAction(row as PayrollBatch, 'submit')">提交审批</el-button>
+              <el-button v-if="row.status === 'LOCKED'" link type="warning" @click="doAction(row as PayrollBatch, 'pay')">标记发放</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -137,9 +125,7 @@
           <el-date-picker v-model="createForm.period" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width:100%" />
         </el-form-item>
         <el-form-item label="范围">
-          <el-select v-model="createForm.deptScope" style="width:100%">
-            <el-option label="全部门店" value="ALL" />
-          </el-select>
+          <span class="scope-text">全部门店</span>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -171,13 +157,14 @@ const STATUS_LABEL: Record<string, string> = {
   DRAFT: '草稿', CALCULATING: '计算中', CALCULATED: '已计算', FAILED: '失败',
   REVIEWING: '待审核', APPROVED: '已确认', LOCKED: '已锁定', PAID: '已发放',
 };
-const STATUS_TAG: Record<string, string> = {
-  DRAFT: 'info', CALCULATING: 'warning', CALCULATED: '', FAILED: 'danger',
+type TagType = 'primary' | 'success' | 'info' | 'warning' | 'danger';
+const STATUS_TAG: Record<string, TagType> = {
+  DRAFT: 'info', CALCULATING: 'warning', CALCULATED: 'primary', FAILED: 'danger',
   REVIEWING: 'warning', APPROVED: 'success', LOCKED: 'success', PAID: 'success',
 };
 
 const statusLabel = (s: string) => STATUS_LABEL[s] || s;
-const statusTag = (s: string) => STATUS_TAG[s] || 'info';
+const statusTag = (s: string): TagType => STATUS_TAG[s] || 'info';
 const canCalc = (s: string) => ['DRAFT', 'CALCULATED', 'FAILED', 'REVIEWING'].includes(s);
 const roleLabel = (r: string) => ({ AGENT: '经纪人', MANAGER: '店长', DIRECTOR: '总监' }[r] || r);
 const fmt = (n: number | null) => (n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
@@ -204,9 +191,6 @@ const createBatch = async () => {
     creating.value = false;
   }
 };
-
-// 操作列「更多」下拉分发
-const handleRowAction = (cmd: string, row: PayrollBatch) => doAction(row, cmd);
 
 const doAction = async (row: PayrollBatch, action: string) => {
   const labelMap: Record<string, string> = { calculate: '算薪', submit: '提交审核', pay: '标记发放' };
@@ -283,4 +267,14 @@ onMounted(() => {
 
 <style scoped>
 .payroll-batch { padding: 12px; }
+
+.table-actions {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.scope-text {
+  color: var(--el-text-color-regular);
+}
 </style>
