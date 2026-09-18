@@ -21,8 +21,8 @@
             :props="{ label: 'deptName', children: 'children' } as any"
             value-key="deptId"
             node-key="deptId"
-            placeholder="全部门店/组别"
-            clearable
+            :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
+            :clearable="!deptLocked"
             check-strictly
             style="width: 210px"
             @change="handleQuery"
@@ -330,7 +330,7 @@ import type { DeptNode } from '@/api/panjia/types';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { useBizApproval } from '@/hooks/workflow/useBizApproval';
 import { checkPermi } from '@/utils/permission';
-import { resolveBizNo } from '@/utils/panjiaBiz';
+import { resolveBizNo, findDeptSubtree } from '@/utils/panjiaBiz';
 import { useUserStore } from '@/store/modules/user';
 import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
 import CommissionApplyDetail from '@/components/WorkflowHandle/details/CommissionApplyDetail.vue';
@@ -338,6 +338,18 @@ import ContractDetail from '@/views/performance/contract/detail.vue';
 
 const route = useRoute();
 const userStore = useUserStore();
+/** 部门受限角色：总监/店长/经纪人默认选中本部门且只能在本部门子树内下钻；财务/超管全量 */
+const deptLocked = computed(() =>
+  !userStore.roles.includes('admin')
+  && !userStore.roles.includes('superadmin')
+  && !userStore.roles.includes('finance')
+  && (userStore.roles.includes('director')
+    || userStore.roles.includes('manager')
+    || userStore.roles.includes('agent'))
+);
+/** 受限角色的部门默认值（本部门 ID）；其余角色不预填 */
+const defaultDeptId = (): string | undefined =>
+  deptLocked.value && userStore.deptId !== '' ? String(userStore.deptId) : undefined;
 
 /** 是否可以作废：超管全部可操作，普通用户只能操作自己发起的单据 */
 const canCancel = (row: CommissionContractVO): boolean => {
@@ -412,12 +424,16 @@ const contractOrOrderNo = (row: CommissionContractVO): string =>
   resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—';
 
 // 部门树（用于顶部门店筛选；详情弹窗的归属门店翻译在 CommissionApplyDetail 内自处理）
-const deptTreeData = ref<DeptNode[]>([]);
+const deptTreeRaw = ref<DeptNode[]>([]);
+/** 受限角色只展示本部门子树；财务/超管展示全量 */
+const deptTreeData = computed<DeptNode[]>(() =>
+  deptLocked.value ? findDeptSubtree(deptTreeRaw.value, userStore.deptId) : deptTreeRaw.value
+);
 
 const loadDeptTree = async () => {
   try {
     const res: any = await employeeApi.deptTree();
-    deptTreeData.value = res.data ?? [];
+    deptTreeRaw.value = res.data ?? [];
   } catch { /* ignore */ }
 };
 
@@ -473,7 +489,8 @@ const handleQuery = () => {
 
 const resetQuery = () => {
   Object.assign(queryParams, {
-    period: currentPeriod(), deptId: undefined, status: '', keyword: '', pageNum: 1,
+    // 受限角色重置回本部门默认值，不能清空为"全部"
+    period: currentPeriod(), deptId: defaultDeptId(), status: '', keyword: '', pageNum: 1,
   });
   getList();
 };
@@ -674,6 +691,8 @@ const formatDateTime = (val?: string | null): string => {
 useWorkflowRouteOpen('/performance/apply', openFromWorkflow);
 
 onMounted(() => {
+  // 受限角色（店长/总监）默认选中本部门，首屏即按本部门查询
+  queryParams.deptId = defaultDeptId();
   loadDeptTree();
   getList();
 });

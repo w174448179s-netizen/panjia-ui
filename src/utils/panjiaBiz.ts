@@ -8,6 +8,35 @@
  * 出处：《盘家智管_业绩域详细设计_V1.3》§1.2 聚合键规则（订单号：一手房（新盘）、房产金融、家装荐客；合同号：其余）。
  */
 
+import type { DeptNode } from '@/api/panjia/types';
+
+/**
+ * 截取部门树中以指定部门为根的子树（部门数据权限前端裁剪用）。
+ *
+ * 受限角色（店长/总监/经纪人）只能看到并选择本部门及其下级节点；
+ * deptId 为空或未命中时原样返回整树（不改变财务/超管的全量视图）。
+ *
+ * @param tree   全量部门树
+ * @param deptId 当前用户归属部门 ID
+ * @returns 裁剪后的部门树（命中时仅含以该部门为根的子树）
+ */
+export const findDeptSubtree = (tree: DeptNode[], deptId?: string | number | null): DeptNode[] => {
+  if (deptId === undefined || deptId === null || deptId === '') return tree;
+  const target = String(deptId);
+  const dfs = (nodes: DeptNode[]): DeptNode | undefined => {
+    for (const node of nodes) {
+      if (String(node.deptId) === target) return node;
+      if (node.children?.length) {
+        const hit = dfs(node.children);
+        if (hit) return hit;
+      }
+    }
+    return undefined;
+  };
+  const hit = dfs(tree);
+  return hit ? [hit] : tree;
+};
+
 /** 以订单号为聚合键的业务类型（其余类型以合同号为聚合键） */
 export const ORDER_KEYED_BIZ_TYPES: readonly string[] = ['一手房', '房产金融', '家装荐客'];
 

@@ -70,6 +70,16 @@
             <el-button type="primary" link class="contract-link" @click="viewDetail(row)">{{ contractOrOrderNo(row) }}</el-button>
           </template>
         </el-table-column>
+        <el-table-column label="实收业绩" align="right" width="120">
+                  <template #default="{ row }">
+                    <span class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="折算后" align="right" width="120">
+                  <template #default="{ row }">
+                    <span class="amount amount-ink">¥{{ formatAmount(row.receivedConvertedAmount) }}</span>
+                  </template>
+                </el-table-column>
         <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值 -->
         <el-table-column label="新签业绩" align="right" width="200">
           <template #default="{ row }">
@@ -91,16 +101,7 @@
             <span v-else class="amount amount-ink">¥{{ formatAmount(row.expectedConvertedAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="实收业绩" align="right" width="120">
-          <template #default="{ row }">
-            <span class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="折算后" align="right" width="120">
-          <template #default="{ row }">
-            <span class="amount amount-ink">¥{{ formatAmount(row.receivedConvertedAmount) }}</span>
-          </template>
-        </el-table-column>
+
         <el-table-column label="类型" align="center" width="100">
           <template #default="{ row }">{{ row.bizType || '—' }}</template>
         </el-table-column>
