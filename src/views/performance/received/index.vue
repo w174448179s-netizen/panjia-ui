@@ -197,7 +197,8 @@
             <span class="amount amount-ink">¥{{ formatAmount(detailApp.expectedConvertedAmount) }}</span>
           </span>
         </el-descriptions-item>
-        <el-descriptions-item label="房源地址" :span="3">{{ detailApp.propertyAddress || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="签约/认购时间">{{ formatDateTime(detailApp.businessDate) }}</el-descriptions-item>
+        <el-descriptions-item label="房源地址" :span="2">{{ detailApp.propertyAddress || '—' }}</el-descriptions-item>
       </el-descriptions>
 
       <div class="detail-table-wrap">

@@ -14,7 +14,7 @@
         <div class="header-right">
           <span class="info-item">期间：<b>{{ period }}</b></span>
           <span class="info-item">口径：<b>新签业绩（应收）</b></span>
-          <span class="info-item">签约时间：<b>{{ formatDateTime(contractInfo.businessDate) }}</b></span>
+          <span class="info-item">签约/认购时间：<b>{{ formatDateTime(contractInfo.businessDate) }}</b></span>
           <span class="info-item">房源地址：<b>{{ contractInfo.propertyAddress || '—' }}</b></span>
           <!-- 合同级作废/恢复：整张合同业绩一次性操作（不区分人员/角色） -->
           <el-button v-if="canVoid && detailList.length > 0" type="danger" link size="small" @click="handleVoidContract">作废合同业绩</el-button>

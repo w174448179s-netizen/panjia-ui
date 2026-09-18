@@ -258,7 +258,7 @@
         <el-descriptions-item label="订单号">{{ detailDialog.orderNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="业务类型">{{ detailDialog.bizType || '—' }}</el-descriptions-item>
         <el-descriptions-item label="房源地址" :span="3">{{ detailDialog.propertyAddress || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="签约时间">{{ formatDateTime(detailDialog.businessDate) }}</el-descriptions-item>
+        <el-descriptions-item label="签约/认购时间">{{ formatDateTime(detailDialog.businessDate) }}</el-descriptions-item>
         <el-descriptions-item label="期间">{{ detailDialog.period }}</el-descriptions-item>
         <el-descriptions-item label="口径">
           新签业绩（应收）

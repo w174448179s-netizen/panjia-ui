@@ -42,7 +42,8 @@
           </el-tag>
           <span v-else>—</span>
         </el-descriptions-item>
-        <el-descriptions-item label="房源地址" :span="3">{{ detail.propertyAddress || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="签约/认购时间">{{ formatDateTime(detail.businessDate) }}</el-descriptions-item>
+        <el-descriptions-item label="房源地址" :span="2">{{ detail.propertyAddress || '—' }}</el-descriptions-item>
       </el-descriptions>
 
       <div class="detail-table-wrap">
@@ -126,7 +127,8 @@
           <span class="amount amount-red">¥{{ formatAmount(summary.expectedAmount) }}</span>
           <span class="converted-inline">折算后 <span class="amount amount-ink">¥{{ formatAmount(summary.expectedConvertedAmount) }}</span></span>
         </el-descriptions-item>
-        <el-descriptions-item label="房源地址" :span="3">{{ summary.propertyAddress || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="签约/认购时间">{{ formatDateTime(summary.businessDate) }}</el-descriptions-item>
+        <el-descriptions-item label="房源地址" :span="2">{{ summary.propertyAddress || '—' }}</el-descriptions-item>
       </el-descriptions>
       <div class="detail-table-wrap">
         <div class="detail-table-title">每人业绩明细（{{ perfRows.length }} 条）</div>

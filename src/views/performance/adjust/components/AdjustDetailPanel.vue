@@ -48,7 +48,7 @@
             <span class="contract-no">{{ detail.contractNo }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="订单号">{{ detail.orderNo || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="签约时间">{{ detail.businessDate || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="签约/认购时间">{{ detail.businessDate || '—' }}</el-descriptions-item>
           <el-descriptions-item label="明细条数">{{ detail.detailCount ?? 0 }} 条</el-descriptions-item>
           <el-descriptions-item label="新签业绩">
             <span class="amount">{{ formatYuan(detail.originalAmount) }}</span>

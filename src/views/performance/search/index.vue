@@ -188,7 +188,7 @@
         <el-descriptions-item label="订单号">{{ detailDialog.row.orderNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="业务类型">{{ detailDialog.row.bizType || '—' }}</el-descriptions-item>
         <el-descriptions-item label="物业地址" :span="3">{{ detailDialog.row.propertyAddress || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="签约时间">{{ formatDate(detailDialog.row.signDate) }}</el-descriptions-item>
+        <el-descriptions-item label="签约/认购时间">{{ formatDate(detailDialog.row.signDate) }}</el-descriptions-item>
         <el-descriptions-item label="最近期间">{{ detailDialog.row.period }}</el-descriptions-item>
         <!-- 新签业绩：已调整时展示「原值 → 调整后业绩」，折算后同形式（同实收明细） -->
         <el-descriptions-item label="新签业绩">
