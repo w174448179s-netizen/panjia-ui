@@ -12,7 +12,7 @@
               placeholder="全部期间"
               clearable
               style="width: 160px"
-              @change="handleQuery"
+              @change="handleScopeChange"
             />
           </el-form-item>
           <el-form-item v-if="!isAgent" label="门店/组别" prop="deptId">
@@ -26,8 +26,20 @@
               :clearable="!deptLocked"
               check-strictly
               style="width: 200px"
-              @change="handleQuery"
+              @change="handleScopeChange"
             />
+          </el-form-item>
+          <el-form-item label="类型" prop="bizType">
+            <el-select
+              v-model="queryParams.bizType"
+              placeholder="全部类型"
+              clearable
+              filterable
+              style="width: 160px"
+              @change="handleQuery"
+            >
+              <el-option v-for="t in bizTypeOptions" :key="t" :label="t" :value="t" />
+            </el-select>
           </el-form-item>
           <el-form-item label="关键字" prop="keyword">
             <el-input
@@ -366,12 +378,33 @@ const queryParams = reactive({
   pageSize: 20,
   period: undefined as string | undefined,
   deptId: undefined as string | undefined,
+  bizType: undefined as string | undefined,
   keyword: undefined as string | undefined,
 });
 
 const loading = ref(false);
 const tableData = ref<PerformanceFactSearch[]>([]);
 const total = ref(0);
+/** 类型下拉选项：随期间/部门数据范围实时变化（与列表同权限口径） */
+const bizTypeOptions = ref<string[]>([]);
+
+/** 加载业务类型选项（不含关键字/类型过滤，避免选项被自身筛选清空） */
+const loadBizTypes = async () => {
+  try {
+    const res = await performanceApi.listSearchBizTypes({
+      period: queryParams.period,
+      deptId: isAgent.value ? undefined : queryParams.deptId,
+    });
+    bizTypeOptions.value = res.data ?? [];
+    // 当前选中类型已不在可见范围内时清空，避免带着失效条件查询
+    if (queryParams.bizType && !bizTypeOptions.value.includes(queryParams.bizType)) {
+      queryParams.bizType = undefined;
+    }
+  } catch (e) {
+    console.error('[search] 业务类型选项加载失败', e);
+    bizTypeOptions.value = [];
+  }
+};
 
 const getList = async () => {
   loading.value = true;
@@ -380,6 +413,7 @@ const getList = async () => {
       period: queryParams.period,
       // 经纪人走后端本人 employeeId 口径，不传部门
       deptId: isAgent.value ? undefined : queryParams.deptId,
+      bizType: queryParams.bizType,
       keyword: queryParams.keyword,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
@@ -400,12 +434,18 @@ const handleQuery = () => {
   getList();
 };
 
+/** 期间/部门范围变化：先按新范围刷新类型选项（顺带剔除失效选中），再触发查询 */
+const handleScopeChange = () => {
+  loadBizTypes().then(handleQuery);
+};
+
 const resetQuery = () => {
   queryParams.period = undefined;
   // 受限角色重置回本部门默认值，不能清空为"全部"
   queryParams.deptId = defaultDeptId();
+  queryParams.bizType = undefined;
   queryParams.keyword = undefined;
-  handleQuery();
+  loadBizTypes().then(handleQuery);
 };
 
 // ==================== 格式化 ====================
@@ -561,6 +601,7 @@ onMounted(() => {
   // 受限角色（店长/总监）默认选中本部门，首屏即按本部门查询
   queryParams.deptId = defaultDeptId();
   loadDeptTree();
+  loadBizTypes();
   getList();
 });
 

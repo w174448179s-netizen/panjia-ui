@@ -369,8 +369,12 @@ export const performanceApi = {
     panjiaRequest.post<void>(`/perf/period/reopen/${period}`),
 
   // 完整业绩查询（合同维度）
-  searchByContract: (params: { period?: string; deptId?: string; keyword?: string; pageNum?: number; pageSize?: number }) =>
+  searchByContract: (params: { period?: string; deptId?: string; bizType?: string; keyword?: string; pageNum?: number; pageSize?: number }) =>
     panjiaRequest.get<PageResult<PerformanceFactSearch>>('/perf/fact/search', params),
+
+  // 完整业绩查询·业务类型下拉选项（数据范围与 searchByContract 一致）
+  listSearchBizTypes: (params: { period?: string; deptId?: string }) =>
+    panjiaRequest.get<string[]>('/perf/fact/search/biz-types', params),
 
   // 业绩查询·合同下明细（查看详情弹窗；bizNo=列表行展示的合同号/订单号，
   // 一手房/房产金融/家装荐客传订单号，其余传合同号，空则订单号）
