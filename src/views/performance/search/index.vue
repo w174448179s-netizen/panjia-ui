@@ -78,14 +78,25 @@
             <template #default="{ row }">{{ formatDate(row.signDate) }}</template>
           </el-table-column>
 
-          <el-table-column label="新签业绩" align="right" width="130">
+          <!-- 新签业绩：未调整只显示本值；已调整显示「原值 → 调整后业绩」（同实收明细） -->
+          <el-table-column label="新签业绩" align="right" width="200">
             <template #default="{ row }">
-              <span :class="{ 'amount-gray': row.expectOriginalAmount === 0 }">{{ formatMoney(row.expectOriginalAmount) }}</span>
+              <template v-if="isExpectAdjusted(row)">
+                <span class="amount-strike">{{ formatMoney(row.expectOriginalAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount-red">{{ formatMoney(row.expectAmount) }}</span>
+              </template>
+              <span v-else :class="{ 'amount-gray': num(row.expectAmount) === 0 }">{{ formatMoney(row.expectAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="折算后" align="right" width="120">
+          <el-table-column label="折算后" align="right" width="190">
             <template #default="{ row }">
-              <span class="amount-ink">{{ formatMoney(row.expectConvertedAmount) }}</span>
+              <template v-if="isExpectAdjusted(row)">
+                <span class="amount-strike">{{ formatMoney(row.originalExpectConvertedAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount-ink">{{ formatMoney(row.expectConvertedAmount) }}</span>
+              </template>
+              <span v-else class="amount-ink">{{ formatMoney(row.expectConvertedAmount) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="实收业绩" align="right" width="130">
@@ -99,24 +110,6 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="调整" align="center" width="80">
-            <template #default="{ row }">
-              <el-tag v-if="row.hasAdjust" type="warning" size="small">已调整</el-tag>
-              <span v-else class="amount-gray">—</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="调整业绩" align="right" width="130">
-            <template #default="{ row }">
-              <span v-if="row.hasAdjust" class="amount-red">{{ formatMoney(row.expectAmount) }}</span>
-              <span v-else class="amount-gray">—</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="折算后" align="right" width="120">
-            <template #default="{ row }">
-              <span v-if="row.hasAdjust" class="amount-ink">{{ formatMoney(row.adjustedConvertedAmount) }}</span>
-              <span v-else class="amount-gray">—</span>
-            </template>
-          </el-table-column>
           <el-table-column label="调整单状态" align="center" width="110">
             <template #default="{ row }">
               <el-tag v-if="row.adjustStatus" :type="adjustStatusTagType(row.adjustStatus)" size="small">
@@ -207,19 +200,24 @@
         <el-descriptions-item label="物业地址" :span="3">{{ detailDialog.row.propertyAddress || '—' }}</el-descriptions-item>
         <el-descriptions-item label="签约时间">{{ formatDate(detailDialog.row.signDate) }}</el-descriptions-item>
         <el-descriptions-item label="最近期间">{{ detailDialog.row.period }}</el-descriptions-item>
+        <!-- 新签业绩：已调整时展示「原值 → 调整后业绩」，折算后同形式（同实收明细） -->
         <el-descriptions-item label="新签业绩">
-          <span class="amount-red">{{ formatMoney(detailDialog.row.expectOriginalAmount) }}</span>
-          <span class="amount-gray" style="margin-left: 8px">折算后 {{ formatMoney(detailDialog.row.expectConvertedAmount) }}</span>
+          <template v-if="detailRowAdjusted">
+            <span class="amount-strike">{{ formatMoney(detailDialog.row.expectOriginalAmount) }}</span>
+            <span class="amount-arrow">→</span>
+            <span class="amount-red">{{ formatMoney(detailDialog.row.expectAmount) }}</span>
+          </template>
+          <span v-else class="amount-red">{{ formatMoney(detailDialog.row.expectAmount) }}</span>
+          <span class="converted-inline">
+            折算后
+            <span v-if="detailRowAdjusted" class="amount-strike">{{ formatMoney(detailDialog.row.originalExpectConvertedAmount) }}</span>
+            <span v-if="detailRowAdjusted" class="amount-arrow">→</span>
+            <span class="amount-ink">{{ formatMoney(detailDialog.row.expectConvertedAmount) }}</span>
+          </span>
         </el-descriptions-item>
         <el-descriptions-item label="实收业绩">
           <span class="amount-red">{{ formatMoney(detailDialog.row.realAmount) }}</span>
           <span class="amount-gray" style="margin-left: 8px">折算后 {{ formatMoney(detailDialog.row.realConvertedAmount) }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="调整业绩">
-          <span :class="detailDialog.row.hasAdjust ? 'amount-red' : 'amount-gray'">
-            {{ detailDialog.row.hasAdjust ? formatMoney(detailDialog.row.expectAmount) : '—' }}
-          </span>
-          <span v-if="detailDialog.row.hasAdjust" class="amount-gray" style="margin-left: 8px">折算后 {{ formatMoney(detailDialog.row.adjustedConvertedAmount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="调整单状态">
           <el-tag v-if="detailDialog.row.adjustStatus" :type="adjustStatusTagType(detailDialog.row.adjustStatus)" size="small">
@@ -260,12 +258,22 @@
           <b>{{ detailList.length }}</b> 条明细
         </span>
         <span class="summary-amount">
-          新签业绩合计：<b class="amount-red">{{ formatMoney(detailSummary.totalExpectOriginal) }}</b>
-          <span class="amount-gray" style="margin-left: 4px">折算后 {{ formatMoney(detailSummary.totalExpectConverted) }}</span>
+          <!-- 存在已调整明细时，合计按「原合计 → 调整后合计」展示，与明细列同形式 -->
           <template v-if="detailSummary.hasAdjustRow">
+            新签业绩合计：
+            <b class="summary-struck">{{ formatMoney(detailSummary.totalExpectOriginal) }}</b>
+            <span class="summary-arrow">→</span>
+            <b class="amount-red">{{ formatMoney(detailSummary.totalExpect) }}</b>
             <span class="summary-sep">|</span>
-            调整业绩合计：<b class="amount-red">{{ formatMoney(detailSummary.totalExpect) }}</b>
-            <span class="amount-gray" style="margin-left: 4px">折算后 {{ formatMoney(detailSummary.totalExpectConv) }}</span>
+            折算后：
+            <b class="summary-struck">{{ formatMoney(detailSummary.totalExpectOriginalConverted) }}</b>
+            <span class="summary-arrow">→</span>
+            <b class="amount-ink">{{ formatMoney(detailSummary.totalExpectConverted) }}</b>
+          </template>
+          <template v-else>
+            新签业绩合计：<b class="amount-red">{{ formatMoney(detailSummary.totalExpect) }}</b>
+            <span class="summary-sep">|</span>
+            折算后：<b class="amount-ink">{{ formatMoney(detailSummary.totalExpectConverted) }}</b>
           </template>
           <span class="summary-sep">|</span>
           实收合计：<b class="amount-red">{{ formatMoney(detailSummary.totalReal) }}</b>
@@ -294,30 +302,25 @@
         <el-table-column label="签约/认购时间" align="center" width="160">
           <template #default="{ row }">{{ formatDate(row.businessDate) }}</template>
         </el-table-column>
-        <el-table-column label="新签业绩" align="right" width="130">
+        <!-- 新签业绩：已调整时在该行展示「原值 → 调整后业绩」，折算后同形式 -->
+        <el-table-column label="新签业绩" align="right" width="200">
           <template #default="{ row }">
-            <span class="amount-red">{{ formatMoney(row.originalExpectAmount ?? row.expectAmount) }}</span>
+            <template v-if="isRowAdjusted(row)">
+              <span class="amount-strike">{{ formatMoney(row.originalExpectAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount-red">{{ formatMoney(row.expectAmount) }}</span>
+            </template>
+            <span v-else class="amount-red">{{ formatMoney(row.expectAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="折算后" align="right" width="120">
+        <el-table-column label="折算后" align="right" width="180">
           <template #default="{ row }">
-            <span class="amount-ink">{{ formatMoney(row.originalExpectConvertedAmount ?? row.expectConvertedAmount) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="调整业绩" align="right" width="130">
-          <template #default="{ row }">
-            <span v-if="Number(row.expectAmount) !== Number(row.originalExpectAmount ?? row.expectAmount)" class="amount-red">
-              {{ formatMoney(row.expectAmount) }}
-            </span>
-            <span v-else class="amount-gray">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="折算后" align="right" width="120">
-          <template #default="{ row }">
-            <span v-if="Number(row.expectAmount) !== Number(row.originalExpectAmount ?? row.expectAmount)" class="amount-ink">
-              {{ formatMoney(row.expectConvertedAmount) }}
-            </span>
-            <span v-else class="amount-gray">—</span>
+            <template v-if="isRowAdjusted(row)">
+              <span class="amount-strike">{{ formatMoney(row.originalExpectConvertedAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount-ink">{{ formatMoney(row.expectConvertedAmount) }}</span>
+            </template>
+            <span v-else class="amount-ink">{{ formatMoney(row.expectConvertedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="实收业绩" align="right" width="130">
@@ -425,10 +428,29 @@ const resetQuery = () => {
 };
 
 // ==================== 格式化 ====================
+const num = (v: number | string | null | undefined): number => {
+  if (v === undefined || v === null || v === '') return 0;
+  const n = Number(v);
+  return Number.isNaN(n) ? 0 : n;
+};
+
 const formatMoney = (val?: number | null): string => {
   if (val == null) return '—';
   return `¥${val.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
+
+/**
+ * 是否按「原值 → 调整后值」展示：调整后金额与原值不等即为已调整。
+ * 统一走 num() 做数值比较（后端字段可能为 number | string），
+ * 与「新签明细」页 isAdjusted 同口径 —— 未调整的行不展示「调整后」值，避免与调整前重复。
+ */
+const isExpectAdjusted = (
+  row: { expectAmount?: number | string | null; expectOriginalAmount?: number | string | null } | null | undefined,
+): boolean => !!row && num(row.expectAmount) !== num(row.expectOriginalAmount);
+/** 合同明细行：字段名不同（originalExpectAmount），判定口径与列表行一致 */
+const isRowAdjusted = (
+  row: { expectAmount?: number | string | null; originalExpectAmount?: number | string | null } | null | undefined,
+): boolean => !!row && num(row.expectAmount) !== num(row.originalExpectAmount);
 
 const formatDate = (val?: string | null): string => {
   if (!val) return '—';
@@ -511,17 +533,22 @@ const detailDialog = reactive({
 const detailLoading = ref(false);
 const detailList = ref<PerformanceSearchDetailRow[]>([]);
 
+/** 明细弹窗头部「新签业绩」是否按「原值 → 调整后值」展示（与列表同口径） */
+const detailRowAdjusted = computed(() => isExpectAdjusted(detailDialog.row));
+
 const detailSummary = computed(() => {
   const list = detailList.value;
   return {
     employeeCount: new Set(list.map((r) => r.employeeId)).size,
-    totalExpectOriginal: list.reduce((s, r) => s + Number(r.originalExpectAmount ?? r.expectAmount ?? 0), 0),
-    totalExpectConverted: list.reduce((s, r) => s + Number(r.originalExpectConvertedAmount ?? r.expectConvertedAmount ?? 0), 0),
-    totalExpect: list.reduce((s, r) => s + Number(r.expectAmount || 0), 0),
-    totalExpectConv: list.reduce((s, r) => s + Number(r.expectConvertedAmount ?? 0), 0),
-    hasAdjustRow: list.some((r) => Number(r.expectAmount) !== Number(r.originalExpectAmount ?? r.expectAmount)),
-    totalReal: list.reduce((s, r) => s + Number(r.realAmount || 0), 0),
-    totalRealConverted: list.reduce((s, r) => s + Number(r.realConvertedAmount ?? 0), 0),
+    // 调整前（原值）合计：originalExpectAmount 由 SQL COALESCE 兜底，未调整时等于当前值
+    totalExpectOriginal: list.reduce((s, r) => s + num(r.originalExpectAmount ?? r.expectAmount), 0),
+    totalExpectOriginalConverted: list.reduce((s, r) => s + num(r.originalExpectConvertedAmount ?? r.expectConvertedAmount), 0),
+    // 当前（调整后）合计
+    totalExpect: list.reduce((s, r) => s + num(r.expectAmount), 0),
+    totalExpectConverted: list.reduce((s, r) => s + num(r.expectConvertedAmount), 0),
+    hasAdjustRow: list.some((r) => isRowAdjusted(r)),
+    totalReal: list.reduce((s, r) => s + num(r.realAmount), 0),
+    totalRealConverted: list.reduce((s, r) => s + num(r.realConvertedAmount), 0),
   };
 });
 
@@ -610,6 +637,37 @@ onBeforeUnmount(() => {
 .amount-ink {
   color: #303133;
   font-weight: 500;
+}
+
+/* ============ 「原值 → 调整后值」展示（列表两列 / 详情摘要 / 明细表两列 / 汇总条共用） ============
+   有调整时：被调整掉的原值置灰加删除线，箭头连接调整后值；未调整时只渲染一个值。
+   口径与「合同业绩明细」页 / 实收明细页保持一致。 */
+.amount-strike {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #c0c4cc;
+  text-decoration: line-through;
+}
+.amount-arrow {
+  margin: 0 4px;
+  color: #c0c4cc;
+}
+/* 详情摘要「新签业绩」右侧的折算后内联段：灰字标签 + 值，与左侧同一格并排 */
+.converted-inline {
+  margin-left: 10px;
+  font-size: 13px;
+  color: #909399;
+}
+/* 汇总条上的「原合计 → 调整后合计」：原值删除线、箭头同明细列口径 */
+.summary-struck {
+  color: #c0c4cc;
+  font-weight: 500;
+  text-decoration: line-through;
+  margin: 0 2px;
+}
+.summary-arrow {
+  margin: 0 2px;
+  color: #c0c4cc;
 }
 
 .adjust-tag {

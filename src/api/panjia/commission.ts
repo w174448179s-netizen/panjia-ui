@@ -57,6 +57,8 @@ export interface CommissionApplication {
   totalAmount: number;
   expectedAmount?: number;   // 应收合计（§3.4/3.5）
   expectedAdjusted?: boolean; // 应收已被调整（当前值与快照不一致）
+  /** 调整前应收合计（提交快照；仅 expectedAdjusted=true 时有值，供展示「原值 → 调整后值」） */
+  originalExpectedAmount?: number;
   aligned?: boolean;         // 是否已实收对齐应收
   currentNode?: string;      // DIRECTOR / FINANCE / null（T-04 后实收==应收时财务节点跳过，流程直接结束）
   status: string;        // DRAFT / SUBMITTED / APPROVED / LOCKED / REJECTED / CANCELLED
@@ -107,10 +109,16 @@ export interface CommissionItemDetail {
   bizType?: string;
   /** 新签业绩（同 sourceKey 的 PERF_EXPECT 事实金额） */
   expectedAmount?: number;
+  /** 该行应收已被调整（同 sourceKey 存在 REVERSED 的 PERF_EXPECT 事实） */
+  expectedAdjusted?: boolean;
+  /** 调整前新签业绩（同 sourceKey 最早一条 REVERSED 的 PERF_EXPECT；无调整时 = expectedAmount） */
+  originalExpectedAmount?: number;
   /** 结佣业绩 */
   amount: number;
   /** 新签业绩折算后金额（expectedAmount × 当前生效折算因子） */
   expectedConvertedAmount?: number;
+  /** 调整前新签业绩折算后金额（originalExpectedAmount × 当前生效折算因子） */
+  originalConvertedAmount?: number;
   /** 结佣业绩折算后金额（amount × 当前生效折算因子） */
   convertedAmount?: number;
   feeItem?: string;
@@ -147,6 +155,10 @@ export interface CommissionContractVO {
   expectedAmount?: number;   // 应收合计
   /** 新签业绩折算后金额（expectedAmount × 当前生效折算因子） */
   expectedConvertedAmount?: number;
+  /** 调整前应收合计（申请单提交快照；仅 expectedAdjusted=true 时有值，供展示「原值 → 调整后值」） */
+  originalExpectedAmount?: number;
+  /** 调整前应收的折算后金额（originalExpectedAmount × 当前生效折算因子） */
+  originalExpectedConvertedAmount?: number;
   expectedAdjusted?: boolean; // 应收已被调整
   aligned?: boolean;
   currentNode?: string;      // DIRECTOR / FINANCE / null（T-04 后实收==应收时财务节点跳过，流程直接结束）

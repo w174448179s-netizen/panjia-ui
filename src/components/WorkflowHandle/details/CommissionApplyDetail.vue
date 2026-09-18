@@ -18,10 +18,22 @@
           <span class="amount amount-red">¥{{ formatAmount(detail.totalAmount) }}</span>
           <span class="amount amount-gray" style="margin-left: 8px">折算后 ¥{{ formatAmount(totalConvertedAmount) }}</span>
         </el-descriptions-item>
+        <!-- 应收合计（新签业绩）：有调整时展示「原值 → 调整后值」，折算后同形式 -->
         <el-descriptions-item label="应收合计" :span="2">
-          ¥{{ formatAmount(detail.expectedAmount) }}
-          <span class="amount amount-gray" style="margin-left: 8px">折算后 ¥{{ formatAmount(totalExpectedConvertedAmount) }}</span>
-          <el-tag v-if="detail.expectedAdjusted" type="warning" size="small" effect="plain" style="margin-left: 6px">已调整</el-tag>
+          <template v-if="detailAdjusted">
+            <span class="amount-strike">¥{{ formatAmount(detail.originalExpectedAmount) }}</span>
+            <span class="amount-arrow">→</span>
+            <span class="amount amount-red">¥{{ formatAmount(detail.expectedAmount) }}</span>
+          </template>
+          <template v-else>
+            <span class="amount amount-red">¥{{ formatAmount(detail.expectedAmount) }}</span>
+          </template>
+          <span class="converted-inline">
+            折算后
+            <span v-if="detailAdjusted" class="amount-strike">¥{{ formatAmount(totalOriginalExpectedConvertedAmount) }}</span>
+            <span v-if="detailAdjusted" class="amount-arrow">→</span>
+            <span class="amount amount-ink">¥{{ formatAmount(totalExpectedConvertedAmount) }}</span>
+          </span>
         </el-descriptions-item>
         <el-descriptions-item label="房源地址" :span="3">{{ detail.propertyAddress || '—' }}</el-descriptions-item>
       </el-descriptions>
@@ -53,14 +65,25 @@
           <el-table-column label="角色占比" align="center" width="90">
             <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
           </el-table-column>
-          <el-table-column label="新签业绩" align="right" width="120">
+          <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值 -->
+          <el-table-column label="新签业绩" align="right" width="190">
             <template #default="scope">
-              <span class="amount">{{ formatAmount(scope.row.expectedAmount) }}</span>
+              <template v-if="isAdjusted(scope.row)">
+                <span class="amount-strike">¥{{ formatAmount(scope.row.originalExpectedAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
+              </template>
+              <span v-else class="amount">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="折算后" align="right" width="120">
+          <el-table-column label="折算后" align="right" width="180">
             <template #default="scope">
-              <span class="amount amount-ink">¥{{ formatAmount(scope.row.expectedConvertedAmount) }}</span>
+              <template v-if="isAdjusted(scope.row)">
+                <span class="amount-strike">¥{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount amount-ink">¥{{ formatAmount(scope.row.expectedConvertedAmount) }}</span>
+              </template>
+              <span v-else class="amount amount-ink">¥{{ formatAmount(scope.row.expectedConvertedAmount) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="结佣业绩" align="right" width="120">
@@ -99,6 +122,19 @@ const { load: loadEmployees, name: employeeName } = useEmployeeMap();
 /** 头部「折算后合计」：按明细逐行折算后金额求和，与表格同源，避免合计与明细对不上 */
 const totalConvertedAmount = computed(() => items.value.reduce((s, it) => s + num(it.convertedAmount), 0));
 const totalExpectedConvertedAmount = computed(() => items.value.reduce((s, it) => s + num(it.expectedConvertedAmount), 0));
+/** 调整前应收的折算后合计：与明细列同源，供「应收合计」展示「原折算 → 调整后折算」 */
+const totalOriginalExpectedConvertedAmount = computed(() =>
+  items.value.reduce((s, it) => s + num(it.originalConvertedAmount), 0));
+
+/**
+ * 是否按「原值 → 调整后值」展示：需后端 expectedAdjusted 标记与调整前值同时成立。
+ * 两者缺一（如差额行无关联业绩事实）就退回单值展示，避免出现「0.00 → 12000.00」这类误导。
+ * 详情头部（CommissionApplication）与每人明细行（CommissionItemDetail）共用同一判定。
+ */
+const isAdjusted = (
+  row: { expectedAdjusted?: boolean | null; originalExpectedAmount?: number | string | null } | null | undefined,
+): boolean => !!row?.expectedAdjusted && row.originalExpectedAmount != null;
+const detailAdjusted = computed(() => isAdjusted(detail.value));
 
 const num = (v: number | string | null | undefined): number => {
   if (v === undefined || v === null || v === '') return 0;
@@ -199,5 +235,24 @@ onMounted(async () => {
 }
 .dept-group {
   color: var(--el-text-color-secondary);
+}
+/* ============ 「原值 → 调整后值」展示（头部应收合计 / 每人明细两列共用） ============
+   有调整时：被调整掉的原值置灰加删除线，箭头连接调整后值；未调整时只渲染一个值。
+   口径与「合同业绩明细」页 / 实收明细页保持一致。 */
+.amount-strike {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #c0c4cc;
+  text-decoration: line-through;
+}
+.amount-arrow {
+  margin: 0 4px;
+  color: #c0c4cc;
+}
+/* 应收合计右侧的折算后内联段：灰字标签 + 值，与左侧应收合计同一格并排 */
+.converted-inline {
+  margin-left: 10px;
+  font-size: 13px;
+  color: #909399;
 }
 </style>

@@ -87,15 +87,25 @@
             <span class="amount amount-ink">¥{{ formatAmount(row.convertedAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="新签业绩" align="right" width="130">
+        <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值（同实收明细） -->
+        <el-table-column label="新签业绩" align="right" width="200">
           <template #default="{ row }">
-            <span class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
-            <el-tag v-if="row.expectedAdjusted" type="warning" size="small" effect="plain" class="adj-tag">已调整</el-tag>
+            <template v-if="isAdjusted(row)">
+              <span class="amount-strike">¥{{ formatAmount(row.originalExpectedAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
+            </template>
+            <span v-else class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="折算后" align="right" width="120">
+        <el-table-column label="折算后" align="right" width="190">
           <template #default="{ row }">
-            <span class="amount amount-ink">¥{{ formatAmount(row.expectedConvertedAmount) }}</span>
+            <template v-if="isAdjusted(row)">
+              <span class="amount-strike">¥{{ formatAmount(row.originalExpectedConvertedAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount amount-ink">¥{{ formatAmount(row.expectedConvertedAmount) }}</span>
+            </template>
+            <span v-else class="amount amount-ink">¥{{ formatAmount(row.expectedConvertedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="差异" align="center" width="90">
@@ -388,6 +398,14 @@ const num = (v: number | string | null | undefined): number => {
 // 金额格式化
 const formatAmount = (n: number | string | null | undefined) =>
   n == null ? '0.00' : num(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * 是否按「原值 → 调整后值」展示：需后端 expectedAdjusted 标记与调整前快照同时成立。
+ * 两者缺一就退回单值展示，避免出现「0.00 → 12000.00」这类误导（同实收明细口径）。
+ */
+const isAdjusted = (
+  row: { expectedAdjusted?: boolean | null; originalExpectedAmount?: number | string | null } | null | undefined,
+): boolean => !!row?.expectedAdjusted && row.originalExpectedAmount != null;
 
 // 合同号/订单号合并展示：一手房、房产金融、家装荐客以订单号为准，其它以合同号为准（空则回退）
 const contractOrOrderNo = (row: CommissionContractVO): string =>
@@ -814,7 +832,17 @@ onMounted(() => {
   }
 }
 
-.adj-tag {
-  margin-left: 4px;
+/* ============ 「原值 → 调整后值」展示（列表 / 详情弹窗共用） ============
+   有调整时：被调整掉的原值置灰加删除线，箭头连接调整后值；未调整时只渲染一个值。
+   样式口径与「合同业绩明细」页 / 实收明细页保持一致。 */
+.amount-strike {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #c0c4cc;
+  text-decoration: line-through;
+}
+.amount-arrow {
+  margin: 0 4px;
+  color: #c0c4cc;
 }
 </style>
