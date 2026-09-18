@@ -16,10 +16,12 @@ export interface ReceivedApply {
   expectedAmount?: number;    // 应收合计（展示实时值：ACTIVE PERF_EXPECT 含已生效调整）
   /** 应收已被调整（当前应收 ≠ 提交时快照，展示「已调整」标记） */
   expectedAdjusted?: boolean;
-  /** 提交时快照应收（展示「调整前」值） */
+  /** 提交时快照应收（即「调整前」值，仅在 expectedAdjusted=true 时有意义） */
   originalExpectedAmount?: number;
   /** 新签业绩折算后金额（expectedAmount × 当前生效折算因子） */
   expectedConvertedAmount?: number;
+  /** 调整前新签业绩的折算后金额（originalExpectedAmount × 同一折算因子） */
+  originalExpectedConvertedAmount?: number;
   /** 实收业绩折算后金额（receivedAmount × 当前生效折算因子） */
   receivedConvertedAmount?: number;
   itemCount: number;
@@ -52,14 +54,18 @@ export interface ReceivedFact {
   roleName?: string;
   /** 角色占比 */
   shareRatio?: number;
-  /** 新签业绩（同 sourceKey 的 PERF_EXPECT 事实金额） */
+  /** 新签业绩（同 sourceKey 的 PERF_EXPECT 事实金额，已含调整） */
   expectedAmount?: number;
+  /** 新签业绩原值（调整前；未调整时 = expectedAmount） */
+  originalExpectedAmount?: number;
   /** 该行应收已被调整（同 sourceKey 存在 REVERSED 的 PERF_EXPECT 事实） */
   expectedAdjusted?: boolean;
   /** 实收业绩（PERF_REAL 事实金额） */
   amount: number;
   /** 新签业绩折算后金额（expectedAmount × 当前生效折算因子） */
   expectedConvertedAmount?: number;
+  /** 新签业绩原值折算后金额（originalExpectedAmount × 同一折算因子） */
+  originalConvertedAmount?: number;
   /** 实收业绩折算后金额（amount × 当前生效折算因子） */
   convertedAmount?: number;
 }

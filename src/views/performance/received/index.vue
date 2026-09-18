@@ -70,15 +70,25 @@
             <el-button type="primary" link class="contract-link" @click="viewDetail(row)">{{ contractOrOrderNo(row) }}</el-button>
           </template>
         </el-table-column>
-        <el-table-column label="新签业绩" align="right" width="130">
+        <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值 -->
+        <el-table-column label="新签业绩" align="right" width="200">
           <template #default="{ row }">
-            <span class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
-            <el-tag v-if="row.expectedAdjusted" type="warning" size="small" effect="plain" class="adj-tag">已调整</el-tag>
+            <template v-if="isAdjusted(row)">
+              <span class="amount-strike">¥{{ formatAmount(row.originalExpectedAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount amount-red">¥{{ formatAmount(row.expectedAmount) }}</span>
+            </template>
+            <span v-else class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="折算后" align="right" width="120">
+        <el-table-column label="折算后" align="right" width="190">
           <template #default="{ row }">
-            <span class="amount amount-ink">¥{{ formatAmount(row.expectedConvertedAmount) }}</span>
+            <template v-if="isAdjusted(row)">
+              <span class="amount-strike">¥{{ formatAmount(row.originalExpectedConvertedAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount amount-ink">¥{{ formatAmount(row.expectedConvertedAmount) }}</span>
+            </template>
+            <span v-else class="amount amount-ink">¥{{ formatAmount(row.expectedConvertedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="实收业绩" align="right" width="120">
@@ -169,17 +179,22 @@
           <span class="amount amount-red">¥{{ formatAmount(detailApp.receivedAmount) }}</span>
           <span class="amount amount-gray" style="margin-left: 8px">折算后 ¥{{ formatAmount(detailApp.receivedConvertedAmount) }}</span>
         </el-descriptions-item>
+        <!-- 新签业绩（应收合计）：有调整时展示「原值 → 调整后值」，折算后同形式 -->
         <el-descriptions-item label="应收合计" :span="2">
-          <template v-if="detailApp.expectedAdjusted">
-            <span style="text-decoration: line-through; color: #999">¥{{ formatAmount(detailApp.originalExpectedAmount) }}</span>
-            <span style="margin: 0 4px">→</span>
+          <template v-if="detailAdjusted">
+            <span class="amount-strike">¥{{ formatAmount(detailApp.originalExpectedAmount) }}</span>
+            <span class="amount-arrow">→</span>
             <span class="amount amount-red">¥{{ formatAmount(detailApp.expectedAmount) }}</span>
-            <el-tag type="warning" size="small" effect="plain" style="margin-left: 6px">已调整</el-tag>
           </template>
           <template v-else>
             <span class="amount amount-expected">¥{{ formatAmount(detailApp.expectedAmount) }}</span>
           </template>
-          <span class="amount amount-gray" style="margin-left: 8px">折算后 ¥{{ formatAmount(detailApp.expectedConvertedAmount) }}</span>
+          <span class="converted-inline">
+            折算后
+            <span v-if="detailAdjusted" class="amount-strike">¥{{ formatAmount(detailApp.originalExpectedConvertedAmount) }}</span>
+            <span v-if="detailAdjusted" class="amount-arrow">→</span>
+            <span class="amount amount-ink">¥{{ formatAmount(detailApp.expectedConvertedAmount) }}</span>
+          </span>
         </el-descriptions-item>
         <el-descriptions-item label="房源地址" :span="3">{{ detailApp.propertyAddress || '—' }}</el-descriptions-item>
       </el-descriptions>
@@ -211,14 +226,25 @@
           <el-table-column label="角色占比" align="center" width="90">
             <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
           </el-table-column>
-          <el-table-column label="新签业绩" align="right" width="120">
+          <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值 -->
+          <el-table-column label="新签业绩" align="right" width="200">
             <template #default="scope">
-              <span :class="['amount', scope.row.expectedAdjusted ? 'amount-red' : 'amount-expected']">{{ formatAmount(scope.row.expectedAmount) }}</span>
+              <template v-if="isAdjusted(scope.row)">
+                <span class="amount-strike">¥{{ formatAmount(scope.row.originalExpectedAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount amount-red">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
+              </template>
+              <span v-else class="amount amount-expected">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="折算后" align="right" width="120">
+          <el-table-column label="折算后" align="right" width="190">
             <template #default="scope">
-              <span class="amount amount-ink">¥{{ formatAmount(scope.row.expectedConvertedAmount) }}</span>
+              <template v-if="isAdjusted(scope.row)">
+                <span class="amount-strike">¥{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount amount-ink">¥{{ formatAmount(scope.row.expectedConvertedAmount) }}</span>
+              </template>
+              <span v-else class="amount amount-ink">¥{{ formatAmount(scope.row.expectedConvertedAmount) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="实收业绩" align="right" width="120">
@@ -396,6 +422,15 @@ const num = (v: number | string | null | undefined): number => {
 const formatAmount = (n: number | string | null | undefined) =>
   n == null ? '0.00' : num(n).toFixed(2);
 
+/**
+ * 是否按「原值 → 调整后值」展示：需后端 expectedAdjusted 标记与原值同时成立。
+ * 两者缺一（如老数据无提交快照）就退回单值展示，避免出现「0.00 → 12000.00」这类误导。
+ * 列表行（ReceivedApply）与每人明细行（ReceivedFact）共用同一判定。
+ */
+const isAdjusted = (
+  row: { expectedAdjusted?: boolean | null; originalExpectedAmount?: number | string | null } | null | undefined,
+): boolean => !!row?.expectedAdjusted && row.originalExpectedAmount != null;
+
 const formatDateTime = (val?: string | null): string => {
   if (!val) return '—';
   return val.replace('T', ' ').substring(0, 19);
@@ -509,6 +544,8 @@ const resetQuery = () => {
 const showDetail = ref(false);
 const detailApp = ref<ReceivedApply | null>(null);
 const detailFacts = ref<ReceivedFact[]>([]);
+/** 详情弹窗的「应收合计」是否按「原值 → 调整后值」展示（同一处判定复用三遍，提为 computed） */
+const detailAdjusted = computed(() => isAdjusted(detailApp.value));
 
 const viewDetail = async (row: ReceivedApply) => {
   showDetail.value = true;
@@ -722,9 +759,6 @@ onMounted(() => {
   .amount-expected {
     color: #909399;
   }
-  .adj-tag {
-    margin-left: 4px;
-  }
 }
 
 .pager-bar {
@@ -773,10 +807,10 @@ onMounted(() => {
     color: #909399;
   }
 
+  /* 仅统一数字字体与字重；颜色交由 amount-expected / amount-red / amount-ink 语义类决定 */
   .amount {
     font-variant-numeric: tabular-nums;
     font-weight: 600;
-    color: #909399;
   }
 }
 
@@ -845,5 +879,36 @@ onMounted(() => {
 .amount-gray {
   color: #909399;
   font-weight: 400;
+}
+
+/* ============ 「原值 → 调整后值」展示（列表两列 / 详情应收合计 / 每人明细 共用） ============
+   有调整时：被调整掉的原值置灰加删除线，箭头连接调整后值；
+   未调整时：只渲染一个值。
+   样式口径与「合同业绩明细」页 .amount-strike / .amount-arrow 保持一致。 */
+.amount-expected {
+  color: #909399;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.amount-red {
+  color: #f56c6c;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.amount-strike {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #c0c4cc;
+  text-decoration: line-through;
+}
+.amount-arrow {
+  margin: 0 4px;
+  color: #c0c4cc;
+}
+/* 详情「应收合计」右侧的折算后内联段：灰字标签 + 值，与左侧应收合计同一格并排 */
+.converted-inline {
+  margin-left: 10px;
+  font-size: 13px;
+  color: #909399;
 }
 </style>
