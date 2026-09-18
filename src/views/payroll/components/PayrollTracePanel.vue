@@ -1,4 +1,5 @@
 <template>
+  <div class="trace-wrap">
   <div class="trace-panel">
     <!-- 左：工资构成 -->
     <div class="trace-left">
@@ -34,67 +35,67 @@
             <span class="compose-val net-val">¥{{ fmt(row.net) }}</span>
           </div>
           <div class="compose-item">
-            <span class="compose-name">公司承担社保</span>
-            <span class="compose-val muted">¥{{ fmt(row.employerSocial) }}（不扣工资，计入部门收支）</span>
-          </div>
-          <div class="compose-item">
             <span class="compose-name">绩效等级 / 综合提点</span>
             <span class="compose-val muted">{{ row.perfGrade || '—' }} / {{ row.finalRate != null ? (Number(row.finalRate) * 100).toFixed(1) + '%' : '—' }}</span>
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- 右：溯源链路 -->
-    <div class="trace-right">
-      <div class="trace-title">
-        <el-icon><Link /></el-icon>
-        溯源链路
-      </div>
-      <el-steps direction="vertical" :active="4" class="trace-steps">
-        <el-step title="工资明细项" description="本批次计算结果（规则快照，锁定后不可改）" />
-        <el-step title="结佣记录 / 录入单据" description="结佣审批单、奖金审批单、考勤/积分导入批次" />
-        <el-step title="合同角色人业绩行" description="原始行 + 调整行版本链，原始行永不修改" />
-        <el-step title="贝壳导入批次" description="理房通到账明细表原始数据（只读存档）" />
-      </el-steps>
       <div v-if="row.commissionIncome" class="trace-action">
-        <el-button size="small" type="primary" plain :loading="traceLoading" @click="loadCommissionTrace">
+        <el-button size="small" type="primary" plain :loading="traceLoading" @click="openTraceDialog">
           查看结佣明细（¥{{ fmt(row.commissionIncome) }} 提成对应的每笔结佣）
         </el-button>
       </div>
-      <div v-if="traceItems.length" class="trace-commission">
-        <el-table :data="traceItems" size="small" border max-height="260">
-          <el-table-column label="业务类型" prop="bizType" width="90" />
-          <el-table-column label="费用项目" prop="feeItem" min-width="100" show-overflow-tooltip />
-          <el-table-column label="金额" align="right" width="110">
-            <template #default="{ row: it }">
-              <span :class="{ 'deduct-text': Number(it.amount) < 0 }">¥{{ fmt(it.amount) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="状态" width="100" align="center">
-            <template #default="{ row: it }">
-              <el-tag v-if="it.status === 'REVERSED'" type="danger" size="small">红冲/退单</el-tag>
-              <el-tag v-else-if="it.status === 'APPROVED'" type="success" size="small">已审批</el-tag>
-              <el-tag v-else type="info" size="small">{{ it.status }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="业绩事实" width="110" align="center">
-            <template #default="{ row: it }">
-              <span v-if="it.performanceFactId" class="fact-id">#{{ it.performanceFactId }}</span>
-              <span v-else>—</span>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div class="trace-footnote">金额为该员工在对应结佣审批单中的分摊金额；红冲行为退单回冲，可继续在「业绩明细 → 合同详情」中查看原始合同。</div>
-      </div>
     </div>
+  </div>
+
+  <el-dialog
+    v-model="traceDialogVisible"
+    :title="`结佣明细追溯 · ${employeeName || ''}（${period}）`"
+    width="1100px"
+    destroy-on-close
+  >
+    <el-table :data="traceItems" size="small" border max-height="460" show-summary :summary-method="traceSummary">
+      <el-table-column label="签约/认购时间" width="170" align="center">
+        <template #default="{ row: it }">{{ formatDate(it.signDate) || it.businessDate || '—' }}</template>
+      </el-table-column>
+      <el-table-column label="合同号/订单号" min-width="180" show-overflow-tooltip>
+        <template #default="{ row: it }">
+          <div class="contract-cell">
+            <span class="contract-no">{{ it.contractNo || '—' }}</span>
+            <span v-if="it.orderNo" class="order-no">/{{ it.orderNo }}</span>
+          </div>
+        </template>
+      </el-table-column>
+      <el-table-column label="类型" prop="bizType" width="100" show-overflow-tooltip />
+      <el-table-column label="房源地址" min-width="200" show-overflow-tooltip>
+        <template #default="{ row: it }">{{ it.propertyAddress || '—' }}</template>
+      </el-table-column>
+      <el-table-column label="所属角色" prop="roleType" width="90" align="center">
+        <template #default="{ row: it }">{{ it.roleType || '—' }}</template>
+      </el-table-column>
+      <el-table-column label="角色占比" width="90" align="center">
+        <template #default="{ row: it }">{{ it.shareRatio != null ? (Number(it.shareRatio) * 100).toFixed(2) + '%' : '—' }}</template>
+      </el-table-column>
+      <el-table-column label="结佣金额" align="right" width="130">
+        <template #default="{ row: it }">
+          <span :class="{ 'deduct-text': Number(it.amount) < 0 }">¥{{ fmt(it.amount) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="结算日期" width="110" align="center">
+        <template #default="{ row: it }">{{ it.approvedMonth || '—' }}</template>
+      </el-table-column>
+    </el-table>
+    <div class="trace-footnote">
+      结佣金额 = 已审批结佣金额；签约/认购日期、房源地址、角色占比由业绩事实 enrich。
+    </div>
+  </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import { Tickets, Link } from '@element-plus/icons-vue';
+import { Tickets } from '@element-plus/icons-vue';
 import { mySalaryApi, orgCommissionTraceApi, type CommissionTraceItem, type PayrollDetail } from '@/api/panjia/payroll';
 
 const props = defineProps<{
@@ -108,46 +109,75 @@ const props = defineProps<{
 const fmt = (n: number | null | undefined) =>
   n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const isZero = (v: number | null | undefined) => !v || Number(v) === 0;
+const formatDate = (val?: string | null): string => {
+  if (!val) return '';
+  return val.replace('T', ' ').substring(0, 19);
+};
 
-/* ───────────── 工资构成列定义（含溯源口径） ───────────── */
-interface ColDef { prop: string; label: string; source: string }
+/* ───────────── 工资构成列定义（含溯源口径，带实际数值） ───────────── */
+interface ColDef { prop: string; label: string; source: string | ((row: PayrollDetail) => string) }
 
 const INCOME_COLS: ColDef[] = [
-  { prop: 'commissionIncome', label: '业绩提成', source: '结佣计薪业绩 × 快照提点' },
-  { prop: 'teamIncome', label: '团队提成', source: '团队新签计薪业绩 × 10%' },
-  { prop: 'personalNewsignIncome', label: '个人新签', source: '本人新签计薪业绩 × 70%' },
+  { prop: 'commissionIncome', label: '业绩提成', source: (r) => {
+    const rate = Number(r.finalRate) || 0;
+    const base = rate > 0 ? Number(r.commissionIncome) / rate : 0;
+    return `结佣计薪业绩 ¥${fmt(base)} × 快照提点 ${(rate * 100).toFixed(1)}% = ¥${fmt(r.commissionIncome)}`;
+  } },
+  { prop: 'teamIncome', label: '团队提成', source: (r) => {
+    const base = Number(r.teamIncome) / 0.1;
+    return `团队新签计薪业绩 ¥${fmt(base)} × 10% = ¥${fmt(r.teamIncome)}`;
+  } },
+  { prop: 'personalNewsignIncome', label: '个人新签', source: (r) => {
+    const base = Number(r.personalNewsignIncome) / 0.7;
+    return `本人新签计薪业绩 ¥${fmt(base)} × 70% = ¥${fmt(r.personalNewsignIncome)}`;
+  } },
   { prop: 'storeIncome', label: '门店提成', source: '各门店新签业绩 × 跳点比例' },
-  { prop: 'baseSalary', label: '底薪/保底', source: '职级规则配置（历史快照）' },
-  { prop: 'guaranteeFill', label: '保底补足', source: 'MAX(保底, 团队+个人新签) 补足部分' },
-  { prop: 'mentorBonus', label: '招聘奖励', source: '师徒关系档案：徒弟结佣 × 2%' },
+  { prop: 'baseSalary', label: '底薪/保底', source: (r) => `职级规则快照：¥${fmt(r.baseSalary)}` },
+  { prop: 'guaranteeFill', label: '保底补足', source: (r) => {
+    const combined = Number(r.teamIncome) + Number(r.personalNewsignIncome);
+    return `MAX(保底 ¥${fmt(r.baseSalary)}, 团队+个人新签 ¥${fmt(combined)}) 补足 ¥${fmt(r.guaranteeFill)}`;
+  } },
+  { prop: 'mentorBonus', label: '招聘奖励', source: (r) => {
+    const apprentice = Number(r.mentorBonus) / 0.02;
+    return `徒弟结佣 ¥${fmt(apprentice)} × 2% = ¥${fmt(r.mentorBonus)}`;
+  } },
   { prop: 'bonus', label: '奖金', source: '奖金审批单' },
   { prop: 'otherIncome', label: '其他收入', source: '收入录入记录（补贴/补发等）' },
 ];
 
 const DEDUCT_COLS: ColDef[] = [
-  { prop: 'socialFee', label: '社保', source: '1637.15 × 职级比例' },
-  { prop: 'housingFund', label: '公积金', source: '员工档案自缴金额' },
-  { prop: 'attendanceFee', label: '考勤扣款', source: '考勤Excel导入：迟到×20 + 旷工/请假标准' },
-  { prop: 'pointsFee', label: '积分扣款', source: '积分Excel导入：处罚次数 × 5元' },
-  { prop: 'commercialInsurance', label: '商业保险', source: '人事数据（21元/月）' },
-  { prop: 'dormitoryFee', label: '宿舍费', source: '人事数据（住宿名单）' },
-  { prop: 'negativeCarryover', label: '负工资结转', source: '上月负工资余额（系统自动结转）' },
+  { prop: 'socialFee', label: '社保', source: (r) => {
+    const ratio = Number(r.socialFee) / 1637.15;
+    return `基数 1637.15 × 职级比例 ${(ratio * 100).toFixed(1)}% = ¥${fmt(r.socialFee)}`;
+  } },
+  { prop: 'housingFund', label: '公积金', source: (r) => `员工档案自缴：¥${fmt(r.housingFund)}` },
+  { prop: 'attendanceFee', label: '考勤扣款', source: (r) => `考勤导入：¥${fmt(Math.abs(Number(r.attendanceFee)))}` },
+  { prop: 'pointsFee', label: '积分扣款', source: (r) => {
+    const times = Number(r.pointsFee) / 5;
+    return `处罚 ${times.toFixed(0)} 次 × 5元 = ¥${fmt(Math.abs(Number(r.pointsFee)))}`;
+  } },
+  { prop: 'commercialInsurance', label: '商业保险', source: (r) => `人事数据：¥${fmt(r.commercialInsurance)}/月` },
+  { prop: 'dormitoryFee', label: '宿舍费', source: (r) => `人事数据（住宿）：¥${fmt(r.dormitoryFee)}` },
+  { prop: 'negativeCarryover', label: '负工资结转', source: (r) => `上月负工资余额：¥${fmt(Math.abs(Number(r.negativeCarryover)))}` },
   { prop: 'otherDeduct', label: '其他支出', source: '支出录入记录（培训费/罚款等）' },
 ];
 
+const resolveSource = (c: ColDef, row: PayrollDetail) => typeof c.source === 'function' ? c.source(row) : c.source;
+
 const incomeItems = INCOME_COLS
   .filter((c) => !isZero((props.row as any)[c.prop]))
-  .map((c) => ({ label: c.label, value: Number((props.row as any)[c.prop]) || 0, source: c.source }));
+  .map((c) => ({ label: c.label, value: Number((props.row as any)[c.prop]) || 0, source: resolveSource(c, props.row) }));
 
 const deductItems = DEDUCT_COLS
   .filter((c) => !isZero((props.row as any)[c.prop]))
-  .map((c) => ({ label: c.label, value: Math.abs(Number((props.row as any)[c.prop])) || 0, source: c.source }));
+  .map((c) => ({ label: c.label, value: Math.abs(Number((props.row as any)[c.prop])) || 0, source: resolveSource(c, props.row) }));
 
 /* ───────────── 结佣追溯（走 payroll 接口，不依赖 commission 菜单权限） ───────────── */
 const traceLoading = ref(false);
 const traceItems = ref<CommissionTraceItem[]>([]);
+const traceDialogVisible = ref(false);
 
-const loadCommissionTrace = async () => {
+const openTraceDialog = async () => {
   if (traceLoading.value) return;
   traceLoading.value = true;
   try {
@@ -155,20 +185,33 @@ const loadCommissionTrace = async () => {
       ? await mySalaryApi.myCommissionTrace(props.period)
       : await orgCommissionTraceApi.list(props.period, props.row.employeeId);
     traceItems.value = (res?.data ?? []) as CommissionTraceItem[];
-    if (!traceItems.value.length) ElMessage.info('当月结佣单中未找到该员工的分摊明细');
+    traceDialogVisible.value = true;
+    if (!traceItems.value.length) ElMessage.info('当月无结佣明细数据');
   } catch {
     ElMessage.warning('结佣明细加载失败，请稍后重试');
   } finally {
     traceLoading.value = false;
   }
 };
+
+/** 弹窗合计行：结佣金额合计 */
+const traceSummary = ({ columns, data }: any) => {
+  const sums: string[] = [];
+  columns.forEach((_col: any, idx: number) => {
+    if (idx === 0) { sums[idx] = '合计'; return; }
+    if (idx === 6) {
+      sums[idx] = `¥${fmt(data.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0))}`;
+    } else {
+      sums[idx] = '';
+    }
+  });
+  return sums;
+};
 </script>
 
 <style scoped>
 /* 展开追溯面板（组织页 / 个人页共用） */
-.trace-panel { display: flex; gap: 24px; padding: 8px 12px 16px 40px; background: #fafbfc; }
-.trace-left { flex: 1.6; min-width: 0; }
-.trace-right { flex: 1; min-width: 300px; border-left: 1px dashed #dcdfe6; padding-left: 24px; }
+.trace-panel { padding: 8px 12px 16px 40px; background: #fafbfc; }
 .trace-title { display: flex; align-items: center; gap: 6px; font-weight: 600; color: #1f2d3d; margin-bottom: 10px; }
 .compose-grid { display: flex; flex-direction: column; gap: 10px; }
 .compose-block { background: #fff; border: 1px solid #ebeef5; border-radius: 6px; padding: 10px 12px; }
@@ -185,10 +228,9 @@ const loadCommissionTrace = async () => {
 .muted { color: #909399; font-size: 12px; white-space: normal; }
 .deduct-text { color: #c0392b; }
 
-.trace-steps :deep(.el-step__title) { font-size: 13px; }
-.trace-steps :deep(.el-step__description) { font-size: 12px; }
 .trace-action { margin-top: 8px; }
-.trace-commission { margin-top: 10px; }
 .trace-footnote { margin-top: 6px; font-size: 11px; color: #b0b3b8; line-height: 1.6; }
-.fact-id { color: #909399; font-family: monospace; }
+.contract-cell { display: flex; align-items: baseline; gap: 0; }
+.contract-no { font-weight: 600; }
+.order-no { color: #909399; font-size: 12px; }
 </style>

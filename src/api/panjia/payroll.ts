@@ -203,6 +203,12 @@ export interface CommissionTraceItem {
   employeeId: number | string;
   employeeCode?: string;
   deptId?: number | string;
+  contractNo?: string;
+  orderNo?: string;
+  businessDate?: string;
+  signDate?: string;
+  propertyAddress?: string;
+  shareRatio?: number | string;
   bizType: string;
   roleType?: string;
   feeItem?: string;
