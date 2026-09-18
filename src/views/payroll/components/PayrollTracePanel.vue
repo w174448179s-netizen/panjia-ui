@@ -73,7 +73,7 @@
           </el-table-column>
           <el-table-column label="状态" width="100" align="center">
             <template #default="{ row: it }">
-              <el-tag v-if="it.originReversed" type="danger" size="small">红冲/退单</el-tag>
+              <el-tag v-if="it.status === 'REVERSED'" type="danger" size="small">红冲/退单</el-tag>
               <el-tag v-else-if="it.status === 'APPROVED'" type="success" size="small">已审批</el-tag>
               <el-tag v-else type="info" size="small">{{ it.status }}</el-tag>
             </template>
@@ -95,13 +95,14 @@
 import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Tickets, Link } from '@element-plus/icons-vue';
-import { commissionApi, type CommissionItem } from '@/api/panjia/commission';
-import type { PayrollDetail } from '@/api/panjia/payroll';
+import { mySalaryApi, orgCommissionTraceApi, type CommissionTraceItem, type PayrollDetail } from '@/api/panjia/payroll';
 
 const props = defineProps<{
   row: PayrollDetail;
   employeeName?: string;
   period: string;
+  /** true=本人工资查询（后端按登录态解析 employeeId）；false=组织工资明细（传 employeeId） */
+  myMode?: boolean;
 }>();
 
 const fmt = (n: number | null | undefined) =>
@@ -142,28 +143,19 @@ const deductItems = DEDUCT_COLS
   .filter((c) => !isZero((props.row as any)[c.prop]))
   .map((c) => ({ label: c.label, value: Math.abs(Number((props.row as any)[c.prop])) || 0, source: c.source }));
 
-/* ───────────── 结佣追溯（当月结佣审批单中本人的每笔分摊） ───────────── */
+/* ───────────── 结佣追溯（走 payroll 接口，不依赖 commission 菜单权限） ───────────── */
 const traceLoading = ref(false);
-const traceItems = ref<CommissionItem[]>([]);
+const traceItems = ref<CommissionTraceItem[]>([]);
 
 const loadCommissionTrace = async () => {
   if (traceLoading.value) return;
   traceLoading.value = true;
   try {
-    const listRes: any = await commissionApi.listApplications({
-      period: props.period, pageNum: 1, pageSize: 200,
-    } as any);
-    const apps = listRes?.data?.rows ?? listRes?.rows ?? [];
-    const items: CommissionItem[] = [];
-    for (const app of apps) {
-      const full: any = await commissionApi.getApplication(app.id);
-      const its: CommissionItem[] = full?.data?.items ?? full?.items ?? [];
-      its
-        .filter((it) => Number(it.employeeId) === Number(props.row.employeeId))
-        .forEach((it) => items.push(it));
-    }
-    traceItems.value = items;
-    if (!items.length) ElMessage.info('当月结佣单中未找到该员工的分摊明细');
+    const res: any = props.myMode
+      ? await mySalaryApi.myCommissionTrace(props.period)
+      : await orgCommissionTraceApi.list(props.period, props.row.employeeId);
+    traceItems.value = (res?.data ?? []) as CommissionTraceItem[];
+    if (!traceItems.value.length) ElMessage.info('当月结佣单中未找到该员工的分摊明细');
   } catch {
     ElMessage.warning('结佣明细加载失败，请稍后重试');
   } finally {

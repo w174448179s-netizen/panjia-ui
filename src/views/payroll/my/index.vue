@@ -74,6 +74,7 @@
         :row="vo.detail"
         :employee-name="vo.employee.employeeName"
         :period="vo.batch.period"
+        my-mode
       />
     </el-card>
 

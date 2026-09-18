@@ -194,6 +194,23 @@ export const payrollApi = {
   },
 };
 
+/** 结佣追溯明细项（后端 CommissionItemDTO） */
+export interface CommissionTraceItem {
+  itemId?: number | string;
+  performanceFactId?: number | string;
+  period: string;
+  approvedMonth?: string;
+  employeeId: number | string;
+  employeeCode?: string;
+  deptId?: number | string;
+  bizType: string;
+  roleType?: string;
+  feeItem?: string;
+  amount: number;
+  status?: string;
+  source?: string;
+}
+
 /** 本人工资查询（综合查询 → 工资查询；员工身份后端按登录态解析） */
 export const mySalaryApi = {
   /** 我有工资明细的批次（期间倒序） */
@@ -203,5 +220,16 @@ export const mySalaryApi = {
   /** 我在指定批次的工资明细 + 员工主数据 */
   getDetail(batchId: number | string) {
     return panjiaRequest.get<MyPayrollDetailVO>('/payroll/batch/my/detail', { batchId });
+  },
+  /** 我的结佣追溯（本人期间已审批结佣明细） */
+  myCommissionTrace(period: string) {
+    return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/my/commission-trace', { period });
+  },
+};
+
+/** 组织视角结佣追溯（总监/财务查指定员工） */
+export const orgCommissionTraceApi = {
+  list(period: string, employeeId: number | string) {
+    return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/commission-trace', { period, employeeId });
   },
 };
