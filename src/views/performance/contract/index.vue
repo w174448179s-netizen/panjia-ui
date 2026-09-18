@@ -283,7 +283,7 @@
       </div>
 
       <!-- 明细列表 -->
-      <el-table border class="data-table" :data="detailList" v-loading="detailLoading">
+      <el-table border class="data-table" :data="detailList" v-loading="detailLoading" max-height="480">
         <el-table-column label="门店/组别" align="left" min-width="100">
           <template #default="scope">
             <span v-if="scope.row.deptPath" class="dept-wrap" :title="scope.row.deptPath">
@@ -1084,18 +1084,6 @@ onMounted(async () => {
 </style>
 
 <style lang="scss">
-/* 合同业绩明细弹窗：近全屏展示，body 不出现内部滚动条（teleport 到 body，需全局样式） */
-.contract-detail-dialog {
-  margin-bottom: 0 !important;
-
-  .el-dialog__body {
-    max-height: none;
-    overflow: visible;
-    padding-top: 10px;
-    padding-bottom: 12px;
-  }
-}
-
 /* 门店/组别列：门店加粗为主、组别弱化为辅，超宽自动换行不截断 */
 .dept-wrap {
   line-height: 1.5;
