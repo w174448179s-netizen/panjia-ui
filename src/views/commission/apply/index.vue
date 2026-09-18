@@ -154,7 +154,7 @@
                 link type="warning"
                 :loading="submittingMap[contractOrOrderNo(row)]"
                 @click="onSubmit(row as CommissionContractVO)">{{ row.status === 'REJECTED' ? '重提' : '提交' }}</el-button>
-              <el-button v-if="(row.status === 'DRAFT' || row.status === 'SUBMITTED') && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
+              <el-button v-if="['DRAFT', 'SUBMITTED', 'REJECTED'].includes(row.status) && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
             </div>
           </template>
         </el-table-column>
@@ -437,21 +437,13 @@ const loadDeptTree = async () => {
   } catch { /* ignore */ }
 };
 
-// 状态映射
+// 状态映射。SUBMITTED 全程统一叫「审批中」（发起后直到审批结束），
+// 与工作流系统页（我发起的/我的已办，全局字典 waiting）保持同一叫法——
+// 系统页状态是粗粒度运行中，无法按节点细分，两段式会导致页面间不一致
 const STATUS_MAP: Record<string, string> = {
   NONE: '未发起', DRAFT: '草稿', SUBMITTED: '审批中', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
 };
-/**
- * SUBMITTED 按当前审批节点细分（与「我发起的」工作流状态、详情弹窗同一语义）：
- * - 总监初审前（currentNode=DIRECTOR）→ 待审批；
- * - 总监已审（财务复核 currentNode=FINANCE，或 T-04 财务节点跳过 currentNode 为空）→ 审批中。
- */
-const statusLabel = (row: CommissionContractVO) => {
-  if (row.status === 'SUBMITTED') {
-    return row.currentNode === 'DIRECTOR' ? '待审批' : '审批中';
-  }
-  return STATUS_MAP[row.status] || row.status || '—';
-};
+const statusLabel = (row: CommissionContractVO) => STATUS_MAP[row.status] || row.status || '—';
 // 筛选下拉只列实际会出现在列表中的状态：
 // DRAFT（发起即提交，无保存草稿入口）、APPROVED（审批通过直接落 LOCKED，不经过 APPROVED）不会出现
 const HIDDEN_FILTER_STATUS = ['DRAFT', 'APPROVED'];
