@@ -372,22 +372,53 @@ export interface AttendanceImport {
   month: string;
 }
 
+/** 月考勤汇总（员工域 pj_people_attendance，一员工一月一行） */
 export interface AttendanceRecord {
   id: string;
   employeeId: string;
-  employeeName: string;
-  workDays: number;
-  leaveDays: number;
-  absentDays: number;
-  lateTimes: number;
-  earlyLeaveTimes: number;
-  overtimeHours: number;
-  month: string;
+  attendMonth: string;
+  leaveDays?: number;
+  absentDays?: number;
+  lateCount?: number;
+  lateMinutes?: number;
+  missingCardCount?: number;
+  attendDays?: number;
+  restDays?: number;
+  dataSource?: string;
+  remark?: string;
+  version?: number;
+  createTime?: string;
+  updateTime?: string;
+  // 展示冗余
+  employeeCode?: string;
+  employeeName?: string;
+  deptId?: string;
+  deptName?: string;
 }
 
+/** 考勤汇总查询（管理端；本人查询仅用 monthStart/monthEnd） */
 export interface AttendanceQuery extends PageQuery {
+  employeeId?: string;
   employeeName?: string;
-  month?: string;
+  employeeCode?: string;
+  deptId?: string;
+  monthStart?: string;
+  monthEnd?: string;
+}
+
+/** 考勤汇总新增/编辑表单（人月维度） */
+export interface AttendanceSaveForm {
+  employeeId?: string;
+  attendMonth?: string;
+  leaveDays?: number;
+  absentDays?: number;
+  lateCount?: number;
+  lateMinutes?: number;
+  missingCardCount?: number;
+  attendDays?: number;
+  restDays?: number;
+  remark?: string;
+  version?: number;
 }
 
 // 积分

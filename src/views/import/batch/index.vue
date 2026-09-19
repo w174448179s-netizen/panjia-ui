@@ -79,7 +79,7 @@
             </template>
           </el-table-column>
           <el-table-column label="创建时间" align="center" prop="createTime" width="170" sortable />
-          <el-table-column label="操作" align="center" min-width="140" class-name="small-padding fixed-width">
+          <el-table-column label="操作" align="center" width="190" class-name="small-padding fixed-width">
             <template #default="scope">
               <div class="action-row">
                 <!-- 终态（ARCHIVED）：仅保留"下载"做合规留档入口，"问题/重归一化/归档"全部收起 -->
@@ -107,7 +107,7 @@
                 </template>
                 <!-- 终态（FAILED）：保留"问题"排查失败原因 + "下载"留档；不可再重归一化/归档 -->
                 <template v-else-if="scope.row.status === 'FAILED'">
-                  <el-tooltip v-if="hasIssues(scope.row)" content="查看失败问题清单" placement="top">
+                  <el-tooltip v-if="hasIssues(scope.row as ImportBatch)" content="查看失败问题清单" placement="top">
                     <a class="action-btn" @click="handleIssues(scope.row as ImportBatch)">
                       <el-icon><Warning /></el-icon>
                     </a>
@@ -123,22 +123,13 @@
                     </a>
                   </el-tooltip>
                 </template>
-                <!-- 中间态（PARSING / NORMALIZING / PENDING_CONFIRM）：按状态机判定 -->
+                <!-- 中间态（PARSING / NORMALIZING / PENDING_CONFIRM）：按状态机判定；
+                     内联最多 3 个高频操作（问题/重归一化/归档），低频"下载"收进"更多"下拉 -->
                 <template v-else>
                   <!-- "问题"仅在有失败行时展示，避免无 issue 的批次显示无效入口 -->
-                  <el-tooltip v-if="hasIssues(scope.row)" content="查看问题清单" placement="top">
+                  <el-tooltip v-if="hasIssues(scope.row as ImportBatch)" content="查看问题清单" placement="top">
                     <a class="action-btn" @click="handleIssues(scope.row as ImportBatch)">
                       <el-icon><Warning /></el-icon>
-                    </a>
-                  </el-tooltip>
-                  <el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
-                    <a
-                      class="action-btn"
-                      :class="{ 'is-loading': downloadingId === scope.row.id }"
-                      @click="handleDownloadFile(scope.row as ImportBatch)"
-                    >
-                      <el-icon v-if="downloadingId !== scope.row.id"><Download /></el-icon>
-                      <el-icon v-else class="is-loading"><Loading /></el-icon>
                     </a>
                   </el-tooltip>
                   <el-tooltip v-if="canRenormalize(scope.row.status)" content="重新解析与归一化" placement="top">
@@ -161,6 +152,21 @@
                       <el-icon v-else class="is-loading"><Loading /></el-icon>
                     </a>
                   </el-tooltip>
+                  <el-dropdown
+                    trigger="click"
+                    @command="(cmd: string) => handleMoreCommand(cmd, scope.row as ImportBatch)"
+                  >
+                    <a class="action-btn" @click.prevent>
+                      <el-icon><MoreFilled /></el-icon>
+                    </a>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="download" :disabled="downloadingId === scope.row.id">
+                          下载原文件（Excel/WPS 可直接打开）
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
                 </template>
               </div>
             </template>
@@ -207,7 +213,7 @@
 import { importApi } from '@/api/panjia/import';
 import type { ImportBatch, ImportIssue } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
-import { Warning, Download, Refresh, Loading, Box, CircleClose } from '@element-plus/icons-vue';
+import { Warning, Download, Refresh, Loading, Box, CircleClose, MoreFilled } from '@element-plus/icons-vue';
 
 // 单据类型映射（跨所有单据类型；业绩来源唯一：贝壳业绩明细表）
 const sourceTypeMap: Record<string, string> = {
@@ -397,6 +403,13 @@ onMounted(() => {
 
 // ==================== 下载原文件 ====================
 const downloadingId = ref<string | number | undefined>();
+
+/** "更多"下拉命令分发（中间态批次：下载原文件） */
+const handleMoreCommand = (command: string, row: ImportBatch) => {
+  if (command === 'download') {
+    handleDownloadFile(row);
+  }
+};
 
 const handleDownloadFile = async (row: ImportBatch) => {
   downloadingId.value = row.id;
