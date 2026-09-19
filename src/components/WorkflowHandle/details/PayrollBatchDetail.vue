@@ -58,9 +58,6 @@
           <el-table-column label="考勤" prop="attendanceFee" width="80" align="right">
             <template #default="{ row }">{{ fmt(row.attendanceFee) }}</template>
           </el-table-column>
-          <el-table-column label="积分" prop="pointsFee" width="70" align="right">
-            <template #default="{ row }">{{ fmt(row.pointsFee) }}</template>
-          </el-table-column>
           <el-table-column label="商保" prop="commercialInsurance" width="70" align="right">
             <template #default="{ row }">{{ fmt(row.commercialInsurance) }}</template>
           </el-table-column>
@@ -114,7 +111,7 @@ const fmt = (n: number | null | undefined) =>
 
 const MONEY_PROPS = [
   'commissionIncome', 'teamIncome', 'guaranteeFill', 'storeIncome', 'baseSalary', 'mentorBonus', 'bonus',
-  'gross', 'socialFee', 'housingFund', 'attendanceFee', 'pointsFee', 'commercialInsurance', 'otherDeduct',
+  'gross', 'socialFee', 'housingFund', 'attendanceFee', 'commercialInsurance', 'otherDeduct',
   'deduct', 'tax', 'net',
 ];
 

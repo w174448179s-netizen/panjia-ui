@@ -462,30 +462,77 @@ export interface AttendanceApproval {
   abnormalRows?: AttendanceAbnormalRow[];
 }
 
-// 积分
-export interface ScoreImport {
-  id: string;
-  batchNo: string;
-  fileName: string;
-  totalCount: number;
-  importTime: string;
-  month: string;
-}
-
+// 积分（员工域 pj_people_performance_score，一员工一月一行，来自积分日报导入）
 export interface ScoreRecord {
   id: string;
   employeeId: string;
-  employeeName: string;
-  scoreType: string;
-  score: number;
-  month: string;
-  remark: string;
+  scoreMonth: string;
+  totalPoints?: number;
+  attendDays?: number;
+  avgPoints?: number;
+  grade?: string | null;
+  deductRate?: number | null;
+  dataSource?: string;
+  version?: number;
+  createTime?: string;
+  updateTime?: string;
+  // 展示冗余
+  employeeCode?: string;
+  employeeName?: string;
+  deptId?: string;
+  deptName?: string;
+  /** 该期间积分已提交审批（SUBMITTED/APPROVED）时锁定 */
+  locked?: boolean;
 }
 
+/** 积分汇总查询（管理端） */
 export interface ScoreQuery extends PageQuery {
+  employeeId?: string;
+  employeeCode?: string;
   employeeName?: string;
-  scoreType?: string;
-  month?: string;
+  deptId?: string;
+  monthStart?: string;
+  monthEnd?: string;
+}
+
+/** 积分审批单（一期间一行；无审批单时 status 为空表示未提交） */
+export type ScoreApprovalStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+
+/** 扣点行（B/C 级，仅这些行需要总监审阅；A 级不扣点免审） */
+export interface ScoreDeductRow {
+  employeeId?: number | string;
+  employeeCode?: string | null;
+  employeeName?: string | null;
+  scoreMonth?: string | null;
+  totalPoints?: number;
+  attendDays?: number;
+  avgPoints?: number;
+  grade?: string | null;
+  deductRate?: number | null;
+}
+
+export interface ScoreApproval {
+  id?: string;
+  period: string;
+  status?: ScoreApprovalStatus;
+  /** 该月是否有积分数据（false = 无积分，算薪前需人工确认） */
+  dataExists?: boolean;
+  submitBy?: string;
+  submitTime?: string;
+  approveBy?: string;
+  approveTime?: string;
+  rejectReason?: string;
+  processInstanceId?: string | null;
+  /** 当期积分总人数 */
+  totalCount?: number;
+  /** A 级人数（不扣点，免审） */
+  gradeACount?: number;
+  /** B 级人数（-2%） */
+  gradeBCount?: number;
+  /** C 级人数（-4%） */
+  gradeCCount?: number;
+  /** 扣点行快照明细（B/C 级） */
+  deductRows?: ScoreDeductRow[];
 }
 
 // 工资计算

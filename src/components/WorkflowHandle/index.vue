@@ -80,6 +80,7 @@ const DETAIL_LOADERS: Record<string, () => Promise<any>> = {
   payroll_batch: () => import('./details/PayrollBatchDetail.vue'),
   payroll_supplement: () => import('./details/PayrollSupplementDetail.vue'),
   attendance_approval: () => import('./details/AttendanceApprovalDetail.vue'),
+  score_approval: () => import('./details/ScoreApprovalDetail.vue'),
 };
 
 const visible = ref(false);

@@ -196,10 +196,6 @@ const DEDUCT_COLS: ColDef[] = [
   } },
   { prop: 'housingFund', label: '公积金', source: (r) => `员工档案自缴：¥${fmt(r.housingFund)}` },
   { prop: 'attendanceFee', label: '考勤扣款', source: (r) => `考勤导入：¥${fmt(Math.abs(Number(r.attendanceFee)))}` },
-  { prop: 'pointsFee', label: '积分扣款', source: (r) => {
-    const times = Number(r.pointsFee) / 5;
-    return `处罚 ${times.toFixed(0)} 次 × 5元 = ¥${fmt(Math.abs(Number(r.pointsFee)))}`;
-  } },
   { prop: 'commercialInsurance', label: '商业保险', source: (r) => `人事数据：¥${fmt(r.commercialInsurance)}/月` },
   { prop: 'dormitoryFee', label: '宿舍费', source: (r) => `人事数据（住宿）：¥${fmt(r.dormitoryFee)}` },
   { prop: 'negativeCarryover', label: '负工资结转', source: (r) => `上月负工资余额：¥${fmt(Math.abs(Number(r.negativeCarryover)))}` },

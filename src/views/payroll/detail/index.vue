@@ -290,7 +290,6 @@ const DEDUCT_COLS: ColDef[] = [
   { prop: 'socialFee', label: '社保', width: 90, source: '1637.15 × 职级比例' },
   { prop: 'housingFund', label: '公积金', width: 90, source: '员工档案自缴金额' },
   { prop: 'attendanceFee', label: '考勤扣款', width: 95, source: '考勤Excel导入：迟到×20 + 旷工/请假标准' },
-  { prop: 'pointsFee', label: '积分扣款', width: 95, source: '积分Excel导入：处罚次数 × 5元' },
   { prop: 'commercialInsurance', label: '商业保险', width: 95, source: '人事数据（21元/月）' },
   { prop: 'dormitoryFee', label: '宿舍费', width: 85, source: '人事数据（住宿名单）' },
   { prop: 'negativeCarryover', label: '负工资结转', width: 105, source: '上月负工资余额（系统自动结转）' },
@@ -354,7 +353,7 @@ const loadEmployees = async () => {
 const MONEY_PROPS = [
   'commissionIncome', 'teamIncome', 'personalNewsignIncome', 'storeIncome',
   'baseSalary', 'guaranteeFill', 'mentorBonus', 'bonus', 'otherIncome', 'gross',
-  'socialFee', 'housingFund', 'attendanceFee', 'pointsFee', 'commercialInsurance',
+  'socialFee', 'housingFund', 'attendanceFee', 'commercialInsurance',
   'dormitoryFee', 'negativeCarryover', 'otherDeduct', 'deduct', 'tax', 'net',
 ];
 

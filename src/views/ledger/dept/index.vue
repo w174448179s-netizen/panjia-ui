@@ -82,9 +82,6 @@
         <el-table-column label="考勤扣款" prop="attendanceFee" width="110" align="right">
           <template #default="{ row }">¥{{ fmt(row.attendanceFee) }}</template>
         </el-table-column>
-        <el-table-column label="积分扣款" prop="pointsFee" width="110" align="right">
-          <template #default="{ row }">¥{{ fmt(row.pointsFee) }}</template>
-        </el-table-column>
         <el-table-column label="商业保险" prop="commercialInsurance" width="110" align="right">
           <template #default="{ row }">¥{{ fmt(row.commercialInsurance) }}</template>
         </el-table-column>
@@ -133,7 +130,6 @@ interface DeptLedgerRow {
   socialFee: number;
   housingFund: number;
   attendanceFee: number;
-  pointsFee: number;
   commercialInsurance: number;
   dormitoryFee: number;
   otherDeduct: number;
@@ -192,7 +188,7 @@ const load = async () => {
     const numKeys = [
       'commissionIncome', 'teamIncome', 'storeIncome', 'baseSalary', 'guaranteeFill',
       'mentorBonus', 'bonus', 'otherIncome', 'socialFee', 'housingFund', 'attendanceFee',
-      'pointsFee', 'commercialInsurance', 'dormitoryFee', 'otherDeduct', 'tax', 'net',
+      'commercialInsurance', 'dormitoryFee', 'otherDeduct', 'tax', 'net',
       'employerSocial', 'gross', 'deduct',
     ];
     allDetails.forEach((d: any) => {
@@ -203,7 +199,7 @@ const load = async () => {
           employeeCount: 0,
           commissionIncome: 0, teamIncome: 0, storeIncome: 0, baseSalary: 0,
           guaranteeFill: 0, mentorBonus: 0, bonus: 0, otherIncome: 0, grossTotal: 0,
-          socialFee: 0, housingFund: 0, attendanceFee: 0, pointsFee: 0,
+          socialFee: 0, housingFund: 0, attendanceFee: 0,
           commercialInsurance: 0, dormitoryFee: 0, otherDeduct: 0, deductTotal: 0,
           tax: 0, netTotal: 0, employerSocial: 0,
         });
@@ -229,7 +225,7 @@ const filterData = () => { /* computed handles filtering */ };
 const MONEY_PROPS = [
   'commissionIncome', 'teamIncome', 'storeIncome', 'baseSalary', 'guaranteeFill',
   'mentorBonus', 'bonus', 'otherIncome', 'grossTotal', 'socialFee', 'housingFund',
-  'attendanceFee', 'pointsFee', 'commercialInsurance', 'dormitoryFee', 'otherDeduct',
+  'attendanceFee', 'commercialInsurance', 'dormitoryFee', 'otherDeduct',
   'deductTotal', 'tax', 'netTotal', 'employerSocial',
 ];
 
@@ -258,12 +254,12 @@ const exportExcel = () => {
   if (!tableData.value.length) return;
   const headers = [
     '部门ID', '人数', '业绩提成', '团队提成', '门店提成', '底薪', '保底补足', '招聘奖励', '奖金', '其他收入', '收入合计',
-    '社保', '公积金', '考勤扣款', '积分扣款', '商业保险', '宿舍费', '其他支出', '支出合计', '个税', '实发合计', '单位社保',
+    '社保', '公积金', '考勤扣款', '商业保险', '宿舍费', '其他支出', '支出合计', '个税', '实发合计', '单位社保',
   ];
   const keys = [
     'deptId', 'employeeCount', 'commissionIncome', 'teamIncome', 'storeIncome', 'baseSalary',
     'guaranteeFill', 'mentorBonus', 'bonus', 'otherIncome', 'grossTotal',
-    'socialFee', 'housingFund', 'attendanceFee', 'pointsFee', 'commercialInsurance',
+    'socialFee', 'housingFund', 'attendanceFee', 'commercialInsurance',
     'dormitoryFee', 'otherDeduct', 'deductTotal', 'tax', 'netTotal', 'employerSocial',
   ];
   const rows = tableData.value.map((r) =>

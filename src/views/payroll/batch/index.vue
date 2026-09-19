@@ -97,9 +97,6 @@
         <el-table-column label="考勤" prop="attendanceFee" width="80" align="right">
           <template #default="{ row }">{{ fmt(row.attendanceFee) }}</template>
         </el-table-column>
-        <el-table-column label="积分" prop="pointsFee" width="70" align="right">
-          <template #default="{ row }">{{ fmt(row.pointsFee) }}</template>
-        </el-table-column>
         <el-table-column label="商保" prop="commercialInsurance" width="70" align="right">
           <template #default="{ row }">{{ fmt(row.commercialInsurance) }}</template>
         </el-table-column>
@@ -142,6 +139,7 @@ import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { payrollApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
 import { attendanceApi } from '@/api/panjia/attendance';
+import { scoreApi } from '@/api/panjia/score';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
 const route = useRoute();
@@ -183,12 +181,22 @@ const createBatch = async () => {
   }
   creating.value = true;
   try {
-    // 无考勤确认：该月无考勤记录时考勤扣款为 0，防人事漏导考勤导致少扣
+    // 无考勤/无积分确认：该月无记录时对应扣款/扣点按默认值（考勤扣款 0、积分默认 A 不扣点），
+    // 防人事漏导考勤或积分日报导致算薪口径失真
     const approvalRes: any = await attendanceApi.getApproval(createForm.value.period);
     if (approvalRes.data?.dataExists === false) {
       const confirmed = await ElMessageBox.confirm(
         `${createForm.value.period} 无考勤数据，考勤扣款将为 0。可能是人事漏导考勤，确认继续创建批次？`,
         '无考勤确认',
+        { type: 'warning', confirmButtonText: '继续创建', cancelButtonText: '取消' }
+      ).then(() => true).catch(() => false);
+      if (!confirmed) return;
+    }
+    const scoreRes: any = await scoreApi.getApproval(createForm.value.period);
+    if (scoreRes.data?.dataExists === false) {
+      const confirmed = await ElMessageBox.confirm(
+        `${createForm.value.period} 无积分数据，绩效等级将默认 A（不扣点）。可能是人事漏导积分日报，确认继续创建批次？`,
+        '无积分确认',
         { type: 'warning', confirmButtonText: '继续创建', cancelButtonText: '取消' }
       ).then(() => true).catch(() => false);
       if (!confirmed) return;
@@ -257,7 +265,7 @@ const summaryMethod = ({ columns, data }: any) => {
       return;
     }
     const prop = col.property;
-    const moneyProps = ['commissionIncome', 'teamIncome', 'guaranteeFill', 'storeIncome', 'baseSalary', 'mentorBonus', 'bonus', 'gross', 'socialFee', 'housingFund', 'attendanceFee', 'pointsFee', 'commercialInsurance', 'otherDeduct', 'deduct', 'tax', 'net'];
+    const moneyProps = ['commissionIncome', 'teamIncome', 'guaranteeFill', 'storeIncome', 'baseSalary', 'mentorBonus', 'bonus', 'gross', 'socialFee', 'housingFund', 'attendanceFee', 'commercialInsurance', 'otherDeduct', 'deduct', 'tax', 'net'];
     if (moneyProps.includes(prop)) {
       const total = data.reduce((s: number, r: any) => s + (Number(r[prop]) || 0), 0);
       sums[idx] = fmt(total);

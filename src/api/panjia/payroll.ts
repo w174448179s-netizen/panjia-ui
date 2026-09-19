@@ -34,7 +34,6 @@ export interface PayrollDetail {
   socialFee: number;
   housingFund: number;
   attendanceFee: number;
-  pointsFee: number;
   commercialInsurance: number;
   dormitoryFee: number;
   negativeCarryover: number;

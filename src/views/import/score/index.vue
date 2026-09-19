@@ -39,10 +39,18 @@
                   上传文件
                 </el-button>
               </el-upload>
-              <el-button icon="Download" @click="handleDownloadTemplate">下载模板</el-button>
             </el-form-item>
           </el-form>
         </div>
+
+        <!-- 上传口径提示：积分日报为客户系统导出原文件直传，不提供模板下载 -->
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          title="请直接上传钉钉智能填报导出的《二手积分日报5.0版》Excel 原文件（无需下载模板改写），保留原始两行表头，归属月选择填报日期所在月份；员工工号需与员工档案一致。"
+          class="upload-result"
+        />
 
         <!-- 上传结果 -->
         <el-alert
@@ -230,10 +238,6 @@ interface UploadResult {
   batchId: string;
 }
 const uploadResult = ref<UploadResult | null>(null);
-
-const handleDownloadTemplate = () => {
-  importApi.downloadTemplate('POINTS', '积分导入模板.xlsx');
-};
 
 // ==================== 下载原文件 ====================
 const rowDownloadingId = ref<string>('');
