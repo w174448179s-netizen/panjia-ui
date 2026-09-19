@@ -86,7 +86,7 @@
               :loading="reconcileLoading"
               @click="handleReconcile"
             >
-              账户对账
+              账户对齐
             </el-button>
           </div>
         </div>
@@ -472,7 +472,7 @@
     </el-dialog>
 
     <!-- 对账结果 -->
-    <el-dialog v-model="reconcileDialog.visible" title="员工-账户对账结果" width="780px" append-to-body>
+    <el-dialog v-model="reconcileDialog.visible" title="员工-账户对齐结果" width="780px" append-to-body>
       <el-alert
         v-if="reconcileResult"
         :title="`共扫描 ${reconcileResult.totalEmployees} 名员工账户，自动修复 ${reconcileResult.fixedCount} 处差异`"

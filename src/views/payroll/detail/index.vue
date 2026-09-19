@@ -140,6 +140,14 @@
             <span v-else class="zero-val">—</span>
           </template>
         </el-table-column>
+        <el-table-column label="提成点调整" width="100" align="center">
+          <template #default="{ row }">
+            <span v-if="row.manualAdjust != null && Number(row.manualAdjust) !== 0" class="deduct-text">
+              {{ ratePercent(row.manualAdjust) }}
+            </span>
+            <span v-else class="zero-val">—</span>
+          </template>
+        </el-table-column>
 
         <!-- 收入构成 -->
         <el-table-column label="收入构成（应发 = 各项之和）" align="center" class-name="group-income" label-class-name="group-income">
@@ -232,6 +240,8 @@ const statusTag = (s: string) => (STATUS_TAG[s] || 'info') as any;
 const roleLabel = (r: string) => ({ AGENT: '经纪人', MANAGER: '店长', DIRECTOR: '总监' }[r] || r || '—');
 const fmt = (n: number | null | undefined) =>
   n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** 提成点调整叠加值 → 百分比文案（-0.02 → -2%） */
+const ratePercent = (v: number | string | null | undefined) => `${Number((Number(v) * 100).toFixed(2))}%`;
 const isZero = (v: number | null | undefined) => !v || Number(v) === 0;
 const empOf = (row: any) =>
   empMap[row.employeeId] || { employeeName: '', employeeCode: '', deptId: '', deptName: '' };

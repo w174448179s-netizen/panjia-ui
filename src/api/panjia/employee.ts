@@ -46,7 +46,7 @@ export const employeeApi = {
   deptTree() {
     return panjiaRequest.get<DeptNode[]>('/people/employee/deptTree');
   },
-  /** 员工-系统账户对账（自动修复 dept/岗位角色/离职禁用差异） */
+  /** 员工-系统账户对齐（自动修复 dept/岗位角色/离职禁用差异） */
   reconcile() {
     return panjiaRequest.post<ReconcileResult>('/people/reconcile/run');
   },

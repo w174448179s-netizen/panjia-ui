@@ -28,6 +28,19 @@
             <span class="compose-val">-{{ fmt(row.tax) }}</span>
           </div>
         </div>
+        <div v-if="rateAdjustItems.length" class="compose-block rate">
+          <div class="compose-head">提成点调整 <span>算薪时叠加到综合提点</span></div>
+          <div v-for="(it, idx) in rateAdjustItems" :key="idx" class="compose-item">
+            <span class="compose-name">
+              <el-tag :type="rateTagType(it.type)" size="small" effect="plain">{{ rateTypeLabel(it.type) }}</el-tag>
+              <i class="compose-src">{{ rateSourceLabel(it.source) }}</i>
+            </span>
+            <span class="compose-val deduct-text">
+              {{ ratePercent(it.rate) }}
+              <i v-if="it.reason" class="compose-src">（{{ it.reason }}）</i>
+            </span>
+          </div>
+        </div>
         <div class="compose-block result">
           <div class="compose-head">结果</div>
           <div class="compose-item">
@@ -137,10 +150,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, toRefs } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Tickets } from '@element-plus/icons-vue';
 import { mySalaryApi, orgCommissionTraceApi, type CommissionTraceItem, type PayrollDetail } from '@/api/panjia/payroll';
+import { useDict } from '@/utils/dict';
 
 const props = defineProps<{
   row: PayrollDetail;
@@ -211,6 +225,42 @@ const incomeItems = INCOME_COLS
 const deductItems = DEDUCT_COLS
   .filter((c) => !isZero((props.row as any)[c.prop]))
   .map((c) => ({ label: c.label, value: Math.abs(Number((props.row as any)[c.prop])) || 0, source: resolveSource(c, props.row) }));
+
+/* ───────────── 提成点调整溯源（rateAdjustJson：{type,rate,reason,source,adjustId} 数组） ───────────── */
+interface RateAdjustTraceItem {
+  type: string;
+  rate: number | string;
+  reason?: string;
+  source?: string;
+  adjustId?: number | string | null;
+}
+
+const rateAdjustItems = computed<RateAdjustTraceItem[]>(() => {
+  const raw = props.row.rateAdjustJson;
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? (arr as RateAdjustTraceItem[]) : [];
+  } catch {
+    return [];
+  }
+});
+
+// 调整类型标签走字典 rate_adjust_type（配置驱动；NO_SOCIAL=未买社保扣点）
+const { rate_adjust_type } = toRefs<any>(useDict('rate_adjust_type'));
+const RATE_TYPE_FALLBACK: Record<string, string> = {
+  NO_SOCIAL: '未买社保扣点',
+  PHONE_CHECK: '电话考核扣点',
+  PERSONAL: '个人调整扣点'
+};
+const rateTypeLabel = (t?: string | null) =>
+  rate_adjust_type.value?.find((o: any) => o.value === t)?.label || RATE_TYPE_FALLBACK[t || ''] || t || '—';
+const rateTagType = (t?: string | null) => {
+  const map: Record<string, string> = { NO_SOCIAL: 'warning', PHONE_CHECK: 'primary', PERSONAL: 'danger' };
+  return (map as any)[t || ''] || 'info';
+};
+const rateSourceLabel = (s?: string | null) => (s === 'APPROVAL' ? '审批' : s === 'AUTO' ? '自动' : s || '—');
+const ratePercent = (v: number | string | null | undefined) => `${Number((Number(v) * 100).toFixed(2))}%`;
 
 /* ───────────── 结佣追溯（走 payroll 接口，不依赖 commission 菜单权限） ───────────── */
 const traceLoading = ref(false);
@@ -288,6 +338,7 @@ const teamSummary = ({ columns, data }: any) => {
 .compose-block.income { border-left: 3px solid #67c23a; }
 .compose-block.deduct { border-left: 3px solid #f56c6c; }
 .compose-block.result { border-left: 3px solid #409eff; }
+.compose-block.rate { border-left: 3px solid #e6a23c; }
 .compose-head { display: flex; justify-content: space-between; font-size: 12px; color: #909399; margin-bottom: 6px; }
 .compose-item { display: flex; justify-content: space-between; align-items: baseline; padding: 3px 0; font-size: 13px; gap: 12px; }
 .compose-name { color: #303133; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }

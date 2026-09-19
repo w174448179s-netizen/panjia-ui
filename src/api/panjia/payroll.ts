@@ -45,6 +45,10 @@ export interface PayrollDetail {
   employerSocial: number;
   finalRate: number;
   perfGrade: string;
+  /** 提成点调整叠加值（负值=扣点，算薪时叠加到综合提点；0=无调整） */
+  manualAdjust?: number | string | null;
+  /** 提成点调整溯源 JSON（RateAdjustItem 数组：type/rate/reason/source/adjustId） */
+  rateAdjustJson?: string | null;
 }
 
 /** 本人工资查询用的员工主数据（后端 EmployeeMainDataDTO） */
