@@ -141,6 +141,7 @@ import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { payrollApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
+import { attendanceApi } from '@/api/panjia/attendance';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
 const route = useRoute();
@@ -182,6 +183,16 @@ const createBatch = async () => {
   }
   creating.value = true;
   try {
+    // 无考勤确认：该月无考勤记录时考勤扣款为 0，防人事漏导考勤导致少扣
+    const approvalRes: any = await attendanceApi.getApproval(createForm.value.period);
+    if (approvalRes.data?.dataExists === false) {
+      const confirmed = await ElMessageBox.confirm(
+        `${createForm.value.period} 无考勤数据，考勤扣款将为 0。可能是人事漏导考勤，确认继续创建批次？`,
+        '无考勤确认',
+        { type: 'warning', confirmButtonText: '继续创建', cancelButtonText: '取消' }
+      ).then(() => true).catch(() => false);
+      if (!confirmed) return;
+    }
     await payrollApi.createBatch(createForm.value);
     showCreate.value = false;
     createForm.value = { period: '', deptScope: 'ALL' };

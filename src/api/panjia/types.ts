@@ -444,6 +444,8 @@ export interface AttendanceApproval {
   id?: string;
   period: string;
   status?: AttendanceApprovalStatus;
+  /** 该月是否有考勤记录（false = 无考勤，算薪前需人工确认） */
+  dataExists?: boolean;
   submitBy?: string;
   submitTime?: string;
   approveBy?: string;
