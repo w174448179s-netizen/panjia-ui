@@ -62,6 +62,42 @@
             <p>共 {{ total }} 条记录，一员工一月一行；对齐钉钉月度汇总，服务薪酬扣款。</p>
           </div>
           <div class="toolbar-actions">
+            <div class="approval-bar">
+              <el-date-picker
+                v-model="approvalPeriod"
+                type="month"
+                value-format="YYYY-MM"
+                :clearable="false"
+                style="width: 120px"
+                @change="loadApproval"
+              />
+              <el-tooltip
+                :disabled="approvalInfo.status !== 'REJECTED'"
+                :content="approvalInfo.rejectReason"
+                placement="top"
+              >
+                <el-tag :type="approvalTagType" style="margin-left: 8px">{{ approvalTagLabel }}</el-tag>
+              </el-tooltip>
+              <!-- 通过/驳回已收敛到「我的待办」（attendance_approval 工作流，总监24h未审自动通过） -->
+              <el-button
+                v-if="approvalInfo.status !== 'SUBMITTED' && approvalInfo.status !== 'APPROVED'"
+                type="warning"
+                plain
+                icon="Position"
+                :loading="approvalLoading"
+                @click="handleSubmitApproval"
+              >
+                提交审批
+              </el-button>
+              <el-button
+                v-if="approvalInfo.status === 'SUBMITTED'"
+                link
+                type="primary"
+                @click="openApprovalDetail"
+              >
+                查看审批单
+              </el-button>
+            </div>
             <el-button v-hasPermi="['people:attendance:add']" type="primary" plain icon="Plus" @click="handleAdd">
               新增考勤
             </el-button>
@@ -176,16 +212,31 @@
         <el-button type="primary" :loading="dialog.saving" @click="submitForm">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 审批单详情（提交后可自查异常行；也从「我的待办」跳转进入） -->
+    <el-dialog v-model="approvalDetailVisible" title="考勤月度审批详情" width="960px" append-to-body destroy-on-close>
+      <AttendanceApprovalDetail v-if="approvalDetailId" :business-id="approvalDetailId" />
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import type { FormInstance, FormRules } from 'element-plus';
 import { attendanceApi } from '@/api/panjia/attendance';
 import { employeeApi } from '@/api/panjia/employee';
-import type { AttendanceQuery, AttendanceRecord, AttendanceSaveForm, DeptNode, Employee } from '@/api/panjia/types';
+import type {
+  AttendanceApproval,
+  AttendanceQuery,
+  AttendanceRecord,
+  AttendanceSaveForm,
+  DeptNode,
+  Employee
+} from '@/api/panjia/types';
 import modal from '@/plugins/modal';
+import AttendanceApprovalDetail from '@/components/WorkflowHandle/details/AttendanceApprovalDetail.vue';
+import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
 // ==================== 查询 ====================
 const queryFormRef = ref<FormInstance>();
@@ -345,10 +396,79 @@ const handleDelete = async (row: AttendanceRecord) => {
   }
 };
 
+// ==================== 考勤审批 ====================
+const currentPeriod = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const approvalPeriod = ref<string>(currentPeriod());
+const approvalInfo = ref<AttendanceApproval>({ period: approvalPeriod.value });
+const approvalLoading = ref(false);
+
+const APPROVAL_TAG: Record<string, { label: string; type: 'info' | 'warning' | 'success' | 'danger' }> = {
+  DRAFT: { label: '待提交', type: 'info' },
+  SUBMITTED: { label: '审批中', type: 'warning' },
+  APPROVED: { label: '总监已通过', type: 'success' },
+  REJECTED: { label: '已驳回', type: 'danger' }
+};
+
+const approvalTagLabel = computed(() => APPROVAL_TAG[approvalInfo.value.status ?? 'DRAFT']?.label ?? '待提交');
+const approvalTagType = computed(() => APPROVAL_TAG[approvalInfo.value.status ?? 'DRAFT']?.type ?? 'info');
+
+const loadApproval = async () => {
+  try {
+    const res = await attendanceApi.getApproval(approvalPeriod.value);
+    approvalInfo.value = res.data ?? { period: approvalPeriod.value };
+  } catch {
+    approvalInfo.value = { period: approvalPeriod.value };
+  }
+};
+
+const handleSubmitApproval = async () => {
+  try {
+    await modal.confirm(`确认将 ${approvalPeriod.value} 考勤提交总监审批？总监通过（或 24 小时未审自动通过）后该期间方可进入算薪。`);
+  } catch {
+    return;
+  }
+  approvalLoading.value = true;
+  try {
+    const res = await attendanceApi.submitApproval(approvalPeriod.value);
+    modal.msgSuccess(res.msg || '已提交总监审批');
+    await loadApproval();
+  } catch (e: any) {
+    modal.msgError(e?.message || '提交失败');
+  } finally {
+    approvalLoading.value = false;
+  }
+};
+
+// ==================== 审批单详情（工作流办理/跳转共用） ====================
+const approvalDetailVisible = ref(false);
+const approvalDetailId = ref<string | number>('');
+
+const openApprovalDetail = () => {
+  if (!approvalInfo.value.id) return;
+  approvalDetailId.value = approvalInfo.value.id;
+  approvalDetailVisible.value = true;
+};
+
+// 「我的待办 → 查看业务表单」跳转到本页时，按 query.id 自动打开审批单详情
+const route = useRoute();
+const openFromWorkflow = () => {
+  const id = route.query.id as string;
+  const type = route.query.type as string;
+  if (!id || !type) return;
+  approvalDetailId.value = id;
+  approvalDetailVisible.value = true;
+};
+useWorkflowRouteOpen('/people/attendance', openFromWorkflow);
+
 onMounted(() => {
   getList();
   loadDeptTree();
   loadEmployees();
+  loadApproval();
 });
 </script>
 
@@ -384,6 +504,14 @@ onMounted(() => {
     letter-spacing: 1px;
     text-transform: uppercase;
     color: var(--el-color-primary);
+  }
+
+  .approval-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-right: 12px;
   }
 
   .pagination-wrap {

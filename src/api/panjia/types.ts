@@ -421,6 +421,43 @@ export interface AttendanceSaveForm {
   version?: number;
 }
 
+/** 考勤审批单（一期间一行；无审批单时 status 为空表示未提交） */
+export type AttendanceApprovalStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+
+/** 异常考勤行（迟到/迟到分/缺卡/旷工/请假 任一 >0，仅这些行需要总监审阅） */
+export interface AttendanceAbnormalRow {
+  employeeId?: number | string;
+  employeeCode?: string | null;
+  employeeName?: string | null;
+  attendMonth?: string | null;
+  lateCount?: number;
+  lateMinutes?: number;
+  missingCardCount?: number;
+  absentDays?: number;
+  leaveDays?: number;
+  remark?: string | null;
+}
+
+export interface AttendanceApproval {
+  id?: string;
+  period: string;
+  status?: AttendanceApprovalStatus;
+  submitBy?: string;
+  submitTime?: string;
+  approveBy?: string;
+  approveTime?: string;
+  rejectReason?: string;
+  processInstanceId?: string | null;
+  /** 当期考勤总行数 */
+  totalCount?: number;
+  /** 异常行数（需总监审阅的行） */
+  abnormalCount?: number;
+  /** 异常行请假天数合计 */
+  abnormalLeaveDays?: number;
+  /** 异常考勤快照明细 */
+  abnormalRows?: AttendanceAbnormalRow[];
+}
+
 // 积分
 export interface ScoreImport {
   id: string;

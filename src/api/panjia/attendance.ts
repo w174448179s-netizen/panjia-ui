@@ -1,5 +1,6 @@
 import panjiaRequest from './index';
 import type {
+  AttendanceApproval,
   AttendanceQuery,
   AttendanceRecord,
   AttendanceSaveForm,
@@ -41,5 +42,18 @@ export const attendanceApi = {
   /** 本人考勤详情 */
   myGetById(id: string | number) {
     return panjiaRequest.get<AttendanceRecord>(`/people/attendance/my/${id}`);
+  },
+  // ==================== 考勤审批 ====================
+  /** 查询期间审批状态 */
+  getApproval(period: string) {
+    return panjiaRequest.get<AttendanceApproval>(`/people/attendance/approval/${period}`);
+  },
+  /** 按审批单 ID 查询（工作流办理弹窗详情用，含异常考勤快照） */
+  getApprovalDetail(id: string | number) {
+    return panjiaRequest.get<AttendanceApproval>(`/people/attendance/approval/detail/${id}`);
+  },
+  /** 提交当月考勤审批（人事，发起 warm-flow 考勤月度审批流程） */
+  submitApproval(period: string) {
+    return panjiaRequest.post<string>('/people/attendance/approval/submit', { period });
   }
 };

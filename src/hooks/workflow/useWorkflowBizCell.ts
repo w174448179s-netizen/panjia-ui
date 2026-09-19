@@ -17,7 +17,8 @@ export const FLOW_TYPE_TABS = [
   { label: '实收审批', code: 'perf_received' },
   { label: '奖金录入', code: 'bonus_apply' },
   { label: '算薪批次', code: 'payroll_batch' },
-  { label: '补发单', code: 'payroll_supplement' }
+  { label: '补发单', code: 'payroll_supplement' },
+  { label: '考勤审批', code: 'attendance_approval' }
 ];
 
 /** el-tag type 联合类型 */
@@ -31,7 +32,8 @@ const TAG_TYPE_MAP: Record<string, ElTagType> = {
   perf_received: 'success',
   bonus_apply: 'info',
   payroll_batch: 'danger',
-  payroll_supplement: 'danger'
+  payroll_supplement: 'danger',
+  attendance_approval: 'primary'
 };
 
 /** 流程类型 -> 标签配色 */
