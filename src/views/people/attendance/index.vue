@@ -120,6 +120,7 @@
         <el-table-column label="备注" align="center" prop="remark" min-width="120" show-overflow-tooltip />
         <el-table-column label="操作" align="center" width="120" fixed="right">
           <template #default="scope">
+             <el-tooltip content="修改" placement="top">
             <el-button
               v-hasPermi="['people:attendance:edit']"
               link
@@ -127,8 +128,10 @@
               icon="Edit"
               @click="handleEdit(scope.row as AttendanceRecord)"
             >
-              修改
+
             </el-button>
+            </el-tooltip>
+                <el-tooltip content="删除" placement="top">
             <el-button
               v-hasPermi="['people:attendance:remove']"
               link
@@ -136,8 +139,9 @@
               icon="Delete"
               @click="handleDelete(scope.row as AttendanceRecord)"
             >
-              删除
+
             </el-button>
+              </el-tooltip>
           </template>
         </el-table-column>
       </el-table>
