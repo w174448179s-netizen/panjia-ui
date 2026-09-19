@@ -34,7 +34,7 @@
                   type="primary"
                   icon="Upload"
                   :loading="uploading"
-                  :disabled="uploading"
+                  :disabled="!period || uploading"
                 >
                   上传文件
                 </el-button>
@@ -246,6 +246,11 @@ const beforeUpload = (file: File): boolean => {
 };
 
 const handleUpload = async (options: UploadRequestOptions): Promise<void> => {
+  // 未选归属月不允许上传（按钮已置灰，此处兜底提示）
+  if (!period.value) {
+    modal.msgWarning('请先选择归属月');
+    return;
+  }
   const file = options.file as File;
   uploading.value = true;
   try {

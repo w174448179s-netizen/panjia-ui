@@ -25,7 +25,7 @@
               :before-upload="beforeUpload"
               :http-request="handleHttpRequest"
             >
-              <el-button type="primary" icon="Upload" :loading="uploadLoading">
+              <el-button type="primary" icon="Upload" :loading="uploadLoading" :disabled="!period">
                 上传文件
               </el-button>
             </el-upload>
