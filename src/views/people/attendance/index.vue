@@ -28,10 +28,11 @@
             :props="{ label: 'deptName', children: 'children' } as any"
             value-key="deptId"
             node-key="deptId"
-            placeholder="请选择门店/组别"
-            clearable
+            :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
+            :clearable="!deptLocked"
             check-strictly
             style="width: 200px"
+            @change="handleQuery"
           />
         </el-form-item>
         <el-form-item label="考勤期间">
@@ -241,20 +242,22 @@ import type {
   AttendanceQuery,
   AttendanceRecord,
   AttendanceSaveForm,
-  DeptNode,
   Employee
 } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
 import { Lock } from '@element-plus/icons-vue';
 import AttendanceApprovalDetail from '@/components/WorkflowHandle/details/AttendanceApprovalDetail.vue';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
+import { useDeptScope } from '@/hooks/useDeptScope';
 
 // ==================== 查询 ====================
 const queryFormRef = ref<FormInstance>();
 const loading = ref(false);
 const attendanceList = ref<AttendanceRecord[]>([]);
 const total = ref(0);
-const deptTreeData = ref<DeptNode[]>([]);
+
+// 门店/组别筛选：全系统统一数据权限口径（useDeptScope：默认本部门、树裁剪为子树、不可清空）
+const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
 
 /** 考勤期间（yyyy-MM，单月必选）：列表查询与审批状态共用同一期间 */
 const currentPeriod = () => {
@@ -268,7 +271,7 @@ const queryParams = reactive<AttendanceQuery>({
   pageSize: 10,
   employeeCode: '',
   employeeName: '',
-  deptId: undefined,
+  deptId: defaultDeptId(),
   monthStart: undefined,
   monthEnd: undefined
 });
@@ -307,15 +310,8 @@ const handleQuery = () => {
 const resetQuery = () => {
   queryFormRef.value?.resetFields();
   period.value = currentPeriod();
+  queryParams.deptId = defaultDeptId();
   handlePeriodChange();
-};
-
-const loadDeptTree = async () => {
-  try {
-    deptTreeData.value = await employeeApi.deptTree();
-  } catch (e: any) {
-    modal.msgError(e?.message || '部门树加载失败');
-  }
 };
 
 // ==================== 员工下拉 ====================
