@@ -91,7 +91,7 @@
 
       <el-table
         v-loading="loading"
-        :data="viewDetails"
+        :data="pagedDetails"
         stripe
         class="detail-table"
         max-height="620"
@@ -104,7 +104,7 @@
           <template #default="{ row }">
             <PayrollTracePanel
               :row="(row as any)"
-              :employee-name="empOf(row).employeeName"
+              :employee-name="row.employeeName"
               :period="currentBatch?.period || ''"
             />
           </template>
@@ -113,15 +113,15 @@
         <!-- 基本信息 -->
         <el-table-column label="姓名" fixed="left" width="90">
           <template #default="{ row }">
-            <span class="emp-name">{{ empOf(row).employeeName || `员工${row.employeeId}` }}</span>
+            <span class="emp-name">{{ row.employeeName || `员工${row.employeeId}` }}</span>
           </template>
         </el-table-column>
         <el-table-column label="门店" fixed="left" min-width="110" show-overflow-tooltip>
-          <template #default="{ row }">{{ empOf(row).deptName || '—' }}</template>
+          <template #default="{ row }">{{ row.deptName || '—' }}</template>
         </el-table-column>
         <el-table-column label="工号" fixed="left" width="100">
           <template #default="{ row }">
-            <span class="emp-code">{{ empOf(row).employeeCode || '—' }}</span>
+            <span class="emp-code">{{ row.employeeCode || '—' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="职级" width="70" align="center">
@@ -203,17 +203,28 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <!-- 分页 -->
+      <div class="pagination-bar">
+        <el-pagination
+          v-model:current-page="pageNum"
+          v-model:page-size="pageSize"
+          :page-sizes="pageSizes"
+          :total="viewDetails.length"
+          layout="total, sizes, prev, pager, next, jumper"
+          small
+          background
+        />
+      </div>
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Lock, Download, InfoFilled, RefreshLeft } from '@element-plus/icons-vue';
 import { payrollApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
-import { employeeApi } from '@/api/panjia/employee';
-import type { Employee } from '@/api/panjia/types';
 import PayrollTracePanel from '../components/PayrollTracePanel.vue';
 
 /* ───────────── 基础状态 ───────────── */
@@ -223,8 +234,6 @@ const selectedBatchId = ref<number | null>(null);
 const loading = ref(false);
 const viewRole = ref<'ALL' | 'AGENT' | 'MANAGER' | 'DIRECTOR'>('ALL');
 const showAllColumns = ref(false);
-
-const empMap = reactive<Record<number, { employeeName: string; employeeCode: string; deptId: number | string; deptName: string }>>({});
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: '草稿', CALCULATING: '计算中', CALCULATED: '已计算', FAILED: '失败',
@@ -243,8 +252,6 @@ const fmt = (n: number | null | undefined) =>
 /** 提成点调整叠加值 → 百分比文案（-0.02 → -2%） */
 const ratePercent = (v: number | string | null | undefined) => `${Number((Number(v) * 100).toFixed(2))}%`;
 const isZero = (v: number | null | undefined) => !v || Number(v) === 0;
-const empOf = (row: any) =>
-  empMap[row.employeeId] || { employeeName: '', employeeCode: '', deptId: '', deptName: '' };
 
 const currentBatch = computed(() => batches.value.find((b) => b.id === selectedBatchId.value) || null);
 
@@ -253,11 +260,11 @@ const filterDeptId = ref<number | string>('');
 const filterName = ref('');
 const filterCode = ref('');
 
-/** 门店选项：从员工档案派生去重（避免依赖 system:dept:query 权限） */
+/** 门店选项：从当前批次明细行的 deptId/deptName 派生去重（后端翻译后直出） */
 const deptOptions = computed(() => {
   const map = new Map<string, string>();
-  Object.values(empMap).forEach((e) => {
-    if (e.deptId && e.deptName) map.set(String(e.deptId), e.deptName);
+  details.value.forEach((d) => {
+    if (d.deptId != null && d.deptName) map.set(String(d.deptId), d.deptName);
   });
   return Array.from(map, ([deptId, deptName]) => ({ deptId, deptName }));
 });
@@ -268,16 +275,16 @@ const resetFilters = () => {
   filterCode.value = '';
 };
 
-/** 当前视图明细：角色 tab → 门店 → 姓名模糊 → 工号模糊（对应 Excel 分 sheet + 手工查找） */
+/** 当前视图明细：角色 tab → 门店 → 姓名模糊 → 工号模糊 */
 const viewDetails = computed(() => {
   let list = viewRole.value === 'ALL' ? details.value : details.value.filter((d) => d.employeeRole === viewRole.value);
   if (filterDeptId.value !== '') {
-    list = list.filter((d) => String(empOf(d).deptId) === String(filterDeptId.value));
+    list = list.filter((d) => String(d.deptId) === String(filterDeptId.value));
   }
   const name = filterName.value.trim();
-  if (name) list = list.filter((d) => empOf(d).employeeName.includes(name));
+  if (name) list = list.filter((d) => (d.employeeName || '').includes(name));
   const code = filterCode.value.trim();
-  if (code) list = list.filter((d) => (empOf(d).employeeCode || '').includes(code));
+  if (code) list = list.filter((d) => (d.employeeCode || '').includes(code));
   return list;
 });
 
@@ -318,6 +325,22 @@ function filterCols(cols: ColDef[]): ColDef[] {
   });
 }
 
+/* ───────────── 分页（客户端分页：批次明细量级百人级，无需后端分页） ───────────── */
+const pageNum = ref(1);
+const pageSize = ref(20);
+const pageSizes = [20, 50, 100, 200];
+
+/** 当前页数据：基于筛选后的 viewDetails 切片 */
+const pagedDetails = computed(() => {
+  const start = (pageNum.value - 1) * pageSize.value;
+  return viewDetails.value.slice(start, start + pageSize.value);
+});
+
+/** 筛选条件变化时回到第一页 */
+const resetPage = () => { pageNum.value = 1; };
+
+watch([viewRole, filterDeptId, filterName, filterCode], resetPage);
+
 /* ───────────── 数据加载 ───────────── */
 const loadBatches = async () => {
   try {
@@ -336,27 +359,12 @@ const loadDetails = async () => {
   try {
     const res = await payrollApi.getDetails(selectedBatchId.value);
     details.value = (res as any).data ?? [];
+    resetPage();
   } catch {
     details.value = [];
   } finally {
     loading.value = false;
   }
-};
-
-/** 员工姓名/工号/门店映射（替代裸的员工ID） */
-const loadEmployees = async () => {
-  try {
-    const res = await employeeApi.list({ pageNum: 1, pageSize: 1000 });
-    const rows: Employee[] = ((res as any).data?.rows ?? (res as any).rows ?? []) as Employee[];
-    rows.forEach((e) => {
-      empMap[Number(e.employeeId)] = {
-        employeeName: e.employeeName,
-        employeeCode: e.employeeCode || '',
-        deptId: e.deptId,
-        deptName: e.deptName,
-      };
-    });
-  } catch { /* 映射失败时回退显示员工ID */ }
 };
 
 /* ───────────── 合计行 ───────────── */
@@ -383,22 +391,77 @@ const summaryMethod = ({ columns, data }: any) => {
   return sums;
 };
 
-/* ───────────── 导出（按当前视图，含姓名/门店） ───────────── */
+/* ───────────── 导出（按业务指定的 27 列固定顺序，导出全部筛选结果） ───────────── */
+/** 当月新签业绩 = 个人新签提成 ÷ 70%（仅店长有个人新签业绩；经纪人/总监无则留空） */
+const deriveNewSignPerf = (r: any) => {
+  const income = Number(r.personalNewsignIncome) || 0;
+  return income > 0 ? income / 0.7 : 0;
+};
+/** 结佣业绩 = 业绩提成 ÷ 最终提成比例 */
+const deriveCommissionPerf = (r: any) => {
+  const rate = Number(r.finalRate) || 0;
+  const income = Number(r.commissionIncome) || 0;
+  return rate > 0 ? income / rate : 0;
+};
+/** 个人提点奖励：rateAdjustJson 中正向调整项合计（目前人工扣点均为负，预留口径） */
+const sumPositiveRateAdjust = (r: any) => {
+  if (!r.rateAdjustJson) return 0;
+  try {
+    const arr = JSON.parse(r.rateAdjustJson);
+    if (!Array.isArray(arr)) return 0;
+    return arr.reduce((s: number, it: any) => {
+      const v = Number(it.rate) || 0;
+      return v > 0 ? s + v : s;
+    }, 0);
+  } catch {
+    return 0;
+  }
+};
+
 const exportExcel = () => {
   if (!viewDetails.value.length) return;
-  const basicHeads = ['姓名', '门店', '工号', '职级', '角色', '兼职'];
-  const incomeHeads = visibleIncomeCols.value.map((c) => c.label).concat(['应发合计']);
-  const deductHeads = visibleDeductCols.value.map((c) => c.label).concat(['扣款合计', '个税']);
-  const heads = [...basicHeads, ...incomeHeads, ...deductHeads, '实发'];
+
+  const heads = [
+    '门店', '姓名', '职级', '职位', '当月新签业绩', '当月新签业绩提成比列',
+    '绩效提成扣点', '个人提点奖励', '当月最终提成比列', '结佣业绩', '提成比例', '提成金额',
+    '招聘奖励', '底薪', '绩效', '考勤扣款', '积分扣款', '应发工资',
+    '社保扣款', '公积金扣款', '往月负工资', '商业保险', '宿舍管理费',
+    '工资合计', '实发工资', '个税扣除', '最终发放',
+  ];
 
   const rows = viewDetails.value.map((r: any) => {
-    const basic = [
-      empOf(r).employeeName || `员工${r.employeeId}`, empOf(r).deptName || '',
-      empOf(r).employeeCode || '', r.levelCode || '', roleLabel(r.employeeRole), r.isPartTime ? '是' : '否',
+    const gross = Number(r.gross) || 0;
+    const deduct = Number(r.deduct) || 0;
+    const posAdjust = sumPositiveRateAdjust(r);
+    return [
+      r.deptName || '',                                                      // 门店
+      r.employeeName || `员工${r.employeeId}`,                              // 姓名
+      r.levelCode || '',                                                    // 职级
+      roleLabel(r.employeeRole),                                            // 职位
+      num(deriveNewSignPerf(r)),                                            // 当月新签业绩
+      Number(r.personalNewsignIncome) > 0 ? '70%' : '',                     // 当月新签业绩提成比列
+      r.manualAdjust != null && Number(r.manualAdjust) !== 0 ? ratePercent(r.manualAdjust) : '', // 绩效提成扣点
+      posAdjust !== 0 ? ratePercent(posAdjust) : '',                        // 个人提点奖励
+      r.finalRate != null ? ratePercent(r.finalRate) : '',                  // 当月最终提成比列
+      num(deriveCommissionPerf(r)),                                         // 结佣业绩
+      r.finalRate != null ? ratePercent(r.finalRate) : '',                  // 提成比例
+      num(r.commissionIncome),                                              // 提成金额
+      num(r.mentorBonus),                                                   // 招聘奖励
+      num(r.baseSalary),                                                    // 底薪
+      num(r.bonus),                                                         // 绩效（奖金）
+      num(Math.abs(Number(r.attendanceFee) || 0)),                          // 考勤扣款
+      '',                                                                   // 积分扣款（pointsFee 链路已下线）
+      num(r.gross),                                                         // 应发工资
+      num(r.socialFee),                                                     // 社保扣款
+      num(r.housingFund),                                                   // 公积金扣款
+      num(Math.abs(Number(r.negativeCarryover) || 0)),                      // 往月负工资
+      num(r.commercialInsurance),                                           // 商业保险
+      num(r.dormitoryFee),                                                  // 宿舍管理费
+      num(gross - deduct),                                                  // 工资合计（应发 - 扣款合计，不含个税）
+      num(r.net),                                                           // 实发工资
+      num(r.tax),                                                           // 个税扣除
+      num(r.net),                                                           // 最终发放
     ];
-    const income = visibleIncomeCols.value.map((c) => num(r[c.prop])).concat([num(r.gross)]);
-    const deduct = visibleDeductCols.value.map((c) => num(r[c.prop])).concat([num(r.deduct), num(r.tax)]);
-    return [...basic, ...income, ...deduct, num(r.net)];
   });
 
   const csv = [heads, ...rows]
@@ -418,7 +481,6 @@ const num = (v: any) => (v == null || v === '' ? '' : Number(v).toFixed(2));
 
 onMounted(() => {
   loadBatches();
-  loadEmployees();
 });
 </script>
 
@@ -473,4 +535,7 @@ onMounted(() => {
 .toolbar-icon { color: #409eff; }
 .toolbar-tip b { color: #606266; }
 .emp-code { color: #606266; font-variant-numeric: tabular-nums; }
+
+/* 分页 */
+.pagination-bar { display: flex; justify-content: flex-end; margin-top: 12px; }
 </style>

@@ -22,6 +22,12 @@ export interface PayrollDetail {
   levelCode: string;
   employeeRole: string;
   isPartTime: boolean;
+  /** 员工姓名（后端按 employeeId 翻译） */
+  employeeName?: string;
+  /** 工号（后端按 employeeId 翻译） */
+  employeeCode?: string;
+  /** 门店名称（后端按 deptId 翻译） */
+  deptName?: string;
   commissionIncome: number;
   teamIncome: number;
   personalNewsignIncome: number;
