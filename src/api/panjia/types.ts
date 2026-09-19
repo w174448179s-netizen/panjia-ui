@@ -394,6 +394,8 @@ export interface AttendanceRecord {
   employeeName?: string;
   deptId?: string;
   deptName?: string;
+  /** 该期间考勤已提交审批（SUBMITTED/APPROVED）时锁定，禁止增删改 */
+  locked?: boolean;
 }
 
 /** 考勤汇总查询（管理端；本人查询仅用 monthStart/monthEnd） */

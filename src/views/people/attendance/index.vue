@@ -34,15 +34,15 @@
             style="width: 200px"
           />
         </el-form-item>
-        <el-form-item label="考勤月份">
+        <el-form-item label="考勤期间">
           <el-date-picker
-            v-model="monthRange"
-            type="monthrange"
-            range-separator="至"
-            start-placeholder="开始月份"
-            end-placeholder="结束月份"
-            value-format="YYYY-MM-DD"
-            style="width: 260px"
+            v-model="period"
+            type="month"
+            value-format="YYYY-MM"
+            :clearable="false"
+            placeholder="请选择期间"
+            style="width: 140px"
+            @change="handlePeriodChange"
           />
         </el-form-item>
         <el-form-item>
@@ -63,20 +63,13 @@
           </div>
           <div class="toolbar-actions">
             <div class="approval-bar">
-              <el-date-picker
-                v-model="approvalPeriod"
-                type="month"
-                value-format="YYYY-MM"
-                :clearable="false"
-                style="width: 120px"
-                @change="loadApproval"
-              />
+              <!-- 期间以筛选区「考勤期间」为准，此处只展示该期间的审批状态与动作 -->
               <el-tooltip
                 :disabled="approvalInfo.status !== 'REJECTED'"
                 :content="approvalInfo.rejectReason"
                 placement="top"
               >
-                <el-tag :type="approvalTagType" style="margin-left: 8px">{{ approvalTagLabel }}</el-tag>
+                <el-tag :type="approvalTagType">{{ approvalTagLabel }}</el-tag>
               </el-tooltip>
               <!-- 通过/驳回已收敛到「我的待办」（attendance_approval 工作流，总监24h未审自动通过） -->
               <el-button
@@ -98,7 +91,14 @@
                 查看审批单
               </el-button>
             </div>
-            <el-button v-hasPermi="['people:attendance:add']" type="primary" plain icon="Plus" @click="handleAdd">
+            <el-button
+              v-hasPermi="['people:attendance:add']"
+              type="primary"
+              plain
+              icon="Plus"
+              :disabled="periodLocked"
+              @click="handleAdd"
+            >
               新增考勤
             </el-button>
           </div>
@@ -120,28 +120,34 @@
         <el-table-column label="备注" align="center" prop="remark" min-width="120" show-overflow-tooltip />
         <el-table-column label="操作" align="center" width="120" fixed="right">
           <template #default="scope">
-             <el-tooltip content="修改" placement="top">
-            <el-button
-              v-hasPermi="['people:attendance:edit']"
-              link
-              type="primary"
-              icon="Edit"
-              @click="handleEdit(scope.row as AttendanceRecord)"
-            >
-
-            </el-button>
-            </el-tooltip>
-                <el-tooltip content="删除" placement="top">
-            <el-button
-              v-hasPermi="['people:attendance:remove']"
-              link
-              type="danger"
-              icon="Delete"
-              @click="handleDelete(scope.row as AttendanceRecord)"
-            >
-
-            </el-button>
+            <!-- 期间已提交审批（SUBMITTED/APPROVED）的行锁定：隐藏修改/删除 -->
+            <template v-if="scope.row.locked">
+              <el-tooltip content="该期间考勤已提交审批（或已通过），数据锁定" placement="top">
+                <span class="lock-cell"><el-icon><Lock /></el-icon>已锁定</span>
               </el-tooltip>
+            </template>
+            <template v-else>
+              <el-tooltip content="修改" placement="top">
+                <el-button
+                  v-hasPermi="['people:attendance:edit']"
+                  link
+                  type="primary"
+                  icon="Edit"
+                  @click="handleEdit(scope.row as AttendanceRecord)"
+                >
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="删除" placement="top">
+                <el-button
+                  v-hasPermi="['people:attendance:remove']"
+                  link
+                  type="danger"
+                  icon="Delete"
+                  @click="handleDelete(scope.row as AttendanceRecord)"
+                >
+                </el-button>
+              </el-tooltip>
+            </template>
           </template>
         </el-table-column>
       </el-table>
@@ -239,6 +245,7 @@ import type {
   Employee
 } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
+import { Lock } from '@element-plus/icons-vue';
 import AttendanceApprovalDetail from '@/components/WorkflowHandle/details/AttendanceApprovalDetail.vue';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
@@ -248,7 +255,13 @@ const loading = ref(false);
 const attendanceList = ref<AttendanceRecord[]>([]);
 const total = ref(0);
 const deptTreeData = ref<DeptNode[]>([]);
-const monthRange = ref<[string, string] | []>([]);
+
+/** 考勤期间（yyyy-MM，单月必选）：列表查询与审批状态共用同一期间 */
+const currentPeriod = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+const period = ref<string>(currentPeriod());
 
 const queryParams = reactive<AttendanceQuery>({
   pageNum: 1,
@@ -263,11 +276,12 @@ const queryParams = reactive<AttendanceQuery>({
 const getList = async () => {
   loading.value = true;
   try {
-    const [monthStart, monthEnd] = monthRange.value || [];
+    // 单月期间：起止都传所选月 1 日
+    const monthFirst = `${period.value}-01`;
     const res = await attendanceApi.list({
       ...queryParams,
-      monthStart: monthStart || undefined,
-      monthEnd: monthEnd || undefined
+      monthStart: monthFirst,
+      monthEnd: monthFirst
     });
     attendanceList.value = res.data?.rows ?? [];
     total.value = res.data?.total ?? 0;
@@ -278,6 +292,13 @@ const getList = async () => {
   }
 };
 
+/** 切换期间：列表与审批状态联动刷新 */
+const handlePeriodChange = () => {
+  queryParams.pageNum = 1;
+  getList();
+  loadApproval();
+};
+
 const handleQuery = () => {
   queryParams.pageNum = 1;
   getList();
@@ -285,9 +306,8 @@ const handleQuery = () => {
 
 const resetQuery = () => {
   queryFormRef.value?.resetFields();
-  monthRange.value = [];
-  queryParams.pageNum = 1;
-  getList();
+  period.value = currentPeriod();
+  handlePeriodChange();
 };
 
 const loadDeptTree = async () => {
@@ -401,14 +421,13 @@ const handleDelete = async (row: AttendanceRecord) => {
 };
 
 // ==================== 考勤审批 ====================
-const currentPeriod = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
-
-const approvalPeriod = ref<string>(currentPeriod());
-const approvalInfo = ref<AttendanceApproval>({ period: approvalPeriod.value });
+const approvalInfo = ref<AttendanceApproval>({ period: period.value });
 const approvalLoading = ref(false);
+
+/** 期间锁定：审批中/已通过的期间禁止手工增删改（后端同步强校验） */
+const periodLocked = computed(
+  () => approvalInfo.value.status === 'SUBMITTED' || approvalInfo.value.status === 'APPROVED'
+);
 
 const APPROVAL_TAG: Record<string, { label: string; type: 'info' | 'warning' | 'success' | 'danger' }> = {
   DRAFT: { label: '待提交', type: 'info' },
@@ -422,22 +441,22 @@ const approvalTagType = computed(() => APPROVAL_TAG[approvalInfo.value.status ??
 
 const loadApproval = async () => {
   try {
-    const res = await attendanceApi.getApproval(approvalPeriod.value);
-    approvalInfo.value = res.data ?? { period: approvalPeriod.value };
+    const res = await attendanceApi.getApproval(period.value);
+    approvalInfo.value = res.data ?? { period: period.value };
   } catch {
-    approvalInfo.value = { period: approvalPeriod.value };
+    approvalInfo.value = { period: period.value };
   }
 };
 
 const handleSubmitApproval = async () => {
   try {
-    await modal.confirm(`确认将 ${approvalPeriod.value} 考勤提交总监审批？总监通过（或 24 小时未审自动通过）后该期间方可进入算薪。`);
+    await modal.confirm(`确认将 ${period.value} 考勤提交总监审批？提交后该期间考勤将锁定不可修改，总监通过（或 24 小时未审自动通过）后方可进入算薪。`);
   } catch {
     return;
   }
   approvalLoading.value = true;
   try {
-    const res = await attendanceApi.submitApproval(approvalPeriod.value);
+    const res = await attendanceApi.submitApproval(period.value);
     modal.msgSuccess(res.msg || '已提交总监审批');
     await loadApproval();
   } catch (e: any) {
@@ -516,6 +535,14 @@ onMounted(() => {
     gap: 8px;
     flex-wrap: wrap;
     margin-right: 12px;
+  }
+
+  .lock-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
   }
 
   .pagination-wrap {
