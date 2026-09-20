@@ -472,6 +472,10 @@ export interface ScoreRecord {
   avgPoints?: number;
   grade?: string | null;
   deductRate?: number | null;
+  /** 当月晚提交次数（填报时间晚于23:00的天数） */
+  lateSubmitCount?: number;
+  /** 积分扣款 = 晚提交次数 × 5元/次 */
+  pointsFee?: number;
   dataSource?: string;
   version?: number;
   createTime?: string;
@@ -533,6 +537,22 @@ export interface ScoreApproval {
   gradeCCount?: number;
   /** 扣点行快照明细（B/C 级） */
   deductRows?: ScoreDeductRow[];
+  /** 当月晚提交总次数 */
+  lateSubmitTotalCount?: number;
+  /** 当月晚提交扣款总额（元） */
+  lateSubmitTotalFee?: number;
+  /** 晚提交行快照明细（lateSubmitCount > 0） */
+  lateSubmitRows?: ScoreLateSubmitRow[];
+}
+
+/** 晚提交行（总监核对豁免情况） */
+export interface ScoreLateSubmitRow {
+  employeeId?: number | string;
+  employeeCode?: string | null;
+  employeeName?: string | null;
+  scoreMonth?: string | null;
+  lateSubmitCount?: number;
+  pointsFee?: number;
 }
 
 // 工资计算

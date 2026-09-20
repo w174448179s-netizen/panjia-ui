@@ -92,12 +92,24 @@
                 查看审批单
               </el-button>
             </div>
+            <el-button
+              v-hasPermi="['people:score:add']"
+              type="primary"
+              plain
+              icon="Plus"
+              @click="openCreate"
+            >
+              新增积分
+            </el-button>
+            <el-button type="success" plain icon="Upload" @click="importOpen = true">导入积分</el-button>
           </div>
         </div>
       </template>
 
       <el-table v-loading="loading" border class="data-table" :data="scoreList">
-        <el-table-column label="积分月份" align="center" prop="scoreMonth" width="110" />
+        <el-table-column label="积分期间" align="center" prop="scoreMonth" width="110">
+          <template #default="{ row }">{{ row.scoreMonth?.slice(0, 7) ?? '—' }}</template>
+        </el-table-column>
         <el-table-column label="工号" align="center" prop="employeeCode" width="100" />
         <el-table-column label="姓名" align="center" prop="employeeName" width="90" />
         <el-table-column label="门店/组别" align="center" prop="deptName" min-width="150" show-overflow-tooltip />
@@ -118,16 +130,55 @@
             <span v-else>—</span>
           </template>
         </el-table-column>
+        <el-table-column label="晚提交次数" align="center" prop="lateSubmitCount" width="100">
+          <template #default="{ row }">{{ row.lateSubmitCount ?? 0 }}</template>
+        </el-table-column>
+        <el-table-column label="积分扣款(元)" align="center" prop="pointsFee" width="110">
+          <template #default="{ row }">{{ row.pointsFee ? Number(row.pointsFee).toFixed(2) : '0.00' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" align="center" width="110" fixed="right">
+          <template #default="{ row }">
+            <el-tooltip
+              :disabled="!row.locked"
+              content="该期间已提交审批或已通过，无法修改"
+              placement="top"
+            >
+              <el-button
+                link
+                type="primary"
+                size="small"
+                :disabled="row.locked"
+                @click="openEdit(row as ScoreRecord)"
+              >
+                修改
+              </el-button>
+            </el-tooltip>
+            <el-tooltip
+              :disabled="!row.locked"
+              content="该期间已提交审批或已通过，无法删除"
+              placement="top"
+            >
+              <el-button
+                v-hasPermi="['people:score:remove']"
+                link
+                type="danger"
+                size="small"
+                :disabled="row.locked"
+                @click="handleDelete(row as ScoreRecord)"
+              >
+                删除
+              </el-button>
+            </el-tooltip>
+          </template>
+        </el-table-column>
       </el-table>
 
-      <el-pagination
+      <pagination
         v-show="total > 0"
         v-model:page="queryParams.pageNum"
         v-model:limit="queryParams.pageSize"
         :total="total"
-        :page-sizes="[10, 20, 50, 100]"
         class="pagination-wrap"
-        layout="total, sizes, prev, pager, next, jumper"
         @pagination="getList"
       />
     </el-card>
@@ -135,6 +186,67 @@
     <!-- 审批单详情（提交后可自查扣点行；也从「我的待办」跳转进入） -->
     <el-dialog v-model="approvalDetailVisible" title="积分月度审批详情" width="960px" append-to-body destroy-on-close>
       <ScoreApprovalDetail v-if="approvalDetailId" :business-id="approvalDetailId" />
+    </el-dialog>
+
+    <!-- 手工新增积分记录（补录/修正）：同员工同月份唯一，导入同步会覆盖 MANUAL 记录 -->
+    <el-dialog v-model="createOpen" title="新增积分" width="460px" append-to-body>
+      <el-form label-width="90px">
+        <el-form-item label="员工" required>
+          <el-select v-model="createForm.employeeId" placeholder="请选择员工" filterable style="width: 100%">
+            <el-option
+              v-for="emp in employeeOptions"
+              :key="emp.employeeId"
+              :label="`${emp.employeeCode || '无工号'}｜${emp.employeeName}${emp.deptName ? '｜' + emp.deptName : ''}`"
+              :value="emp.employeeId"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="积分期间" required>
+          <el-date-picker v-model="createForm.scoreMonth" type="month" value-format="YYYY-MM" placeholder="请选择月份" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="总积分" required>
+          <el-input-number v-model="createForm.totalPoints" :min="0" :max="100000" :precision="0" controls-position="right" style="width: 180px" />
+        </el-form-item>
+        <el-form-item label="出勤天数" required>
+          <el-input-number v-model="createForm.attendDays" :min="0" :max="31" :precision="0" controls-position="right" style="width: 180px" />
+        </el-form-item>
+        <el-form-item label="晚提交次数" required>
+          <el-input-number v-model="createForm.lateSubmitCount" :min="0" :max="99" :precision="0" controls-position="right" style="width: 180px" />
+          <div class="edit-tip">扣款 = 次数 × 晚提交罚款单价（政策规则可配）</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createOpen = false">取消</el-button>
+        <el-button type="primary" :loading="createSaving" @click="saveCreate">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 修改积分原始事实（总积分/出勤天数/晚提交次数）；平均积分/等级/扣点/扣款由后端实时重算 -->
+    <el-dialog v-model="editOpen" title="修改积分记录" width="440px" append-to-body>
+      <el-form label-width="90px">
+        <el-form-item label="工号/姓名">
+          <span>{{ editForm.employeeCode }} / {{ editForm.employeeName }}</span>
+        </el-form-item>
+        <el-form-item label="总积分" required>
+          <el-input-number v-model="editForm.totalPoints" :min="0" :max="100000" :precision="0" controls-position="right" style="width: 180px" />
+        </el-form-item>
+        <el-form-item label="出勤天数" required>
+          <el-input-number v-model="editForm.attendDays" :min="0" :max="31" :precision="0" controls-position="right" style="width: 180px" />
+        </el-form-item>
+        <el-form-item label="晚提交次数" required>
+          <el-input-number v-model="editForm.lateSubmitCount" :min="0" :max="99" :precision="0" controls-position="right" style="width: 180px" />
+          <div class="edit-tip">经总监同意可调整（豁免处罚）；扣款 = 次数 × 晚提交罚款单价（政策规则可配）</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editOpen = false">取消</el-button>
+        <el-button type="primary" :loading="editSaving" @click="saveEdit">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 积分导入入口：整体复用导入页组件（自带归属月/上传/批次管理），关闭后刷新汇总列表 -->
+    <el-dialog v-model="importOpen" title="积分数据导入" width="1080px" append-to-body destroy-on-close @closed="getList">
+      <ImportScorePage />
     </el-dialog>
   </div>
 </template>
@@ -144,9 +256,11 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import type { FormInstance } from 'element-plus';
 import { scoreApi } from '@/api/panjia/score';
-import type { ScoreApproval, ScoreQuery, ScoreRecord } from '@/api/panjia/types';
+import { employeeApi } from '@/api/panjia/employee';
+import type { Employee, ScoreApproval, ScoreQuery, ScoreRecord } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
 import ScoreApprovalDetail from '@/components/WorkflowHandle/details/ScoreApprovalDetail.vue';
+import ImportScorePage from '@/views/import/score/index.vue';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { useDeptScope } from '@/hooks/useDeptScope';
 
@@ -155,6 +269,9 @@ const queryFormRef = ref<FormInstance>();
 const loading = ref(false);
 const scoreList = ref<ScoreRecord[]>([]);
 const total = ref(0);
+
+/** 积分导入弹窗（内嵌导入页组件） */
+const importOpen = ref(false);
 
 // 门店/组别筛选：全系统统一数据权限口径（useDeptScope：默认本部门、树裁剪为子树、不可清空）
 const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
@@ -262,6 +379,126 @@ const handleSubmitApproval = async () => {
   }
 };
 
+// ==================== 手工新增 / 删除 ====================
+const employeeOptions = ref<Employee[]>([]);
+
+const loadEmployees = async () => {
+  try {
+    const res = await employeeApi.list({ pageNum: 1, pageSize: 1000 });
+    employeeOptions.value = res.data?.rows ?? [];
+  } catch {
+    employeeOptions.value = [];
+  }
+};
+
+const createOpen = ref(false);
+const createSaving = ref(false);
+const createForm = reactive({
+  employeeId: '' as string | number,
+  scoreMonth: currentPeriod(),
+  totalPoints: 0,
+  attendDays: 0,
+  lateSubmitCount: 0
+});
+
+const openCreate = () => {
+  createForm.employeeId = '';
+  createForm.scoreMonth = currentPeriod();
+  createForm.totalPoints = 0;
+  createForm.attendDays = 0;
+  createForm.lateSubmitCount = 0;
+  createOpen.value = true;
+};
+
+const saveCreate = async () => {
+  if (!createForm.employeeId) {
+    modal.msgWarning('请选择员工');
+    return;
+  }
+  if (!createForm.scoreMonth) {
+    modal.msgWarning('请选择积分期间');
+    return;
+  }
+  if (createForm.attendDays === 0) {
+    modal.msgWarning('出勤天数为 0 时平均积分/绩效等级为空，算薪默认 A 级不扣点');
+  }
+  createSaving.value = true;
+  try {
+    const res = await scoreApi.create({
+      employeeId: createForm.employeeId,
+      scoreMonth: createForm.scoreMonth,
+      totalPoints: createForm.totalPoints,
+      attendDays: createForm.attendDays,
+      lateSubmitCount: createForm.lateSubmitCount
+    });
+    modal.msgSuccess(res.msg || '已新增积分记录');
+    createOpen.value = false;
+    await getList();
+    await loadApproval();
+  } catch (e: any) {
+    modal.msgError(e?.message || '新增失败');
+  } finally {
+    createSaving.value = false;
+  }
+};
+
+const handleDelete = async (row: ScoreRecord) => {
+  const ok = await modal.confirm(`确认删除 ${row.employeeName ?? ''}（${row.scoreMonth?.slice(0, 7)}）的积分记录吗？`);
+  if (!ok) return;
+  try {
+    const res = await scoreApi.remove(row.id);
+    modal.msgSuccess(res.msg || '已删除积分记录');
+    await getList();
+    await loadApproval();
+  } catch (e: any) {
+    modal.msgError(e?.message || '删除失败');
+  }
+};
+
+// ==================== 修改原始事实（总积分/出勤天数/晚提交次数） ====================
+const editOpen = ref(false);
+const editSaving = ref(false);
+const editForm = reactive({
+  id: '' as string | number,
+  employeeCode: '',
+  employeeName: '',
+  totalPoints: 0,
+  attendDays: 0,
+  lateSubmitCount: 0
+});
+
+const openEdit = (row: ScoreRecord) => {
+  editForm.id = row.id;
+  editForm.employeeCode = row.employeeCode ?? '';
+  editForm.employeeName = row.employeeName ?? '';
+  editForm.totalPoints = Number(row.totalPoints ?? 0);
+  editForm.attendDays = row.attendDays ?? 0;
+  editForm.lateSubmitCount = row.lateSubmitCount ?? 0;
+  editOpen.value = true;
+};
+
+const saveEdit = async () => {
+  if (editForm.attendDays === 0) {
+    modal.msgWarning('出勤天数为 0 时平均积分/绩效等级为空，算薪默认 A 级不扣点');
+  }
+  editSaving.value = true;
+  try {
+    const res = await scoreApi.update(editForm.id, {
+      totalPoints: editForm.totalPoints,
+      attendDays: editForm.attendDays,
+      lateSubmitCount: editForm.lateSubmitCount
+    });
+    modal.msgSuccess(res.msg || '已修改积分记录');
+    editOpen.value = false;
+    await getList();
+    await loadApproval();
+  } catch (e: any) {
+    modal.msgError(e?.message || '修改失败');
+  } finally {
+    editSaving.value = false;
+  }
+};
+
 // ==================== 审批单详情（工作流办理/跳转共用） ====================
 const approvalDetailVisible = ref(false);
 const approvalDetailId = ref<string | number>('');
@@ -287,6 +524,7 @@ onMounted(() => {
   getList();
   loadDeptTree();
   loadApproval();
+  loadEmployees();
 });
 </script>
 
@@ -335,6 +573,13 @@ onMounted(() => {
   .pagination-wrap {
     margin-top: 12px;
     justify-content: flex-end;
+  }
+
+  .edit-tip {
+    width: 100%;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    line-height: 1.5;
   }
 }
 </style>

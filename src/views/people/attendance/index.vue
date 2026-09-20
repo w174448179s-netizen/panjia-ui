@@ -92,6 +92,7 @@
                 查看审批单
               </el-button>
             </div>
+            <el-button type="success" plain icon="Upload" @click="importOpen = true">导入考勤</el-button>
             <el-button
               v-hasPermi="['people:attendance:add']"
               type="primary"
@@ -107,7 +108,9 @@
       </template>
 
       <el-table v-loading="loading" border class="data-table" :data="attendanceList">
-        <el-table-column label="考勤月份" align="center" prop="attendMonth" width="110" />
+        <el-table-column label="考勤期间" align="center" prop="attendMonth" width="110">
+          <template #default="{ row }">{{ row.attendMonth?.slice(0, 7) ?? '—' }}</template>
+        </el-table-column>
         <el-table-column label="工号" align="center" prop="employeeCode" width="100" />
         <el-table-column label="姓名" align="center" prop="employeeName" width="90" />
         <el-table-column label="门店/组别" align="center" prop="deptName" min-width="150" show-overflow-tooltip />
@@ -153,14 +156,12 @@
         </el-table-column>
       </el-table>
 
-      <el-pagination
+      <pagination
         v-show="total > 0"
         v-model:page="queryParams.pageNum"
         v-model:limit="queryParams.pageSize"
         :total="total"
-        :page-sizes="[10, 20, 50, 100]"
         class="pagination-wrap"
-        layout="total, sizes, prev, pager, next, jumper"
         @pagination="getList"
       />
     </el-card>
@@ -184,7 +185,7 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="考勤月份" prop="attendMonth">
+        <el-form-item label="考勤期间" prop="attendMonth">
           <el-date-picker
             v-model="form.attendMonth"
             type="month"
@@ -228,6 +229,11 @@
     <el-dialog v-model="approvalDetailVisible" title="考勤月度审批详情" width="960px" append-to-body destroy-on-close>
       <AttendanceApprovalDetail v-if="approvalDetailId" :business-id="approvalDetailId" />
     </el-dialog>
+
+    <!-- 考勤导入入口：整体复用导入页组件（自带归属月/上传/批次管理），关闭后刷新汇总列表 -->
+    <el-dialog v-model="importOpen" title="考勤数据导入" width="1080px" append-to-body destroy-on-close @closed="getList">
+      <ImportAttendancePage />
+    </el-dialog>
   </div>
 </template>
 
@@ -247,6 +253,7 @@ import type {
 import modal from '@/plugins/modal';
 import { Lock } from '@element-plus/icons-vue';
 import AttendanceApprovalDetail from '@/components/WorkflowHandle/details/AttendanceApprovalDetail.vue';
+import ImportAttendancePage from '@/views/import/attendance/index.vue';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { useDeptScope } from '@/hooks/useDeptScope';
 
@@ -255,6 +262,9 @@ const queryFormRef = ref<FormInstance>();
 const loading = ref(false);
 const attendanceList = ref<AttendanceRecord[]>([]);
 const total = ref(0);
+
+/** 考勤导入弹窗（内嵌导入页组件） */
+const importOpen = ref(false);
 
 // 门店/组别筛选：全系统统一数据权限口径（useDeptScope：默认本部门、树裁剪为子树、不可清空）
 const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
@@ -348,7 +358,7 @@ const form = reactive<AttendanceSaveForm>(createEmptyForm());
 
 const rules: FormRules = {
   employeeId: [{ required: true, message: '请选择员工', trigger: 'change' }],
-  attendMonth: [{ required: true, message: '请选择考勤月份', trigger: 'change' }]
+  attendMonth: [{ required: true, message: '请选择考勤期间', trigger: 'change' }]
 };
 
 const resetForm = () => {
@@ -403,7 +413,7 @@ const submitForm = async () => {
 };
 
 const handleDelete = async (row: AttendanceRecord) => {
-  await modal.confirm(`确认删除员工「${row.employeeName}」${row.attendMonth} 的考勤记录？删除后不可恢复。`);
+  await modal.confirm(`确认删除员工「${row.employeeName}」${row.attendMonth?.slice(0, 7)} 的考勤记录？删除后不可恢复。`);
   try {
     await attendanceApi.remove(row.id);
     modal.msgSuccess('删除成功');

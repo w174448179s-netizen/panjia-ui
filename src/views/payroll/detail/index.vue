@@ -307,6 +307,7 @@ const DEDUCT_COLS: ColDef[] = [
   { prop: 'socialFee', label: '社保', width: 90, source: '1637.15 × 职级比例' },
   { prop: 'housingFund', label: '公积金', width: 90, source: '员工档案自缴金额' },
   { prop: 'attendanceFee', label: '考勤扣款', width: 95, source: '考勤Excel导入：迟到×20 + 旷工/请假标准' },
+  { prop: 'pointsFee', label: '积分扣款', width: 90, source: '积分日报晚提交处罚：5元/次' },
   { prop: 'commercialInsurance', label: '商业保险', width: 95, source: '人事数据（21元/月）' },
   { prop: 'dormitoryFee', label: '宿舍费', width: 85, source: '人事数据（住宿名单）' },
   { prop: 'negativeCarryover', label: '负工资结转', width: 105, source: '上月负工资余额（系统自动结转）' },
@@ -371,7 +372,7 @@ const loadDetails = async () => {
 const MONEY_PROPS = [
   'commissionIncome', 'teamIncome', 'personalNewsignIncome', 'storeIncome',
   'baseSalary', 'guaranteeFill', 'mentorBonus', 'bonus', 'otherIncome', 'gross',
-  'socialFee', 'housingFund', 'attendanceFee', 'commercialInsurance',
+  'socialFee', 'housingFund', 'attendanceFee', 'pointsFee', 'commercialInsurance',
   'dormitoryFee', 'negativeCarryover', 'otherDeduct', 'deduct', 'tax', 'net',
 ];
 
@@ -392,32 +393,6 @@ const summaryMethod = ({ columns, data }: any) => {
 };
 
 /* ───────────── 导出（按业务指定的 27 列固定顺序，导出全部筛选结果） ───────────── */
-/** 当月新签业绩 = 个人新签提成 ÷ 70%（仅店长有个人新签业绩；经纪人/总监无则留空） */
-const deriveNewSignPerf = (r: any) => {
-  const income = Number(r.personalNewsignIncome) || 0;
-  return income > 0 ? income / 0.7 : 0;
-};
-/** 结佣业绩 = 业绩提成 ÷ 最终提成比例 */
-const deriveCommissionPerf = (r: any) => {
-  const rate = Number(r.finalRate) || 0;
-  const income = Number(r.commissionIncome) || 0;
-  return rate > 0 ? income / rate : 0;
-};
-/** 个人提点奖励：rateAdjustJson 中正向调整项合计（目前人工扣点均为负，预留口径） */
-const sumPositiveRateAdjust = (r: any) => {
-  if (!r.rateAdjustJson) return 0;
-  try {
-    const arr = JSON.parse(r.rateAdjustJson);
-    if (!Array.isArray(arr)) return 0;
-    return arr.reduce((s: number, it: any) => {
-      const v = Number(it.rate) || 0;
-      return v > 0 ? s + v : s;
-    }, 0);
-  } catch {
-    return 0;
-  }
-};
-
 const exportExcel = () => {
   if (!viewDetails.value.length) return;
 
@@ -432,25 +407,24 @@ const exportExcel = () => {
   const rows = viewDetails.value.map((r: any) => {
     const gross = Number(r.gross) || 0;
     const deduct = Number(r.deduct) || 0;
-    const posAdjust = sumPositiveRateAdjust(r);
     return [
       r.deptName || '',                                                      // 门店
       r.employeeName || `员工${r.employeeId}`,                              // 姓名
       r.levelCode || '',                                                    // 职级
       roleLabel(r.employeeRole),                                            // 职位
-      num(deriveNewSignPerf(r)),                                            // 当月新签业绩
-      Number(r.personalNewsignIncome) > 0 ? '70%' : '',                     // 当月新签业绩提成比列
+      num(r.newSignPerformance),                                            // 当月新签业绩（落地值）
+      r.newSignRate != null ? ratePercent(r.newSignRate) : '',                  // 当月新签业绩提成比列（职级personalRate）
       r.manualAdjust != null && Number(r.manualAdjust) !== 0 ? ratePercent(r.manualAdjust) : '', // 绩效提成扣点
-      posAdjust !== 0 ? ratePercent(posAdjust) : '',                        // 个人提点奖励
+      num(r.mentorBonus),                                                   // 个人提点奖励（招聘奖励金额）
       r.finalRate != null ? ratePercent(r.finalRate) : '',                  // 当月最终提成比列
-      num(deriveCommissionPerf(r)),                                         // 结佣业绩
+      num(r.commissionPerformance),                                         // 结佣业绩（落地值）
       r.finalRate != null ? ratePercent(r.finalRate) : '',                  // 提成比例
       num(r.commissionIncome),                                              // 提成金额
       num(r.mentorBonus),                                                   // 招聘奖励
       num(r.baseSalary),                                                    // 底薪
       num(r.bonus),                                                         // 绩效（奖金）
       num(Math.abs(Number(r.attendanceFee) || 0)),                          // 考勤扣款
-      '',                                                                   // 积分扣款（pointsFee 链路已下线）
+      num(r.pointsFee),                                                     // 积分扣款（晚提交处罚）
       num(r.gross),                                                         // 应发工资
       num(r.socialFee),                                                     // 社保扣款
       num(r.housingFund),                                                   // 公积金扣款

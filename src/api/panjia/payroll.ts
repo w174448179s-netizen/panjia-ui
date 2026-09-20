@@ -44,11 +44,19 @@ export interface PayrollDetail {
   dormitoryFee: number;
   negativeCarryover: number;
   otherDeduct: number;
+  /** 积分扣款（晚提交处罚：次数×5元/次） */
+  pointsFee?: number;
   gross: number;
   deduct: number;
   tax: number;
   net: number;
   employerSocial: number;
+  /** 当月新签业绩（折算后金额） */
+  newSignPerformance?: number;
+  /** 当月结佣业绩（不折算） */
+  commissionPerformance?: number;
+  /** 当月新签业绩提成比例（职级personalRate） */
+  newSignRate?: number;
   finalRate: number;
   perfGrade: string;
   /** 提成点调整叠加值（负值=扣点，算薪时叠加到综合提点；0=无调整） */

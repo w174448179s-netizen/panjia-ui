@@ -13,6 +13,8 @@
         <el-descriptions-item label="B级（-2%）">{{ approval.gradeBCount ?? 0 }} 人</el-descriptions-item>
         <el-descriptions-item label="C级（-4%）">{{ approval.gradeCCount ?? 0 }} 人</el-descriptions-item>
         <el-descriptions-item label="驳回原因">{{ approval.rejectReason || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="晚提交总次数">{{ approval.lateSubmitTotalCount ?? 0 }} 次</el-descriptions-item>
+        <el-descriptions-item label="晚提交扣款总额">¥{{ (approval.lateSubmitTotalFee ?? 0).toFixed(2) }}</el-descriptions-item>
       </el-descriptions>
 
       <el-alert
@@ -53,6 +55,33 @@
           </el-table-column>
         </el-table>
       </div>
+
+      <!-- 晚提交扣款明细（所有 lateSubmitCount > 0 的行，总监核对豁免情况） -->
+      <div v-if="lateSubmitRows.length" class="detail-table-wrap">
+        <div class="detail-table-title">
+          晚提交扣款明细（{{ lateSubmitRows.length }} 人，扣款 = 晚提交次数 × 5 元/次；
+          经总监同意已豁免的次数由人事在积分列表调整后定格）
+        </div>
+        <el-table :data="lateSubmitRows" stripe border max-height="360">
+          <el-table-column label="工号" prop="employeeCode" width="100" align="center" />
+          <el-table-column label="姓名" prop="employeeName" width="100" align="center" />
+          <el-table-column label="积分月份" prop="scoreMonth" width="100" align="center" />
+          <el-table-column label="晚提交次数" prop="lateSubmitCount" width="100" align="center">
+            <template #default="{ row }">{{ row.lateSubmitCount ?? 0 }}</template>
+          </el-table-column>
+          <el-table-column label="积分扣款(元)" prop="pointsFee" width="110" align="center">
+            <template #default="{ row }">{{ row.pointsFee ? Number(row.pointsFee).toFixed(2) : '0.00' }}</template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <el-alert
+        v-else
+        type="success"
+        :closable="false"
+        show-icon
+        title="本期无晚提交扣款"
+        class="deduct-empty"
+      />
     </template>
   </div>
 </template>
@@ -60,7 +89,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { scoreApi } from '@/api/panjia/score';
-import type { ScoreApproval, ScoreDeductRow } from '@/api/panjia/types';
+import type { ScoreApproval, ScoreDeductRow, ScoreLateSubmitRow } from '@/api/panjia/types';
 
 // businessId 为雪花 ID，以字符串透传（19 位超出 JS 安全整数，Number() 会丢精度）
 const props = defineProps<{ businessId: string | number }>();
@@ -70,6 +99,7 @@ const loadError = ref('');
 const approval = ref<ScoreApproval | null>(null);
 
 const deductRows = computed<ScoreDeductRow[]>(() => approval.value?.deductRows ?? []);
+const lateSubmitRows = computed<ScoreLateSubmitRow[]>(() => approval.value?.lateSubmitRows ?? []);
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: '待提交', SUBMITTED: '审批中', APPROVED: '已通过', REJECTED: '已驳回'
