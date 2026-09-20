@@ -77,7 +77,7 @@
           <template #default="{ row }">{{ row.newSignRate != null ? ratePercent(row.newSignRate) : '' }}</template>
         </el-table-column>
         <el-table-column label="绩效提成扣点" width="110" align="right">
-          <template #default="{ row }">{{ row.manualAdjust != null && Number(row.manualAdjust) !== 0 ? ratePercent(row.manualAdjust) : '' }}</template>
+          <template #default="{ row }">{{ row.perfDeduct != null && Number(row.perfDeduct) !== 0 ? ratePercent(row.perfDeduct) : '' }}</template>
         </el-table-column>
         <el-table-column label="个人提点奖励" width="110" align="right">
           <template #default="{ row }">{{ num(row.mentorBonus) }}</template>
@@ -338,7 +338,7 @@ const exportExcel = () => {
       roleLabel(r.employeeRole),
       num(r.newSignPerformance),
       r.newSignRate != null ? ratePercent(r.newSignRate) : '',
-      r.manualAdjust != null && Number(r.manualAdjust) !== 0 ? ratePercent(r.manualAdjust) : '',
+      r.perfDeduct != null && Number(r.perfDeduct) !== 0 ? ratePercent(r.perfDeduct) : '',
       num(r.mentorBonus),
       r.finalRate != null ? ratePercent(r.finalRate) : '',
       num(r.commissionPerformance),

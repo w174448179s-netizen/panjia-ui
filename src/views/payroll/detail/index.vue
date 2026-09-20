@@ -415,7 +415,7 @@ const exportExcel = () => {
       roleLabel(r.employeeRole),                                            // 职位
       num(r.newSignPerformance),                                            // 当月新签业绩（落地值）
       r.newSignRate != null ? ratePercent(r.newSignRate) : '',                  // 当月新签业绩提成比列（职级personalRate）
-      r.manualAdjust != null && Number(r.manualAdjust) !== 0 ? ratePercent(r.manualAdjust) : '', // 绩效提成扣点
+      r.perfDeduct != null && Number(r.perfDeduct) !== 0 ? ratePercent(r.perfDeduct) : '', // 绩效提成扣点（积分等级扣点）
       num(r.mentorBonus),                                                   // 个人提点奖励（招聘奖励金额）
       r.finalRate != null ? ratePercent(r.finalRate) : '',                  // 当月最终提成比列
       num(r.commissionPerformance),                                         // 结佣业绩（落地值）

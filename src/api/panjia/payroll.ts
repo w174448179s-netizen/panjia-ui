@@ -59,6 +59,8 @@ export interface PayrollDetail {
   newSignRate?: number;
   finalRate: number;
   perfGrade: string;
+  /** 绩效提成扣点（积分等级 A/B/C 对应扣点，A=0/B=-2%/C=-4%，负=扣点） */
+  perfDeduct?: number | string | null;
   /** 提成点调整叠加值（负值=扣点，算薪时叠加到综合提点；0=无调整） */
   manualAdjust?: number | string | null;
   /** 提成点调整溯源 JSON（RateAdjustItem 数组：type/rate/reason/source/adjustId） */
