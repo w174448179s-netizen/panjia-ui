@@ -203,6 +203,9 @@
         </el-form-item>
         <el-form-item label="积分期间" required>
           <el-date-picker v-model="createForm.scoreMonth" type="month" value-format="YYYY-MM" placeholder="请选择月份" style="width: 100%" />
+          <div v-if="createPeriodLocked" class="edit-tip" style="color: var(--el-color-danger)">
+            该期间积分已提交审批或已通过，处于锁定状态，不可新增
+          </div>
         </el-form-item>
         <el-form-item label="总积分" required>
           <el-input-number v-model="createForm.totalPoints" :min="0" :max="100000" :precision="0" controls-position="right" style="width: 180px" />
@@ -217,7 +220,7 @@
       </el-form>
       <template #footer>
         <el-button @click="createOpen = false">取消</el-button>
-        <el-button type="primary" :loading="createSaving" @click="saveCreate">保存</el-button>
+        <el-button type="primary" :loading="createSaving" :disabled="createPeriodLocked" @click="saveCreate">保存</el-button>
       </template>
     </el-dialog>
 
@@ -252,7 +255,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import type { FormInstance } from 'element-plus';
 import { scoreApi } from '@/api/panjia/score';
@@ -408,7 +411,25 @@ const openCreate = () => {
   createForm.attendDays = 0;
   createForm.lateSubmitCount = 0;
   createOpen.value = true;
+  checkCreatePeriodLocked();
 };
+
+// 期间锁定校验：已提交审批/已通过的期间禁止新增（与修改/删除口径一致）
+const createPeriodLocked = ref(false);
+const checkCreatePeriodLocked = async () => {
+  if (!createForm.scoreMonth) {
+    createPeriodLocked.value = false;
+    return;
+  }
+  try {
+    const res = await scoreApi.getApproval(createForm.scoreMonth);
+    const st = res.data?.status;
+    createPeriodLocked.value = st === 'SUBMITTED' || st === 'APPROVED';
+  } catch {
+    createPeriodLocked.value = false;
+  }
+};
+watch(() => createForm.scoreMonth, checkCreatePeriodLocked);
 
 const saveCreate = async () => {
   if (!createForm.employeeId) {
@@ -417,6 +438,10 @@ const saveCreate = async () => {
   }
   if (!createForm.scoreMonth) {
     modal.msgWarning('请选择积分期间');
+    return;
+  }
+  if (createPeriodLocked.value) {
+    modal.msgWarning('该期间积分已提交审批或已通过，处于锁定状态，不可新增');
     return;
   }
   if (createForm.attendDays === 0) {

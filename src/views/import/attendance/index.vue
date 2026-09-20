@@ -41,12 +41,28 @@
               </el-upload>
             </el-form-item>
           </el-form>
-          <el-alert
-            type="info"
-            :closable="false"
-            show-icon
-            title="请直接上传钉钉考勤后台导出的《月度汇总》Excel 原文件（无需下载模板改写），归属月选择文件统计日期所在月份；员工工号需与员工档案一致。"
-          />
+        <!-- 下载导入模板：简版（手工填写）或钉钉原始文件格式 -->
+        <div class="tpl-row">
+          <el-dropdown @command="downloadTpl">
+            <el-button :loading="tplDownloading">
+              <el-icon class="btn-ico"><Download /></el-icon>
+              下载导入模板
+              <el-icon class="el-icon--right"><MoreFilled /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="SIMPLE">简版模板（手工填写）</el-dropdown-item>
+                <el-dropdown-item command="ORIG">钉钉原始文件格式</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          title="支持两种文件：① 钉钉考勤后台导出的《月度汇总》Excel 原文件；② 简版模板（下载后手工填写）。上传时系统按文件表头自动识别，归属月选择文件统计日期所在月份；员工工号需与员工档案一致。"
+        />
         </div>
 
         <!-- 上传结果 -->
@@ -243,6 +259,21 @@ const beforeUpload = (file: File): boolean => {
     return false;
   }
   return true;
+};
+
+const tplDownloading = ref(false);
+/** 下载导入模板：SIMPLE=简版手工模板；ORIG=钉钉原始文件格式 */
+const downloadTpl = async (kind: 'SIMPLE' | 'ORIG') => {
+  tplDownloading.value = true;
+  try {
+    if (kind === 'SIMPLE') {
+      await importApi.downloadTemplate('ATTENDANCE', '考勤导入模板（简版）.xlsx', 'ATTENDANCE_SIMPLE');
+    } else {
+      await importApi.downloadTemplate('ATTENDANCE', '钉钉月度汇总格式模板.xlsx');
+    }
+  } finally {
+    tplDownloading.value = false;
+  }
 };
 
 const handleUpload = async (options: UploadRequestOptions): Promise<void> => {
@@ -446,6 +477,14 @@ onMounted(() => {
 
 .upload-result {
   margin-bottom: 12px;
+}
+
+.tpl-row {
+  margin-bottom: 12px;
+
+  .btn-ico {
+    margin-right: 4px;
+  }
 }
 
 .action-row {

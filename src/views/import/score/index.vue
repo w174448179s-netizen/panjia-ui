@@ -43,12 +43,29 @@
           </el-form>
         </div>
 
-        <!-- 上传口径提示：积分日报为客户系统导出原文件直传，不提供模板下载 -->
+        <!-- 下载导入模板：简版（手工填写）或原始文件格式 -->
+        <div class="tpl-row">
+          <el-dropdown @command="downloadTpl">
+            <el-button :loading="tplDownloading">
+              <el-icon class="btn-ico"><Download /></el-icon>
+              下载导入模板
+              <el-icon class="el-icon--right"><MoreFilled /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="SIMPLE">简版模板（手工填写）</el-dropdown-item>
+                <el-dropdown-item command="ORIG">日报原始文件格式</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+
+        <!-- 上传口径提示 -->
         <el-alert
           type="info"
           :closable="false"
           show-icon
-          title="请直接上传钉钉智能填报导出的《二手积分日报5.0版》Excel 原文件（无需下载模板改写），保留原始两行表头，归属月选择填报日期所在月份；员工工号需与员工档案一致。"
+          title="支持两种文件：① 钉钉智能填报导出的《二手积分日报5.0版》Excel 原文件（保留原始表头）；② 简版模板（下载后手工填写）。上传时系统按文件表头自动识别，归属月选择填报日期所在月份；员工工号需与员工档案一致。"
           class="upload-result"
         />
 
@@ -271,6 +288,21 @@ const beforeUpload = (file: File): boolean => {
   return true;
 };
 
+const tplDownloading = ref(false);
+/** 下载导入模板：SIMPLE=简版手工模板；ORIG=日报原始文件格式 */
+const downloadTpl = async (kind: 'SIMPLE' | 'ORIG') => {
+  tplDownloading.value = true;
+  try {
+    if (kind === 'SIMPLE') {
+      await importApi.downloadTemplate('POINTS', '积分导入模板（简版）.xlsx', 'POINTS_SIMPLE');
+    } else {
+      await importApi.downloadTemplate('POINTS', '二手积分日报5.0版格式模板.xlsx');
+    }
+  } finally {
+    tplDownloading.value = false;
+  }
+};
+
 const handleUpload = async (options: UploadRequestOptions): Promise<void> => {
   // 未选归属月不允许上传（按钮已置灰，此处兜底提示）
   if (!period.value) {
@@ -449,6 +481,14 @@ onMounted(() => {
 
 .upload-result {
   margin-bottom: 12px;
+}
+
+.tpl-row {
+  margin-bottom: 12px;
+
+  .btn-ico {
+    margin-right: 4px;
+  }
 }
 
 .action-row {

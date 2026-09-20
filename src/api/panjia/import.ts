@@ -66,10 +66,11 @@ export const importApi = {
   ignoreIssue(id: string | number) {
     return panjiaRequest.post<void>(`/import/issues/${id}/ignore`);
   },
-  /** 下载导入模板（Excel，含表头+示例行） */
-  async downloadTemplate(sourceType: string, fileName: string) {
+  /** 下载导入模板（Excel，含表头+示例行）；templateCode 可选：多模板共存时指定（如 POINTS_SIMPLE / ATTENDANCE_SIMPLE），缺省取首选模板 */
+  async downloadTemplate(sourceType: string, fileName: string, templateCode?: string) {
     const baseApi = import.meta.env.VITE_APP_BASE_API;
-    const res = await fetch(`${baseApi}/api/panjia/import/template/${sourceType}?_t=${Date.now()}`, {
+    const tc = templateCode ? `&templateCode=${encodeURIComponent(templateCode)}` : '';
+    const res = await fetch(`${baseApi}/api/panjia/import/template/${sourceType}?_t=${Date.now()}${tc}`, {
       headers: { Authorization: `Bearer ${getToken()}`, clientid: 'e5cd7e4891bf95d1d19206ce24a7b32e' }
     });
     if (!res.ok) throw new Error('模板下载失败');

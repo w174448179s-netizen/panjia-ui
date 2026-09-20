@@ -14,7 +14,7 @@
         <el-descriptions-item label="C级（-4%）">{{ approval.gradeCCount ?? 0 }} 人</el-descriptions-item>
         <el-descriptions-item label="驳回原因">{{ approval.rejectReason || '—' }}</el-descriptions-item>
         <el-descriptions-item label="晚提交总次数">{{ approval.lateSubmitTotalCount ?? 0 }} 次</el-descriptions-item>
-        <el-descriptions-item label="晚提交扣款总额">¥{{ (approval.lateSubmitTotalFee ?? 0).toFixed(2) }}</el-descriptions-item>
+        <el-descriptions-item label="晚提交扣款总额">¥{{ Number(approval.lateSubmitTotalFee ?? 0).toFixed(2) }}</el-descriptions-item>
       </el-descriptions>
 
       <el-alert
