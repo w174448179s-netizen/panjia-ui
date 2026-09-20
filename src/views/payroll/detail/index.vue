@@ -225,6 +225,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Lock, Download, InfoFilled, RefreshLeft } from '@element-plus/icons-vue';
 import { payrollApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
+import { exportMultiSheet } from '../components/payroll-export';
 import PayrollTracePanel from '../components/PayrollTracePanel.vue';
 
 /* ───────────── 基础状态 ───────────── */
@@ -392,64 +393,12 @@ const summaryMethod = ({ columns, data }: any) => {
   return sums;
 };
 
-/* ───────────── 导出（按业务指定的 28 列固定顺序，导出全部筛选结果） ───────────── */
+/* ───────────── 导出（xlsx 三 sheet：经纪人/店长/总监各一 sheet，列对齐天街工资表） ───────────── */
 const exportExcel = () => {
   if (!viewDetails.value.length) return;
-
-  const heads = [
-    '门店', '员工编号', '姓名', '职级', '职位', '当月新签业绩', '当月新签业绩提成比列',
-    '绩效提成扣点', '个人提点奖励', '当月最终提成比列', '结佣业绩', '提成比例', '提成金额',
-    '招聘奖励', '底薪', '绩效', '考勤扣款', '积分扣款', '应发工资',
-    '社保扣款', '公积金扣款', '往月负工资', '商业保险', '宿舍管理费',
-    '工资合计', '实发工资', '个税扣除', '最终发放',
-  ];
-
-  const rows = viewDetails.value.map((r: any) => {
-    const gross = Number(r.gross) || 0;
-    const deduct = Number(r.deduct) || 0;
-    return [
-      r.deptName || '',                                                      // 门店
-      r.employeeCode || '',                                                  // 员工编号
-      r.employeeName || `员工${r.employeeId}`,                              // 姓名
-      r.levelCode || '',                                                    // 职级
-      roleLabel(r.employeeRole),                                            // 职位
-      num(r.newSignPerformance),                                            // 当月新签业绩（落地值）
-      r.newSignRate != null ? ratePercent(r.newSignRate) : '',                  // 当月新签业绩提成比列（职级personalRate）
-      r.perfDeduct != null && Number(r.perfDeduct) !== 0 ? ratePercent(r.perfDeduct) : '', // 绩效提成扣点（积分等级扣点）
-      num(r.mentorBonus),                                                   // 个人提点奖励（招聘奖励金额）
-      r.finalRate != null ? ratePercent(r.finalRate) : '',                  // 当月最终提成比列
-      num(r.commissionPerformance),                                         // 结佣业绩（落地值）
-      r.finalRate != null ? ratePercent(r.finalRate) : '',                  // 提成比例
-      num(r.commissionIncome),                                              // 提成金额
-      num(r.mentorBonus),                                                   // 招聘奖励
-      num(r.baseSalary),                                                    // 底薪
-      num(r.bonus),                                                         // 绩效（奖金）
-      num(Math.abs(Number(r.attendanceFee) || 0)),                          // 考勤扣款
-      num(r.pointsFee),                                                     // 积分扣款（晚提交处罚）
-      num(r.gross),                                                         // 应发工资
-      num(r.socialFee),                                                     // 社保扣款
-      num(r.housingFund),                                                   // 公积金扣款
-      num(Math.abs(Number(r.negativeCarryover) || 0)),                      // 往月负工资
-      num(r.commercialInsurance),                                           // 商业保险
-      num(r.dormitoryFee),                                                  // 宿舍管理费
-      num(gross - deduct),                                                  // 工资合计（应发 - 扣款合计，不含个税）
-      num(r.net),                                                           // 实发工资
-      num(r.tax),                                                           // 个税扣除
-      num(r.net),                                                           // 最终发放
-    ];
-  });
-
-  const csv = [heads, ...rows]
-    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    .join('\n');
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  const roleSuffix = viewRole.value === 'ALL' ? '' : `_${roleLabel(viewRole.value)}工资`;
-  link.download = `工资明细_${currentBatch.value?.period || ''}${roleSuffix}.csv`;
-  link.click();
-  window.URL.revokeObjectURL(url);
+  // ALL 视图导出全量三 sheet；按角色筛选时只导对应 sheet
+  const only = viewRole.value === 'ALL' ? undefined : (viewRole.value as 'AGENT' | 'MANAGER' | 'DIRECTOR');
+  exportMultiSheet(viewDetails.value, currentBatch.value?.period || '', only);
   ElMessage.success('导出成功');
 };
 const num = (v: any) => (v == null || v === '' ? '' : Number(v).toFixed(2));

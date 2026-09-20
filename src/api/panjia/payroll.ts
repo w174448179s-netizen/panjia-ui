@@ -65,6 +65,20 @@ export interface PayrollDetail {
   manualAdjust?: number | string | null;
   /** 提成点调整溯源 JSON（RateAdjustItem 数组：type/rate/reason/source/adjustId） */
   rateAdjustJson?: string | null;
+  /** 店长/总监 sheet：门店当月新签计薪业绩合计（折算后） */
+  deptNewSignTotal?: number;
+  /** 店长/总监 sheet：门店社保业绩扣款（门店全员公司承担社保合计） */
+  deptEmployerSocialTotal?: number;
+  /** 店长 sheet：团队提成比例（职级 teamRate，如 0.10） */
+  teamRate?: number;
+  /** 总监 sheet：门店提成比例（跳点命中档 rate） */
+  storeRate?: number;
+  /** 店长 sheet：保底工资（职级 minSalary，如 8000） */
+  minSalary?: number;
+  /** 总监 sheet：全勤奖（policy.fullAttendance 默认 500） */
+  fullAttendance?: number;
+  /** 总监各门店提成明细 JSON（DirectorStoreItem 数组：deptId/newSign/social/billable/rate/income，导出按门店分行） */
+  directorStoreItems?: string | null;
 }
 
 /** 本人工资查询用的员工主数据（后端 EmployeeMainDataDTO） */
