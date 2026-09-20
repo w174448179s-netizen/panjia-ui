@@ -392,12 +392,12 @@ const summaryMethod = ({ columns, data }: any) => {
   return sums;
 };
 
-/* ───────────── 导出（按业务指定的 27 列固定顺序，导出全部筛选结果） ───────────── */
+/* ───────────── 导出（按业务指定的 28 列固定顺序，导出全部筛选结果） ───────────── */
 const exportExcel = () => {
   if (!viewDetails.value.length) return;
 
   const heads = [
-    '门店', '姓名', '职级', '职位', '当月新签业绩', '当月新签业绩提成比列',
+    '门店', '员工编号', '姓名', '职级', '职位', '当月新签业绩', '当月新签业绩提成比列',
     '绩效提成扣点', '个人提点奖励', '当月最终提成比列', '结佣业绩', '提成比例', '提成金额',
     '招聘奖励', '底薪', '绩效', '考勤扣款', '积分扣款', '应发工资',
     '社保扣款', '公积金扣款', '往月负工资', '商业保险', '宿舍管理费',
@@ -409,6 +409,7 @@ const exportExcel = () => {
     const deduct = Number(r.deduct) || 0;
     return [
       r.deptName || '',                                                      // 门店
+      r.employeeCode || '',                                                  // 员工编号
       r.employeeName || `员工${r.employeeId}`,                              // 姓名
       r.levelCode || '',                                                    // 职级
       roleLabel(r.employeeRole),                                            // 职位

@@ -48,72 +48,99 @@
       </el-table>
     </el-card>
 
-    <!-- 工资明细 -->
-    <el-card v-if="currentBatch">
-      <template #header>
-        <div class="flex items-center justify-between">
-          <span>工资明细 — {{ currentBatch.period }}（{{ statusLabel(currentBatch.status) }}）</span>
-          <el-button text @click="closeDetail">关闭</el-button>
-        </div>
-      </template>
+    <!-- 工资明细弹窗（列与导出一致） -->
+    <el-dialog
+      v-model="detailVisible"
+      :title="`工资明细 — ${currentBatch?.period || ''}（${currentBatch ? statusLabel(currentBatch.status) : ''}）`"
+      width="96%"
+      top="3vh"
+      destroy-on-close
+      @closed="closeDetail"
+    >
+      <div v-if="currentBatch" class="detail-toolbar">
+        <el-button :disabled="!details.length" @click="exportExcel">
+          <el-icon><Download /></el-icon>&nbsp;导出
+        </el-button>
+      </div>
       <el-table :data="details" stripe border max-height="600" :summary-method="summaryMethod" show-summary>
-        <el-table-column label="工号" width="120">
-          <template #default="{ row }">{{ empName(row.employeeId) }}</template>
-        </el-table-column>
-        <el-table-column label="职级" prop="levelCode" width="70" />
-        <el-table-column label="角色" width="80">
+        <el-table-column label="门店" prop="deptName" width="110" fixed="left" />
+        <el-table-column label="员工编号" prop="employeeCode" width="90" fixed="left" />
+        <el-table-column label="姓名" prop="employeeName" width="80" fixed="left" />
+        <el-table-column label="职级" prop="levelCode" width="60" />
+        <el-table-column label="职位" width="70">
           <template #default="{ row }">{{ roleLabel(row.employeeRole) }}</template>
         </el-table-column>
-        <el-table-column label="业绩提成" prop="commissionIncome" width="110" align="right">
-          <template #default="{ row }">{{ fmt(row.commissionIncome) }}</template>
+        <el-table-column label="当月新签业绩" width="120" align="right">
+          <template #default="{ row }">{{ num(row.newSignPerformance) }}</template>
         </el-table-column>
-        <el-table-column label="团队提成" prop="teamIncome" width="100" align="right">
-          <template #default="{ row }">{{ fmt(row.teamIncome) }}</template>
+        <el-table-column label="新签业绩提成比例" width="130" align="right">
+          <template #default="{ row }">{{ row.newSignRate != null ? ratePercent(row.newSignRate) : '' }}</template>
         </el-table-column>
-        <el-table-column label="保底补足" prop="guaranteeFill" width="100" align="right">
-          <template #default="{ row }">{{ fmt(row.guaranteeFill) }}</template>
+        <el-table-column label="绩效提成扣点" width="110" align="right">
+          <template #default="{ row }">{{ row.manualAdjust != null && Number(row.manualAdjust) !== 0 ? ratePercent(row.manualAdjust) : '' }}</template>
         </el-table-column>
-        <el-table-column label="门店提成" prop="storeIncome" width="100" align="right">
-          <template #default="{ row }">{{ fmt(row.storeIncome) }}</template>
+        <el-table-column label="个人提点奖励" width="110" align="right">
+          <template #default="{ row }">{{ num(row.mentorBonus) }}</template>
+        </el-table-column>
+        <el-table-column label="最终提成比例" width="110" align="right">
+          <template #default="{ row }">{{ row.finalRate != null ? ratePercent(row.finalRate) : '' }}</template>
+        </el-table-column>
+        <el-table-column label="结佣业绩" width="110" align="right">
+          <template #default="{ row }">{{ num(row.commissionPerformance) }}</template>
+        </el-table-column>
+        <el-table-column label="提成比例" width="100" align="right">
+          <template #default="{ row }">{{ row.finalRate != null ? ratePercent(row.finalRate) : '' }}</template>
+        </el-table-column>
+        <el-table-column label="提成金额" prop="commissionIncome" width="110" align="right">
+          <template #default="{ row }">{{ num(row.commissionIncome) }}</template>
+        </el-table-column>
+        <el-table-column label="招聘奖励" prop="mentorBonus" width="90" align="right">
+          <template #default="{ row }">{{ num(row.mentorBonus) }}</template>
         </el-table-column>
         <el-table-column label="底薪" prop="baseSalary" width="90" align="right">
-          <template #default="{ row }">{{ fmt(row.baseSalary) }}</template>
+          <template #default="{ row }">{{ num(row.baseSalary) }}</template>
         </el-table-column>
-        <el-table-column label="招聘奖" prop="mentorBonus" width="90" align="right">
-          <template #default="{ row }">{{ fmt(row.mentorBonus) }}</template>
+        <el-table-column label="绩效" prop="bonus" width="90" align="right">
+          <template #default="{ row }">{{ num(row.bonus) }}</template>
         </el-table-column>
-        <el-table-column label="奖金" prop="bonus" width="90" align="right">
-          <template #default="{ row }">{{ fmt(row.bonus) }}</template>
+        <el-table-column label="考勤扣款" width="90" align="right">
+          <template #default="{ row }">{{ num(Math.abs(Number(row.attendanceFee) || 0)) }}</template>
         </el-table-column>
-        <el-table-column label="应发" prop="gross" width="110" align="right">
-          <template #default="{ row }"><b>{{ fmt(row.gross) }}</b></template>
+        <el-table-column label="积分扣款" prop="pointsFee" width="90" align="right">
+          <template #default="{ row }">{{ num(row.pointsFee) }}</template>
         </el-table-column>
-        <el-table-column label="社保" prop="socialFee" width="90" align="right">
-          <template #default="{ row }">{{ fmt(row.socialFee) }}</template>
+        <el-table-column label="应发工资" prop="gross" width="110" align="right">
+          <template #default="{ row }"><b>{{ num(row.gross) }}</b></template>
         </el-table-column>
-        <el-table-column label="公积金" prop="housingFund" width="80" align="right">
-          <template #default="{ row }">{{ fmt(row.housingFund) }}</template>
+        <el-table-column label="社保扣款" prop="socialFee" width="90" align="right">
+          <template #default="{ row }">{{ num(row.socialFee) }}</template>
         </el-table-column>
-        <el-table-column label="考勤" prop="attendanceFee" width="80" align="right">
-          <template #default="{ row }">{{ fmt(row.attendanceFee) }}</template>
+        <el-table-column label="公积金扣款" prop="housingFund" width="100" align="right">
+          <template #default="{ row }">{{ num(row.housingFund) }}</template>
         </el-table-column>
-        <el-table-column label="商保" prop="commercialInsurance" width="70" align="right">
-          <template #default="{ row }">{{ fmt(row.commercialInsurance) }}</template>
+        <el-table-column label="往月负工资" width="100" align="right">
+          <template #default="{ row }">{{ num(Math.abs(Number(row.negativeCarryover) || 0)) }}</template>
         </el-table-column>
-        <el-table-column label="其他扣" prop="otherDeduct" width="80" align="right">
-          <template #default="{ row }">{{ fmt(row.otherDeduct) }}</template>
+        <el-table-column label="商业保险" prop="commercialInsurance" width="90" align="right">
+          <template #default="{ row }">{{ num(row.commercialInsurance) }}</template>
         </el-table-column>
-        <el-table-column label="支出合计" prop="deduct" width="100" align="right">
-          <template #default="{ row }">{{ fmt(row.deduct) }}</template>
+        <el-table-column label="宿舍管理费" prop="dormitoryFee" width="100" align="right">
+          <template #default="{ row }">{{ num(row.dormitoryFee) }}</template>
         </el-table-column>
-        <el-table-column label="个税" prop="tax" width="80" align="right">
-          <template #default="{ row }">{{ fmt(row.tax) }}</template>
+        <el-table-column label="工资合计" width="110" align="right">
+          <template #default="{ row }">{{ num((Number(row.gross) || 0) - (Number(row.deduct) || 0)) }}</template>
         </el-table-column>
-        <el-table-column label="最终发放" prop="net" width="120" align="right">
-          <template #default="{ row }"><b class="text-primary">{{ fmt(row.net) }}</b></template>
+        <el-table-column label="实发工资" prop="net" width="110" align="right">
+          <template #default="{ row }"><b class="text-primary">{{ num(row.net) }}</b></template>
+        </el-table-column>
+        <el-table-column label="个税扣除" prop="tax" width="90" align="right">
+          <template #default="{ row }">{{ num(row.tax) }}</template>
+        </el-table-column>
+        <el-table-column label="最终发放" prop="net" width="120" align="right" fixed="right">
+          <template #default="{ row }"><b class="text-primary">{{ num(row.net) }}</b></template>
         </el-table-column>
       </el-table>
-    </el-card>
+    </el-dialog>
 
     <!-- 创建批次弹窗 -->
     <el-dialog v-model="showCreate" title="创建工资批次" width="420px">
@@ -137,6 +164,7 @@
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { Download } from '@element-plus/icons-vue';
 import { payrollApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
 import { attendanceApi } from '@/api/panjia/attendance';
 import { scoreApi } from '@/api/panjia/score';
@@ -147,6 +175,7 @@ const route = useRoute();
 const batches = ref<PayrollBatch[]>([]);
 const details = ref<PayrollDetail[]>([]);
 const currentBatch = ref<PayrollBatch | null>(null);
+const detailVisible = ref(false);
 const filterPeriod = ref('');
 const showCreate = ref(false);
 const creating = ref(false);
@@ -167,7 +196,13 @@ const statusTag = (s: string): TagType => STATUS_TAG[s] || 'info';
 const canCalc = (s: string) => ['DRAFT', 'CALCULATED', 'FAILED', 'REVIEWING'].includes(s);
 const roleLabel = (r: string) => ({ AGENT: '经纪人', MANAGER: '店长', DIRECTOR: '总监' }[r] || r);
 const fmt = (n: number | null) => (n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-const empName = (id: number) => String(id);
+const num = (v: any) => (v == null || v === '' ? '' : Number(v).toFixed(2));
+const ratePercent = (v: any) => {
+  if (v == null || v === '') return '';
+  const n = Number(v);
+  if (Number.isNaN(n)) return '';
+  return `${(n * 100).toFixed(2)}%`;
+};
 
 const loadBatches = async () => {
   const res = await payrollApi.listBatches(filterPeriod.value || undefined);
@@ -225,7 +260,7 @@ const doAction = async (row: PayrollBatch, action: string) => {
     await (payrollApi as any)[action](row.id);
     ElMessage.success(`${label}成功`);
     loadBatches();
-    if (currentBatch.value?.id === row.id) viewDetail(row);
+    if (currentBatch.value?.id === row.id && detailVisible.value) viewDetail(row);
   } catch (e) {
     /* 拦截器处理 */
   }
@@ -233,11 +268,13 @@ const doAction = async (row: PayrollBatch, action: string) => {
 
 const viewDetail = async (row: PayrollBatch) => {
   currentBatch.value = row;
+  detailVisible.value = true;
   const res = await payrollApi.getDetails(row.id);
   details.value = (res as any).data ?? [];
 };
 
 const closeDetail = () => {
+  detailVisible.value = false;
   currentBatch.value = null;
   details.value = [];
 };
@@ -252,6 +289,7 @@ const openFromWorkflow = async () => {
     currentBatch.value = res.data;
     const detRes = await payrollApi.getDetails(Number(id));
     details.value = (detRes as any).data ?? [];
+    detailVisible.value = true;
   } catch {
     ElMessage.error('加载批次失败');
   }
@@ -259,14 +297,15 @@ const openFromWorkflow = async () => {
 
 const summaryMethod = ({ columns, data }: any) => {
   const sums: string[] = [];
+  // 与明细导出一致：仅对有 prop 的金额列求和，无 prop 的计算列（如新签业绩/考勤扣款 abs）留空
+  const moneyProps = ['commissionIncome', 'mentorBonus', 'baseSalary', 'bonus', 'pointsFee', 'gross', 'socialFee', 'housingFund', 'commercialInsurance', 'dormitoryFee', 'net', 'tax'];
   columns.forEach((col: any, idx: number) => {
     if (idx === 0) {
       sums[idx] = '合计';
       return;
     }
     const prop = col.property;
-    const moneyProps = ['commissionIncome', 'teamIncome', 'guaranteeFill', 'storeIncome', 'baseSalary', 'mentorBonus', 'bonus', 'gross', 'socialFee', 'housingFund', 'attendanceFee', 'commercialInsurance', 'otherDeduct', 'deduct', 'tax', 'net'];
-    if (moneyProps.includes(prop)) {
+    if (prop && moneyProps.includes(prop)) {
       const total = data.reduce((s: number, r: any) => s + (Number(r[prop]) || 0), 0);
       sums[idx] = fmt(total);
     } else {
@@ -274,6 +313,66 @@ const summaryMethod = ({ columns, data }: any) => {
     }
   });
   return sums;
+};
+
+/* ───────────── 导出（28 列固定顺序，与明细导出完全一致） ───────────── */
+const exportExcel = () => {
+  if (!details.value.length) return;
+
+  const heads = [
+    '门店', '员工编号', '姓名', '职级', '职位', '当月新签业绩', '当月新签业绩提成比列',
+    '绩效提成扣点', '个人提点奖励', '当月最终提成比列', '结佣业绩', '提成比例', '提成金额',
+    '招聘奖励', '底薪', '绩效', '考勤扣款', '积分扣款', '应发工资',
+    '社保扣款', '公积金扣款', '往月负工资', '商业保险', '宿舍管理费',
+    '工资合计', '实发工资', '个税扣除', '最终发放',
+  ];
+
+  const rows = details.value.map((r: any) => {
+    const gross = Number(r.gross) || 0;
+    const deduct = Number(r.deduct) || 0;
+    return [
+      r.deptName || '',
+      r.employeeCode || '',
+      r.employeeName || '',
+      r.levelCode || '',
+      roleLabel(r.employeeRole),
+      num(r.newSignPerformance),
+      r.newSignRate != null ? ratePercent(r.newSignRate) : '',
+      r.manualAdjust != null && Number(r.manualAdjust) !== 0 ? ratePercent(r.manualAdjust) : '',
+      num(r.mentorBonus),
+      r.finalRate != null ? ratePercent(r.finalRate) : '',
+      num(r.commissionPerformance),
+      r.finalRate != null ? ratePercent(r.finalRate) : '',
+      num(r.commissionIncome),
+      num(r.mentorBonus),
+      num(r.baseSalary),
+      num(r.bonus),
+      num(Math.abs(Number(r.attendanceFee) || 0)),
+      num(r.pointsFee),
+      num(r.gross),
+      num(r.socialFee),
+      num(r.housingFund),
+      num(Math.abs(Number(r.negativeCarryover) || 0)),
+      num(r.commercialInsurance),
+      num(r.dormitoryFee),
+      num(gross - deduct),
+      num(r.net),
+      num(r.tax),
+      num(r.net),
+    ];
+  });
+
+  const csv = [heads, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `工资明细_${currentBatch.value?.period || ''}.csv`;
+  link.click();
+  window.URL.revokeObjectURL(url);
+  ElMessage.success('导出成功');
 };
 
 // 页签缓存复用场景下补开单据（详见 useWorkflowRouteOpen 注释）
@@ -295,5 +394,15 @@ onMounted(() => {
 
 .scope-text {
   color: var(--el-text-color-regular);
+}
+
+.detail-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.text-primary {
+  color: var(--el-color-primary);
 }
 </style>
