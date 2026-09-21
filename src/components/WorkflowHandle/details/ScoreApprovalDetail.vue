@@ -53,16 +53,28 @@
               <span v-else>—</span>
             </template>
           </el-table-column>
+          <el-table-column label="晚提交(次)" prop="lateSubmitCount" width="100" align="center">
+            <template #default="{ row }">
+              <span v-if="row.lateSubmitCount">{{ row.lateSubmitCount }}</span>
+              <span v-else class="text-muted">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="积分扣款(元)" prop="pointsFee" width="110" align="center">
+            <template #default="{ row }">
+              <span v-if="row.pointsFee">{{ Number(row.pointsFee).toFixed(2) }}</span>
+              <span v-else class="text-muted">—</span>
+            </template>
+          </el-table-column>
         </el-table>
       </div>
 
-      <!-- 晚提交扣款明细（所有 lateSubmitCount > 0 的行，总监核对豁免情况） -->
-      <div v-if="lateSubmitRows.length" class="detail-table-wrap">
+      <!-- 晚提交扣款明细（仅展示不在扣点表中的 A 级员工，B/C 级已含晚提交列） -->
+      <div v-if="lateSubmitOnlyRows.length" class="detail-table-wrap">
         <div class="detail-table-title">
-          晚提交扣款明细（{{ lateSubmitRows.length }} 人，扣款 = 晚提交次数 × 5 元/次；
+          晚提交扣款明细（{{ lateSubmitOnlyRows.length }} 人，A 级员工；扣款 = 晚提交次数 × 5 元/次；
           经总监同意已豁免的次数由人事在积分列表调整后定格）
         </div>
-        <el-table :data="lateSubmitRows" stripe border max-height="360">
+        <el-table :data="lateSubmitOnlyRows" stripe border max-height="360">
           <el-table-column label="工号" prop="employeeCode" width="100" align="center" />
           <el-table-column label="姓名" prop="employeeName" width="100" align="center" />
           <el-table-column label="积分月份" prop="scoreMonth" width="100" align="center" />
@@ -75,11 +87,11 @@
         </el-table>
       </div>
       <el-alert
-        v-else
+        v-else-if="deductRows.length"
         type="success"
         :closable="false"
         show-icon
-        title="本期无晚提交扣款"
+        title="无 A 级员工的晚提交扣款（B/C 级晚提交已在上方扣点明细中展示）"
         class="deduct-empty"
       />
     </template>
@@ -100,6 +112,14 @@ const approval = ref<ScoreApproval | null>(null);
 
 const deductRows = computed<ScoreDeductRow[]>(() => approval.value?.deductRows ?? []);
 const lateSubmitRows = computed<ScoreLateSubmitRow[]>(() => approval.value?.lateSubmitRows ?? []);
+
+/** 晚提交独立表：仅展示不在扣点表中的员工（A 级），B/C 级晚提交已在扣点明细列中展示 */
+const lateSubmitOnlyRows = computed<ScoreLateSubmitRow[]>(() => {
+  const deductIds = new Set(
+    deductRows.value.map((r) => String(r.employeeId ?? '')).filter(Boolean),
+  );
+  return lateSubmitRows.value.filter((r) => !deductIds.has(String(r.employeeId ?? '')));
+});
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: '待提交', SUBMITTED: '审批中', APPROVED: '已通过', REJECTED: '已驳回'
@@ -143,5 +163,8 @@ onMounted(async () => {
 }
 .deduct-empty {
   margin-top: 16px;
+}
+.text-muted {
+  color: #c0c4cc;
 }
 </style>

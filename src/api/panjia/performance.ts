@@ -290,6 +290,16 @@ export interface PerformanceFactSearch {
   detailCount: number;        // 明细条数
 }
 
+/** 业绩查询·员工下拉选项（/perf/fact/search/employee-options 返回，已按部门数据权限过滤） */
+export interface PerformanceEmployeeOption {
+  employeeId: string;
+  employeeCode?: string;      // 工号
+  employeeName: string;       // 姓名
+  deptId?: string;
+  deptName?: string;          // 部门全路径名
+  status?: string;            // ACTIVE 在职 / LEFT 离职
+}
+
 /** 业绩查询·合同下明细行（/perf/fact/search/details 返回，含全部期间） */
 export interface PerformanceSearchDetailRow {
   factId: string;
@@ -368,13 +378,17 @@ export const performanceApi = {
   reopenPeriod: (period: string) =>
     panjiaRequest.post<void>(`/perf/period/reopen/${period}`),
 
-  // 完整业绩查询（合同维度）
-  searchByContract: (params: { period?: string; deptId?: string; bizType?: string; keyword?: string; pageNum?: number; pageSize?: number }) =>
+  // 完整业绩查询（合同维度；传 employeeId 时金额仅汇总该员工个人份额）
+  searchByContract: (params: { period?: string; deptId?: string; bizType?: string; keyword?: string; employeeId?: string; pageNum?: number; pageSize?: number }) =>
     panjiaRequest.get<PageResult<PerformanceFactSearch>>('/perf/fact/search', params),
 
   // 完整业绩查询·业务类型下拉选项（数据范围与 searchByContract 一致）
-  listSearchBizTypes: (params: { period?: string; deptId?: string }) =>
+  listSearchBizTypes: (params: { period?: string; deptId?: string; employeeId?: string }) =>
     panjiaRequest.get<string[]>('/perf/fact/search/biz-types', params),
+
+  // 完整业绩查询·员工下拉选项（按姓名/工号远程搜索，后端按登录用户部门数据权限过滤）
+  searchEmployeeOptions: (params: { keyword: string; deptId?: string }) =>
+    panjiaRequest.get<PerformanceEmployeeOption[]>('/perf/fact/search/employee-options', params),
 
   // 业绩查询·合同下明细（查看详情弹窗；bizNo=列表行展示的合同号/订单号，
   // 一手房/房产金融/家装荐客传订单号，其余传合同号，空则订单号）

@@ -26,8 +26,42 @@
               :clearable="!deptLocked"
               check-strictly
               style="width: 200px"
-              @change="handleScopeChange"
+              @change="handleDeptChange"
             />
+          </el-form-item>
+          <!-- 员工筛选：经纪人无此筛选（后端强制本人口径）；选项由后端按部门数据权限过滤 -->
+          <el-form-item v-if="!isAgent" label="员工" prop="employeeId">
+            <el-select
+              v-model="queryParams.employeeId"
+              filterable
+              remote
+              clearable
+              :remote-method="searchEmployees"
+              :loading="employeeLoading"
+              :no-data-text="employeeNoDataText"
+              placeholder="姓名/工号搜索"
+              style="width: 230px"
+              @change="handleEmployeeChange"
+              @clear="handleEmployeeClear"
+            >
+              <el-option
+                v-for="emp in employeeOptions"
+                :key="emp.employeeId"
+                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`"
+                :value="emp.employeeId"
+              >
+                <div class="employee-option">
+                  <span class="employee-option-name">
+                    {{ emp.employeeName }}
+                    <span class="employee-option-code">{{ emp.employeeCode }}</span>
+                  </span>
+                  <span class="employee-option-dept">
+                    <el-tag v-if="emp.status === 'LEFT'" type="info" size="small" effect="plain">离职</el-tag>
+                    {{ emp.deptName || '' }}
+                  </span>
+                </div>
+              </el-option>
+            </el-select>
           </el-form-item>
           <el-form-item label="类型" prop="bizType">
             <el-select
@@ -350,7 +384,7 @@
 import { Search, Refresh } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { performanceApi } from '@/api/panjia/performance';
-import type { PerformanceFactSearch, PerformanceSearchDetailRow } from '@/api/panjia/performance';
+import type { PerformanceEmployeeOption, PerformanceFactSearch, PerformanceSearchDetailRow } from '@/api/panjia/performance';
 import { resolveBizNo } from '@/utils/panjiaBiz';
 import { useUserStore } from '@/store/modules/user';
 import { useDeptScope } from '@/hooks/useDeptScope';
@@ -378,9 +412,68 @@ const queryParams = reactive({
   pageSize: 20,
   period: undefined as string | undefined,
   deptId: undefined as string | undefined,
+  employeeId: undefined as string | undefined,
   bizType: undefined as string | undefined,
   keyword: undefined as string | undefined,
 });
+
+// ==================== 员工筛选（远程搜索，选项受后端部门数据权限约束） ====================
+const employeeOptions = ref<PerformanceEmployeeOption[]>([]);
+const employeeLoading = ref(false);
+/** 是否已发起过搜索（未搜索时提示输入，搜索无结果时提示无匹配） */
+const employeeSearched = ref(false);
+/** 当前已选中的员工选项（远程刷新列表后合并保留，避免选中项只显示 ID） */
+const selectedEmployeeOption = ref<PerformanceEmployeeOption | undefined>(undefined);
+const employeeNoDataText = computed(() => (employeeSearched.value ? '无匹配员工' : '输入姓名/工号搜索'));
+
+const searchEmployees = async (query: string) => {
+  const keyword = (query ?? '').trim();
+  if (!keyword) {
+    employeeOptions.value = selectedEmployeeOption.value ? [selectedEmployeeOption.value] : [];
+    employeeSearched.value = false;
+    return;
+  }
+  employeeLoading.value = true;
+  try {
+    const res = await performanceApi.searchEmployeeOptions({
+      keyword,
+      deptId: isAgent.value ? undefined : queryParams.deptId,
+    });
+    const rows = res.data ?? [];
+    // 已选中员工不在新结果中时置顶保留，保证选中态正常回显姓名
+    const selected = selectedEmployeeOption.value;
+    employeeOptions.value = selected && !rows.some((r) => r.employeeId === selected.employeeId)
+      ? [selected, ...rows]
+      : rows;
+    employeeSearched.value = true;
+  } catch (e) {
+    console.error('[search] 员工选项加载失败', e);
+    employeeOptions.value = selectedEmployeeOption.value ? [selectedEmployeeOption.value] : [];
+  } finally {
+    employeeLoading.value = false;
+  }
+};
+
+const handleEmployeeChange = (value: string | undefined) => {
+  selectedEmployeeOption.value = employeeOptions.value.find((o) => o.employeeId === value);
+  // 员工变化后类型可见范围随之变化，先刷新类型选项（顺带剔除失效选中）再查询
+  loadBizTypes().then(handleQuery);
+};
+
+const handleEmployeeClear = () => {
+  selectedEmployeeOption.value = undefined;
+  employeeOptions.value = [];
+  employeeSearched.value = false;
+  loadBizTypes().then(handleQuery);
+};
+
+/** 清空员工筛选（部门范围变化/重置时调用：原员工可能已不在新部门范围内） */
+const clearEmployeeFilter = () => {
+  queryParams.employeeId = undefined;
+  selectedEmployeeOption.value = undefined;
+  employeeOptions.value = [];
+  employeeSearched.value = false;
+};
 
 const loading = ref(false);
 const tableData = ref<PerformanceFactSearch[]>([]);
@@ -394,6 +487,7 @@ const loadBizTypes = async () => {
     const res = await performanceApi.listSearchBizTypes({
       period: queryParams.period,
       deptId: isAgent.value ? undefined : queryParams.deptId,
+      employeeId: isAgent.value ? undefined : queryParams.employeeId,
     });
     bizTypeOptions.value = res.data ?? [];
     // 当前选中类型已不在可见范围内时清空，避免带着失效条件查询
@@ -411,8 +505,9 @@ const getList = async () => {
   try {
     const res = await performanceApi.searchByContract({
       period: queryParams.period,
-      // 经纪人走后端本人 employeeId 口径，不传部门
+      // 经纪人走后端本人 employeeId 口径，不传部门/员工筛选
       deptId: isAgent.value ? undefined : queryParams.deptId,
+      employeeId: isAgent.value ? undefined : queryParams.employeeId,
       bizType: queryParams.bizType,
       keyword: queryParams.keyword,
       pageNum: queryParams.pageNum,
@@ -439,10 +534,17 @@ const handleScopeChange = () => {
   loadBizTypes().then(handleQuery);
 };
 
+/** 门店/组别变化：原选中员工可能不在新部门范围内，清空员工筛选后再按新范围查询 */
+const handleDeptChange = () => {
+  clearEmployeeFilter();
+  handleScopeChange();
+};
+
 const resetQuery = () => {
   queryParams.period = undefined;
   // 受限角色重置回本部门默认值，不能清空为"全部"
   queryParams.deptId = defaultDeptId();
+  clearEmployeeFilter();
   queryParams.bizType = undefined;
   queryParams.keyword = undefined;
   loadBizTypes().then(handleQuery);
@@ -629,6 +731,38 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 0;
+}
+
+/* 员工下拉选项：左姓名+工号，右部门路径/离职标记 */
+.employee-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.employee-option-name {
+  font-weight: 500;
+}
+
+.employee-option-code {
+  margin-left: 6px;
+  font-size: 12px;
+  color: #909399;
+  font-weight: 400;
+}
+
+.employee-option-dept {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #909399;
 }
 
 .empty-wrap {

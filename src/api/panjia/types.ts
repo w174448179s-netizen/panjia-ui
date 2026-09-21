@@ -513,6 +513,10 @@ export interface ScoreDeductRow {
   avgPoints?: number;
   grade?: string | null;
   deductRate?: number | null;
+  /** 晚提交次数（0 或 null 表示无晚提交） */
+  lateSubmitCount?: number;
+  /** 积分扣款 = 晚提交次数 × 5 元/次 */
+  pointsFee?: number;
 }
 
 export interface ScoreApproval {
