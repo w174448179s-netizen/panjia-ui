@@ -7,12 +7,18 @@ export interface CommissionAdjust {
   applicationId: number;
   itemId?: number;
   period?: string;
-  adjustType: string;    // DISCOUNT / DIFF / VOID
+  adjustType: string;    // AMOUNT / VOID / TRANSFER（旧 DISCOUNT/DIFF 兼容历史）
+  adjustScope?: string;  // CONTRACT / DETAIL
+  /** 调整前金额（AMOUNT 调整，从业绩事实/明细快照） */
+  originalAmount?: number;
+  /** 调整后金额（AMOUNT 调整，= originalAmount + deltaAmount） */
   newAmount?: number;
+  /** 调整差额（= newAmount - originalAmount） */
   diffAmount?: number;
-  /** 折算后折后金额（newAmount × 当前生效折算因子，后端按明细 bizType 计算） */
+  /** 部门划转目标部门（TRANSFER 用） */
+  targetDeptId?: number;
+  // —— 旧字段，历史数据兼容 ——
   convertedNewAmount?: number;
-  /** 折算后差额金额（diffAmount × 当前生效折算因子） */
   convertedDiffAmount?: number;
   targetPeriod?: string;
   reason: string;
@@ -34,11 +40,11 @@ export interface CommissionAdjustQuery extends PageQuery {
 
 export interface CommissionAdjustCreateDTO {
   applicationId: number | string;    // 雪花 ID 以字符串透传，禁止 Number() 丢精度
-  itemId: number | string;
-  adjustType: string;    // DISCOUNT / DIFF / VOID
-  newAmount?: number;
-  diffAmount?: number;
-  targetPeriod?: string;
+  itemId?: number | string;          // 明细级必填，合同级为空
+  adjustScope: string;               // CONTRACT / DETAIL
+  adjustType: string;                // AMOUNT / VOID / TRANSFER
+  targetAmount?: number;             // 调整后金额（AMOUNT 用，前端 = 当前 + 差额）
+  targetDeptId?: number;             // 部门划转目标部门（TRANSFER 用）
   reason: string;
 }
 

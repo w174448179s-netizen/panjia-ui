@@ -47,7 +47,15 @@
       </el-descriptions>
 
       <div class="detail-table-wrap">
-        <div class="detail-table-title">每人结佣明细（{{ items.length }} 条）</div>
+        <div class="detail-table-title">
+          <span>每人结佣明细（{{ items.length }} 条）</span>
+          <el-button
+            v-if="detail && detail.status === 'LOCKED'"
+            type="warning"
+            size="small"
+            @click="openAdjust('CONTRACT')"
+          >结佣调整（合同级）</el-button>
+        </div>
         <el-table :data="items" border max-height="420" class="detail-facts-table">
           <el-table-column label="序号" type="index" width="55" align="center" />
           <el-table-column label="门店/组别" align="left" min-width="150">
@@ -102,6 +110,11 @@
                 <span class="amount amount-ink">¥{{ formatAmount(scope.row.expectedConvertedAmount) }}</span>
               </template>
               <span v-else class="amount amount-ink">¥{{ formatAmount(scope.row.expectedConvertedAmount) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="detail && detail.status === 'LOCKED'" label="操作" align="center" width="90" fixed="right">
+            <template #default="scope">
+              <el-button link type="warning" @click="openAdjust('DETAIL', scope.row)">调整</el-button>
             </template>
           </el-table-column>
           <template #empty>
@@ -205,14 +218,69 @@
         </el-table>
       </div>
     </template>
+
+    <!-- 结佣调整弹窗（合同级 / 明细级共用） -->
+    <el-dialog v-model="adjustDialog.visible" :title="adjustDialog.scope === 'CONTRACT' ? '结佣调整（合同级）' : '结佣调整（明细级）'" width="520px" append-to-body destroy-on-close>
+      <el-form ref="adjustFormRef" :model="adjustForm" :rules="adjustRules" label-width="110px">
+        <el-form-item label="调整类型" prop="adjustType">
+          <el-radio-group v-model="adjustForm.adjustType">
+            <el-radio-button value="AMOUNT">金额调整</el-radio-button>
+            <el-radio-button value="VOID">业绩冲销</el-radio-button>
+            <el-radio-button value="TRANSFER">部门划转</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="当前金额">
+          <span class="amount amount-red">¥{{ formatAmount(adjustDialog.currentAmount) }}</span>
+        </el-form-item>
+        <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整金额" prop="adjustAmount">
+          <el-input-number
+            v-model="adjustForm.adjustAmount"
+            :precision="2"
+            :step="100"
+            :min="-num(adjustDialog.currentAmount)"
+            controls-position="right"
+            style="width: 100%"
+            placeholder="正数增加，负数减少"
+          />
+          <div class="form-tip">
+            <span :class="adjustDeltaClass(adjustForm.adjustAmount)">
+              {{ (adjustForm.adjustAmount ?? 0) >= 0 ? '+' : '' }}{{ formatAmount(adjustForm.adjustAmount ?? 0) }}
+            </span>
+            → 调整后：¥{{ formatAmount(adjustTargetAmount) }}
+          </div>
+        </el-form-item>
+        <el-form-item v-if="adjustForm.adjustType === 'TRANSFER'" label="目标门店" prop="targetDeptId">
+          <el-tree-select
+            v-model="adjustForm.targetDeptId"
+            :data="deptTreeRaw"
+            :props="{ label: 'deptName', children: 'children' }"
+            value-key="deptId"
+            node-key="deptId"
+            check-strictly
+            placeholder="请选择目标门店/组别"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="调整原因" prop="reason">
+          <el-input v-model="adjustForm.reason" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请输入调整原因" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="adjustDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="adjustSubmitting" @click="submitAdjust">提交</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue';
+import { computed, reactive, ref, onMounted } from 'vue';
+import { ElMessage } from 'element-plus';
+import type { FormInstance } from 'element-plus';
 import { commissionApi, type CommissionApplication, type CommissionItemDetail, type CommissionContractVO } from '@/api/panjia/commission';
 import { performanceApi, type PerformanceManageRow } from '@/api/panjia/performance';
 import { useEmployeeMap } from '../useEmployeeMap';
+import { useDeptScope } from '@/hooks/useDeptScope';
 
 const props = defineProps<{
   /** 已发起模式：结佣申请单 businessId（工作流查看/办理、结佣明细页已发起行） */
@@ -304,6 +372,96 @@ const isPerfAdjusted = (row: { amount?: number | string | null; originalAmount?:
 const perfKey = (row: { employeeId?: string | null; roleType?: string | null; roleName?: string | null }): string =>
   `${row.employeeId}|${row.roleType || row.roleName || ''}`;
 
+// ==================== 结佣调整弹窗 ====================
+const { deptTreeRaw, loadDeptTree } = useDeptScope();
+
+const adjustDialog = reactive({
+  visible: false,
+  scope: 'CONTRACT' as 'CONTRACT' | 'DETAIL',
+  currentAmount: 0,
+  itemId: undefined as number | string | undefined,
+});
+
+const adjustForm = reactive({
+  adjustType: 'AMOUNT',
+  adjustAmount: undefined as number | undefined,
+  targetDeptId: undefined as number | string | undefined,
+  reason: '',
+});
+const adjustTargetAmount = computed(() =>
+  Math.round((num(adjustDialog.currentAmount) + num(adjustForm.adjustAmount)) * 100) / 100);
+const adjustSubmitting = ref(false);
+const adjustFormRef = ref<FormInstance>();
+
+const adjustRules = {
+  reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
+  adjustAmount: [
+    {
+      validator: (_r: unknown, v: number | undefined, cb: (e?: Error) => void) => {
+        if (adjustForm.adjustType === 'AMOUNT' && (v === undefined || v === null)) cb(new Error('请输入调整金额'));
+        else cb();
+      },
+      trigger: 'blur',
+    },
+  ],
+  targetDeptId: [
+    {
+      validator: (_r: unknown, v: number | string | undefined, cb: (e?: Error) => void) => {
+        if (adjustForm.adjustType === 'TRANSFER' && (v === undefined || v === null || v === '')) cb(new Error('请选择目标门店'));
+        else cb();
+      },
+      trigger: 'change',
+    },
+  ],
+};
+
+const adjustDeltaClass = (v: number | undefined) => {
+  const d = num(v);
+  return d > 0 ? 'amount-positive' : d < 0 ? 'amount-negative' : '';
+};
+
+const emit = defineEmits(['adjusted']);
+
+const openAdjust = (scope: 'CONTRACT' | 'DETAIL', row?: any) => {
+  if (!detail.value) return;
+  loadDeptTree();
+  adjustDialog.scope = scope;
+  adjustDialog.itemId = row?.itemId;
+  adjustDialog.currentAmount = scope === 'CONTRACT' ? num(detail.value.totalAmount) : num(row?.amount);
+  adjustForm.adjustType = 'AMOUNT';
+  adjustForm.adjustAmount = undefined;
+  adjustForm.targetDeptId = undefined;
+  adjustForm.reason = '';
+  adjustDialog.visible = true;
+};
+
+const submitAdjust = async () => {
+  if (!adjustFormRef.value || !detail.value) return;
+  try {
+    await adjustFormRef.value.validate();
+  } catch {
+    return;
+  }
+  adjustSubmitting.value = true;
+  try {
+    const payload: any = {
+      applicationId: detail.value.id,
+      adjustScope: adjustDialog.scope,
+      adjustType: adjustForm.adjustType,
+      reason: adjustForm.reason,
+    };
+    if (adjustDialog.scope === 'DETAIL') payload.itemId = adjustDialog.itemId;
+    if (adjustForm.adjustType === 'AMOUNT') payload.targetAmount = adjustTargetAmount.value;
+    if (adjustForm.adjustType === 'TRANSFER') payload.targetDeptId = adjustForm.targetDeptId;
+    await commissionApi.createAdjust(payload);
+    ElMessage.success('调整单已提交，等待审批');
+    adjustDialog.visible = false;
+    emit('adjusted');
+  } finally {
+    adjustSubmitting.value = false;
+  }
+};
+
 onMounted(async () => {
   // 未发起模式：无审批单，按合同/订单号拉新签业绩构成（PERF_EXPECT），
   // 并发拉实收口径（PERF_REAL）按员工+角色合并，补充每人实收金额
@@ -369,6 +527,13 @@ onMounted(async () => {
   color: #909399;
   font-weight: 400;
 }
+.amount-positive { color: #67c23a; font-weight: 600; }
+.amount-negative { color: #f56c6c; font-weight: 600; }
+.form-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+}
 .detail-table-wrap {
   margin-top: 16px;
 }
@@ -376,6 +541,9 @@ onMounted(async () => {
   font-size: 14px;
   font-weight: 500;
   margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 .person-name {
   font-weight: 600;
