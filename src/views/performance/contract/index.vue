@@ -201,17 +201,21 @@
             <el-option label="部门划转" value="TRANSFER" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整后业绩" prop="targetAmount">
+        <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整金额" prop="adjustAmount">
           <el-input-number
-            v-model="adjustForm.targetAmount"
+            v-model="adjustForm.adjustAmount"
             :precision="2"
             :step="100"
-            :min="0"
+            :min="-Number(adjustDialog.amount || 0)"
             style="width: 100%"
-            placeholder="请输入调整后的目标金额"
+            placeholder="正数增加业绩，负数减少业绩"
           />
           <div class="form-tip">
-            当前：¥{{ formatAmount(adjustDialog.amount) }} → 调整后：¥{{ formatAmount(adjustForm.targetAmount ?? 0) }}
+            当前：¥{{ formatAmount(adjustDialog.amount) }}
+            <span :class="adjustDeltaClass(adjustForm.adjustAmount)">
+              {{ (adjustForm.adjustAmount ?? 0) >= 0 ? '+' : '' }}{{ formatAmount(adjustForm.adjustAmount ?? 0) }}
+            </span>
+            → 调整后：¥{{ formatAmount(adjustTargetAmount) }}
           </div>
         </el-form-item>
         <el-form-item v-if="adjustForm.adjustType === 'TRANSFER'" label="目标部门">
@@ -388,17 +392,21 @@
             <el-option label="部门划转" value="TRANSFER" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="detailAdjustForm.adjustType === 'AMOUNT'" label="调整后业绩" prop="targetAmount">
+        <el-form-item v-if="detailAdjustForm.adjustType === 'AMOUNT'" label="调整金额" prop="adjustAmount">
           <el-input-number
-            v-model="detailAdjustForm.targetAmount"
+            v-model="detailAdjustForm.adjustAmount"
             :precision="2"
             :step="100"
-            :min="0"
+            :min="-Number(detailAdjustDialog.amount || 0)"
             style="width: 100%"
-            placeholder="请输入调整后的目标金额"
+            placeholder="正数增加业绩，负数减少业绩"
           />
           <div class="form-tip">
-            当前：¥{{ formatAmount(detailAdjustDialog.amount) }} → 调整后：¥{{ formatAmount(detailAdjustForm.targetAmount ?? 0) }}
+            当前：¥{{ formatAmount(detailAdjustDialog.amount) }}
+            <span :class="adjustDeltaClass(detailAdjustForm.adjustAmount)">
+              {{ (detailAdjustForm.adjustAmount ?? 0) >= 0 ? '+' : '' }}{{ formatAmount(detailAdjustForm.adjustAmount ?? 0) }}
+            </span>
+            → 调整后：¥{{ formatAmount(detailAdjustTargetAmount) }}
           </div>
         </el-form-item>
         <el-form-item v-if="detailAdjustForm.adjustType === 'TRANSFER'" label="目标部门">
@@ -606,17 +614,20 @@ const detailAdjustDialog = reactive({
 });
 const detailAdjustForm = reactive({
   adjustType: 'AMOUNT',
-  targetAmount: undefined as number | undefined,
+  adjustAmount: undefined as number | undefined,  // 录入的是调整金额（正增负减），提交时折算为调整后金额
   targetDeptId: undefined as string | undefined,
   reason: '',
 });
+// 调整后金额 = 当前新签业绩 + 调整金额（仅用于界面提示；提交给后台的仍是调整后金额）
+const detailAdjustTargetAmount = computed(() =>
+  round2(num(detailAdjustDialog.amount) + num(detailAdjustForm.adjustAmount)));
 const detailAdjustRules = {
   reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
-  targetAmount: [
+  adjustAmount: [
     {
       validator: (_rule: unknown, value: number | undefined, callback: (err?: Error) => void) => {
         if (detailAdjustForm.adjustType === 'AMOUNT' && (value === undefined || value === null)) {
-          callback(new Error('请输入调整后业绩'));
+          callback(new Error('请输入调整金额（正数增加，负数减少）'));
         } else {
           callback();
         }
@@ -644,7 +655,7 @@ const openDetailAdjustDialog = (row: PerformanceManageRow) => {
   detailAdjustDialog.employeeName = row.employeeName || '—';
   detailAdjustDialog.amount = row.amount ?? 0;
   detailAdjustForm.adjustType = 'AMOUNT';
-  detailAdjustForm.targetAmount = undefined;
+  detailAdjustForm.adjustAmount = undefined;
   detailAdjustForm.targetDeptId = undefined;
   detailAdjustForm.reason = '';
   detailAdjustDialog.visible = true;
@@ -661,7 +672,8 @@ const submitDetailAdjust = async () => {
       adjustType: detailAdjustForm.adjustType,
       adjustScope: 'DETAIL',
       factType: detailDialog.factType,
-      targetAmount: detailAdjustForm.targetAmount,
+      // 界面录入调整金额（正增负减），后台口径不变：提交当前业绩 + 调整金额 = 调整后金额
+      targetAmount: round2(num(detailAdjustDialog.amount) + num(detailAdjustForm.adjustAmount)),
       targetDeptId: detailAdjustForm.targetDeptId,
       reason: detailAdjustForm.reason.trim(),
     } as any);
@@ -680,6 +692,15 @@ const num = (v: number | string | undefined | null): number => {
   if (v === undefined || v === null || v === '') return 0;
   const n = Number(v);
   return Number.isNaN(n) ? 0 : n;
+};
+
+/** 金额保留两位小数（避免浮点累加误差，提交口径与后台 BigDecimal setScale(2) 一致）。 */
+const round2 = (v: number): number => Math.round((v + Number.EPSILON) * 100) / 100;
+
+/** 调整金额差额着色：增加（正）绿色、减少（负）红色、0 不着色。 */
+const adjustDeltaClass = (v: number | undefined): string => {
+  const d = num(v);
+  return d > 0 ? 'delta-up' : d < 0 ? 'delta-down' : '';
 };
 
 /**
@@ -788,17 +809,20 @@ const adjustDialog = reactive({
 });
 const adjustForm = reactive({
   adjustType: 'AMOUNT',
-  targetAmount: undefined as number | undefined,
+  adjustAmount: undefined as number | undefined,  // 录入的是调整金额（正增负减），提交时折算为调整后金额
   targetDeptId: undefined as string | undefined,
   reason: '',
 });
+// 调整后金额 = 当前新签业绩 + 调整金额（仅用于界面提示；提交给后台的仍是调整后金额）
+const adjustTargetAmount = computed(() =>
+  round2(num(adjustDialog.amount) + num(adjustForm.adjustAmount)));
 const adjustRules = {
   reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
-  targetAmount: [
+  adjustAmount: [
     {
       validator: (_rule: unknown, value: number | undefined, callback: (err?: Error) => void) => {
         if (adjustForm.adjustType === 'AMOUNT' && (value === undefined || value === null)) {
-          callback(new Error('请输入调整后业绩'));
+          callback(new Error('请输入调整金额（正数增加，负数减少）'));
         } else {
           callback();
         }
@@ -824,7 +848,7 @@ const openAdjustDialog = (row: PerformanceManageContract) => {
   adjustDialog.contractNo = resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '';
   adjustDialog.amount = row.amount ?? 0;
   adjustForm.adjustType = 'AMOUNT';
-  adjustForm.targetAmount = undefined;
+  adjustForm.adjustAmount = undefined;
   adjustForm.targetDeptId = undefined;
   adjustForm.reason = '';
   adjustDialog.visible = true;
@@ -840,7 +864,8 @@ const submitAdjust = async () => {
       adjustScope: 'CONTRACT',
       contractNo: adjustDialog.contractNo,
       factType: 'PERF_EXPECT',
-      targetAmount: adjustForm.targetAmount,
+      // 界面录入调整金额（正增负减），后台口径不变：提交当前业绩 + 调整金额 = 调整后金额
+      targetAmount: round2(num(adjustDialog.amount) + num(adjustForm.adjustAmount)),
       targetDeptId: adjustForm.targetDeptId,
       reason: adjustForm.reason.trim(),
     } as any);
@@ -883,6 +908,14 @@ onMounted(async () => {
   font-size: 12px;
   color: #909399;
   margin-top: 4px;
+}
+.form-tip .delta-up {
+  color: #67c23a;
+  font-weight: 600;
+}
+.form-tip .delta-down {
+  color: #f56c6c;
+  font-weight: 600;
 }
 
 .filter-form {

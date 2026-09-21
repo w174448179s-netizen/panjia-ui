@@ -29,6 +29,18 @@
         <el-descriptions-item label="折算后业绩">
           <span class="amount-ink">{{ formatYuan(detail.convertedOriginalAmount) }}</span>
         </el-descriptions-item>
+        <template v-if="detail.adjustType === 'AMOUNT'">
+          <el-descriptions-item label="调整金额">
+            <span :class="deltaAmountClass(detail.targetAmount, detail.originalAmount)">
+              {{ deltaYuan(detail.targetAmount, detail.originalAmount) }}
+            </span>
+          </el-descriptions-item>
+          <el-descriptions-item label="调整金额（折算后）">
+            <span :class="deltaAmountClass(detail.convertedTargetAmount, detail.convertedOriginalAmount)">
+              {{ deltaYuan(detail.convertedTargetAmount, detail.convertedOriginalAmount) }}
+            </span>
+          </el-descriptions-item>
+        </template>
         <el-descriptions-item label="调整后业绩">
           <span class="amount-red">{{ formatYuan(detail.targetAmount) }}</span>
         </el-descriptions-item>
@@ -56,6 +68,18 @@
           <el-descriptions-item label="折算后业绩">
             <span class="amount amount-ink">{{ formatYuan(detail.convertedOriginalAmount) }}</span>
           </el-descriptions-item>
+          <template v-if="detail.adjustType === 'AMOUNT'">
+            <el-descriptions-item label="调整金额">
+              <span class="amount" :class="deltaAmountClass(detail.targetAmount, detail.originalAmount)">
+                {{ deltaYuan(detail.targetAmount, detail.originalAmount) }}
+              </span>
+            </el-descriptions-item>
+            <el-descriptions-item label="调整金额（折算后）">
+              <span class="amount" :class="deltaAmountClass(detail.convertedTargetAmount, detail.convertedOriginalAmount)">
+                {{ deltaYuan(detail.convertedTargetAmount, detail.convertedOriginalAmount) }}
+              </span>
+            </el-descriptions-item>
+          </template>
           <el-descriptions-item label="调整后业绩">
             <span class="amount amount-red">{{ formatYuan(detail.targetAmount) }}</span>
           </el-descriptions-item>
@@ -199,6 +223,41 @@ const formatDelta = (val: number | string | undefined | null): string => {
   const n = Number(val);
   if (Number.isNaN(n)) return String(val);
   return (n > 0 ? '+' : '') + n.toFixed(2);
+};
+
+/** 两数相减保留两位小数（消除浮点误差）；任一值缺失/非数字返回 null */
+const subtract2 = (
+  target: number | string | undefined | null,
+  original: number | string | undefined | null
+): number | null => {
+  if (target === undefined || target === null || target === ''
+    || original === undefined || original === null || original === '') {
+    return null;
+  }
+  const t = Number(target);
+  const o = Number(original);
+  if (Number.isNaN(t) || Number.isNaN(o)) return null;
+  return Math.round((t - o + Number.EPSILON) * 100) / 100;
+};
+
+/** 调整金额（调整后 − 调整前）：带 ¥ 与 +/- 前缀，审批时直接可见本单调整了多少钱 */
+const deltaYuan = (
+  target: number | string | undefined | null,
+  original: number | string | undefined | null
+): string => {
+  const d = subtract2(target, original);
+  if (d === null) return '—';
+  return `¥${d > 0 ? '+' : ''}${d.toFixed(2)}`;
+};
+
+/** 调整金额差额着色：增加绿色 / 减少红色 / 不变不着色 */
+const deltaAmountClass = (
+  target: number | string | undefined | null,
+  original: number | string | undefined | null
+): string => {
+  const d = subtract2(target, original);
+  if (d === null || d === 0) return '';
+  return d > 0 ? 'amount-positive' : 'amount-negative';
 };
 
 const getAmountClass = (val: number | undefined | null): string => {
