@@ -148,7 +148,6 @@
                 </template>
               </el-table-column>
             </el-table>
-          </div>
 
           <pagination
             v-show="typeTotal > 0"
@@ -157,6 +156,7 @@
             :total="typeTotal"
             @pagination="getTypeList"
           />
+          </div>
         </el-card>
       </el-col>
 
@@ -316,7 +316,6 @@
                 </template>
               </el-table-column>
             </el-table>
-          </div>
 
           <pagination
             v-show="dataTotal > 0"
@@ -325,6 +324,7 @@
             :total="dataTotal"
             @pagination="getDataList"
           />
+          </div>
         </el-card>
       </el-col>
     </el-row>
