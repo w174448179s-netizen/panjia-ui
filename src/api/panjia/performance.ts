@@ -333,19 +333,7 @@ export const performanceApi = {
   // 业绩事实
   listFacts: (params: FactQuery) =>
     panjiaRequest.get<PageResult<PerformanceFact>>('/perf/fact/list', params),
-  getFact: (id: string | number) =>
-    panjiaRequest.get<PerformanceFact>(`/perf/fact/${id}`),
-  buildBatch: (batchId: string | number) =>
-    panjiaRequest.post<void>(`/perf/fact/build/${batchId}`),
-  getSummary: (params: { period?: string; factType?: string; employeeId?: string; deptId?: string }) =>
-    panjiaRequest.get<number>('/perf/fact/summary', params),
 
-  // 业绩明细（人→合同→明细 懒加载树表，后端按人分页）
-  listManage: (params: ManageQuery) =>
-    panjiaRequest.get<PerformanceManagePage>('/perf/fact/manage', params),
-  // 按员工懒加载明细（展开单人传 1 个 ID，全部展开传当前页全部 ID）
-  listManageDetails: (params: ManageDetailQuery) =>
-    panjiaRequest.get<PerformanceManageRow[]>('/perf/fact/manage/details', params),
   // 有业绩数据的期间（倒序）
   listManagePeriods: () =>
     panjiaRequest.get<string[]>('/perf/fact/manage/periods'),
@@ -360,8 +348,6 @@ export const performanceApi = {
   // 调整单
   listAdjusts: (params: AdjustQuery) =>
     panjiaRequest.get<PageResult<PerformanceAdjust>>('/perf/adjust/list', params),
-  getAdjust: (id: string | number) =>
-    panjiaRequest.get<PerformanceAdjust>(`/perf/adjust/${id}`),
   getAdjustDetail: (id: string | number) =>
     panjiaRequest.get<AdjustDetailVO>(`/perf/adjust/${id}/detail`),
   createAdjust: (data: AdjustCreateForm) =>
@@ -370,8 +356,6 @@ export const performanceApi = {
   // 期间封账
   listPeriods: () =>
     panjiaRequest.get<PeriodClose[]>('/perf/period/list'),
-  getPeriod: (period: string) =>
-    panjiaRequest.get<PeriodClose>(`/perf/period/${period}`),
   closePeriod: (period: string, reason?: string) => {
     const url = reason
       ? `/perf/period/close/${period}?reason=${encodeURIComponent(reason)}`
