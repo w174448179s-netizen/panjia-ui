@@ -25,7 +25,7 @@ export interface ReceivedApply {
   /** 实收业绩折算后金额（receivedAmount × 当前生效折算因子） */
   receivedConvertedAmount?: number;
   itemCount: number;
-  /** 业务类型（列表接口按 (期间,合同号) 从 ACTIVE PERF_REAL 事实回填） */
+  /** 业务类型（建单时快照落库，列表直接读列；「类型」筛选已下推 SQL） */
   bizType?: string;
   /** 涉及人数（列表接口回填：该合同本期间实收事实去重员工数） */
   employeeCount?: number;
