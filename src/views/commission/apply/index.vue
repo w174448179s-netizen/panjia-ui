@@ -11,7 +11,7 @@
             placeholder="选择月份"
             clearable
             style="width: 150px"
-            @change="handleQuery"
+            @change="handleScopeChange"
           />
         </el-form-item>
         <el-form-item label="门店/组别">
@@ -25,8 +25,42 @@
             :clearable="!deptLocked"
             check-strictly
             style="width: 210px"
-            @change="handleQuery"
+            @change="handleDeptChange"
           />
+        </el-form-item>
+        <el-form-item v-if="!isAgent" label="员工" prop="employeeId">
+          <el-select
+            v-model="queryParams.employeeId"
+            filterable
+            remote
+            clearable
+            :remote-method="searchEmployees"
+            :loading="employeeLoading"
+            :no-data-text="employeeNoDataText"
+            placeholder="姓名/工号搜索"
+            style="width: 230px"
+            @change="handleQuery"
+            @clear="handleEmployeeClear"
+          >
+            <el-option
+              v-for="emp in employeeOptions"
+              :key="emp.employeeId"
+              :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`"
+              :value="emp.employeeId"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="类型" prop="bizType">
+          <el-select
+            v-model="queryParams.bizType"
+            placeholder="全部类型"
+            clearable
+            filterable
+            style="width: 160px"
+            @change="handleQuery"
+          >
+            <el-option v-for="t in bizTypeOptions" :key="t" :label="t" :value="t" />
+          </el-select>
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="queryParams.status" placeholder="全部状态" clearable style="width: 130px" @change="handleQuery">
@@ -332,6 +366,7 @@ import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Loading } from '@element-plus/icons-vue';
 import { commissionApi, type CommissionContractVO, type BatchResultDTO } from '@/api/panjia/commission';
+import { performanceApi, type PerformanceEmployeeOption } from '@/api/panjia/performance';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { useBizApproval } from '@/hooks/workflow/useBizApproval';
 import { useDeptScope } from '@/hooks/useDeptScope';
@@ -343,6 +378,8 @@ import CommissionApplyDetail from '@/components/WorkflowHandle/details/Commissio
 
 const route = useRoute();
 const userStore = useUserStore();
+/** 经纪人：本人口径（后端强制按本人 employeeId 过滤），不展示员工筛选 */
+const isAgent = computed(() => userStore.roles.includes('agent'));
 
 /** 是否可以作废：超管全部可操作；未发起行无申请人（列表已按部门范围过滤），权限由后端门店校验；已发起单仅本人可操作 */
 const canCancel = (row: CommissionContractVO): boolean => {
@@ -377,6 +414,8 @@ const queryParams = reactive({
   pageSize: 20,
   period: currentPeriod(),
   deptId: undefined as string | undefined,
+  employeeId: undefined as string | undefined,
+  bizType: undefined as string | undefined,
   status: '' as string,
   keyword: '' as string,
 });
@@ -420,6 +459,48 @@ const contractOrOrderNo = (row: CommissionContractVO): string =>
 // 部门树（全系统统一口径：所有用户查本部门及以下；详情弹窗的归属门店翻译在 CommissionApplyDetail 内自处理）
 const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
 
+// 员工筛选（远程搜索，选项受后端部门数据权限约束；经纪人无此筛选，后端按本人口径）
+const employeeOptions = ref<PerformanceEmployeeOption[]>([]);
+const employeeLoading = ref(false);
+const employeeSearched = ref(false);
+const employeeNoDataText = computed(() => (employeeSearched.value ? '无匹配员工' : '输入姓名/工号搜索'));
+
+const searchEmployees = async (query: string) => {
+  const kw = (query ?? '').trim();
+  if (!kw) { employeeOptions.value = []; employeeSearched.value = false; return; }
+  employeeLoading.value = true;
+  try {
+    const res = await performanceApi.searchEmployeeOptions({ keyword: kw, deptId: queryParams.deptId });
+    employeeOptions.value = res.data ?? [];
+    employeeSearched.value = true;
+  } catch { employeeOptions.value = []; }
+  finally { employeeLoading.value = false; }
+};
+const handleEmployeeClear = () => { employeeOptions.value = []; employeeSearched.value = false; handleQuery(); };
+
+// 类型下拉选项：随期间/部门数据范围实时变化（与列表同权限口径）
+const bizTypeOptions = ref<string[]>([]);
+const loadBizTypes = async () => {
+  try {
+    const res = await performanceApi.listSearchBizTypes({
+      period: queryParams.period,
+      deptId: isAgent.value ? undefined : queryParams.deptId,
+      employeeId: isAgent.value ? undefined : queryParams.employeeId,
+    });
+    bizTypeOptions.value = res.data ?? [];
+  } catch { bizTypeOptions.value = []; }
+};
+
+/** 期间变化：先按新范围刷新类型选项再查询 */
+const handleScopeChange = () => loadBizTypes().then(handleQuery);
+/** 门店/组别变化：原选中员工可能不在新部门范围内，清空员工筛选后再按新范围查询 */
+const handleDeptChange = () => {
+  queryParams.employeeId = undefined;
+  employeeOptions.value = [];
+  employeeSearched.value = false;
+  handleScopeChange();
+};
+
 // 状态映射。SUBMITTED 全程统一叫「审批中」（发起后直到审批结束），
 // 与工作流系统页（我发起的/我的已办，全局字典 waiting）保持同一叫法——
 // 系统页状态是粗粒度运行中，无法按节点细分，两段式会导致页面间不一致
@@ -451,6 +532,8 @@ const getList = async () => {
     const res: any = await commissionApi.listContracts({
       period: queryParams.period || currentPeriod(),
       deptId: queryParams.deptId || undefined,
+      employeeId: queryParams.employeeId || undefined,
+      bizType: queryParams.bizType || undefined,
       status: queryParams.status || undefined,
       keyword: queryParams.keyword || undefined,
       pageNum: queryParams.pageNum,
@@ -475,9 +558,11 @@ const handleQuery = () => {
 const resetQuery = () => {
   Object.assign(queryParams, {
     // 受限角色重置回本部门默认值，不能清空为"全部"
-    period: currentPeriod(), deptId: defaultDeptId(), status: '', keyword: '', pageNum: 1,
+    period: currentPeriod(), deptId: defaultDeptId(), employeeId: undefined, bizType: undefined, status: '', keyword: '', pageNum: 1,
   });
-  getList();
+  employeeOptions.value = [];
+  employeeSearched.value = false;
+  loadBizTypes().then(getList);
 };
 
 // 按钮 loading 状态（以 contractNo 为 key：未发起行无 applicationId，统一用 contractNo）
@@ -719,6 +804,7 @@ onMounted(() => {
   // 受限角色（店长/总监）默认选中本部门，首屏即按本部门查询
   queryParams.deptId = defaultDeptId();
   loadDeptTree();
+  loadBizTypes();
   getList();
 });
 </script>

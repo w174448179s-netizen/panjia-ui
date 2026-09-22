@@ -28,6 +28,28 @@
             @change="handleQuery"
           />
         </el-form-item>
+        <el-form-item v-if="!isBroker" label="员工" prop="employeeId">
+          <el-select
+            v-model="queryParams.employeeId"
+            filterable
+            remote
+            clearable
+            :remote-method="searchEmployees"
+            :loading="employeeLoading"
+            :no-data-text="employeeNoDataText"
+            placeholder="姓名/工号搜索"
+            style="width: 230px"
+            @change="handleQuery"
+            @clear="handleEmployeeClear"
+          >
+            <el-option
+              v-for="emp in employeeOptions"
+              :key="emp.employeeId"
+              :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`"
+              :value="emp.employeeId"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="类型">
           <el-select
             v-model="queryParams.bizType"
@@ -38,6 +60,16 @@
           >
             <el-option v-for="t in bizTypeOptions" :key="t" :label="t" :value="t" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="关键字" prop="keyword">
+          <el-input
+            v-model.trim="queryParams.keyword"
+            placeholder="合同号/订单号/物业地址"
+            clearable
+            style="width: 260px"
+            @keyup.enter="handleQuery"
+            @clear="handleQuery"
+          />
         </el-form-item>
         <el-form-item label="状态">
           <el-select
@@ -61,15 +93,6 @@
       <!-- 汇总条 -->
       <div class="summary-bar">
         <div class="summary-left">
-          <el-input
-            v-if="!isBroker"
-            v-model="keyword"
-            placeholder="搜索合同号 / 订单号 / 房源地址 / 员工号 / 姓名 / 角色"
-            clearable
-            :prefix-icon="Search"
-            class="keyword-input"
-            @keydown.enter.prevent="handleQuery"
-          />
           <span class="summary-text">
             共 <b>{{ summary.contractCount }}</b> 个合同 ·
             涉及 <b>{{ summary.employeeCount }}</b> 人 ·
@@ -441,10 +464,9 @@
 </template>
 
 <script setup lang="ts">
-import { Search } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { performanceApi } from '@/api/panjia/performance';
-import type { PerformanceManageContract, PerformanceManageRow } from '@/api/panjia/performance';
+import type { PerformanceEmployeeOption, PerformanceManageContract, PerformanceManageRow } from '@/api/panjia/performance';
 import { useUserStore } from '@/store/modules/user';
 import { resolveBizNo } from '@/utils/panjiaBiz';
 import { checkPermi } from '@/utils/permission';
@@ -461,20 +483,57 @@ const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope()
 const queryParams = reactive<{
   period: string;
   deptId: string | number | undefined;
+  employeeId: string | undefined;
   bizType: string;
+  keyword: string | undefined;
   factStatus: string;
 }>({
   period: '',
   deptId: defaultDeptId(),
+  employeeId: undefined,
   bizType: '',
+  keyword: undefined,
   factStatus: '',
 });
+
+// ==================== 员工筛选（远程搜索，选项受后端部门数据权限约束） ====================
+const employeeOptions = ref<PerformanceEmployeeOption[]>([]);
+const employeeLoading = ref(false);
+const employeeSearched = ref(false);
+const employeeNoDataText = computed(() => (employeeSearched.value ? '无匹配员工' : '输入姓名/工号搜索'));
+
+const searchEmployees = async (query: string) => {
+  const kw = (query ?? '').trim();
+  if (!kw) {
+    employeeOptions.value = [];
+    employeeSearched.value = false;
+    return;
+  }
+  employeeLoading.value = true;
+  try {
+    const res = await performanceApi.searchEmployeeOptions({
+      keyword: kw,
+      deptId: queryParams.deptId ? String(queryParams.deptId) : undefined,
+    });
+    employeeOptions.value = res.data ?? [];
+    employeeSearched.value = true;
+  } catch {
+    employeeOptions.value = [];
+  } finally {
+    employeeLoading.value = false;
+  }
+};
+
+const handleEmployeeClear = () => {
+  employeeOptions.value = [];
+  employeeSearched.value = false;
+  handleQuery();
+};
 
 // ==================== 数据 ====================
 const loading = ref(false);
 const contractData = ref<PerformanceManageContract[]>([]);
 const totalContracts = ref(0);
-const keyword = ref('');
 
 const pageNum = ref(1);
 const pageSize = ref(20);
@@ -733,18 +792,8 @@ const deptGroup = (path: string): string => {
 
 
 
-// ==================== 关键字搜索（防抖） ====================
+// ==================== 类型选项 ====================
 const bizTypeOptions = ref<string[]>([]);
-let keywordTimer: ReturnType<typeof setTimeout> | undefined;
-let suppressKeywordWatch = false;
-watch(keyword, () => {
-  if (suppressKeywordWatch) return;
-  clearTimeout(keywordTimer);
-  keywordTimer = setTimeout(() => {
-    pageNum.value = 1;
-    getList();
-  }, 350);
-});
 
 // ==================== 加载 ====================
 const getList = async () => {
@@ -761,8 +810,9 @@ const getList = async () => {
       period: queryParams.period,
       factType: 'PERF_EXPECT',
       deptId: queryParams.deptId ? String(queryParams.deptId) : undefined,
+      employeeId: queryParams.employeeId || undefined,
       bizType: queryParams.bizType || undefined,
-      keyword: keyword.value.trim() || undefined,
+      keyword: queryParams.keyword?.trim() || undefined,
       factStatus: queryParams.factStatus || undefined,
       pageNum: pageNum.value,
       pageSize: pageSize.value
@@ -788,15 +838,14 @@ const handleQuery = () => {
 };
 const resetQuery = () => {
   queryParams.deptId = defaultDeptId();
+  queryParams.employeeId = undefined;
   queryParams.bizType = '';
+  queryParams.keyword = undefined;
   queryParams.factStatus = '';
-  suppressKeywordWatch = true;
-  keyword.value = '';
+  employeeOptions.value = [];
+  employeeSearched.value = false;
   pageNum.value = 1;
-  nextTick(() => {
-    suppressKeywordWatch = false;
-    getList();
-  });
+  getList();
 };
 
 // ==================== 业绩调整弹窗 ====================
@@ -948,10 +997,6 @@ onMounted(async () => {
     display: flex;
     align-items: center;
     gap: 16px;
-  }
-
-  .keyword-input {
-    width: 320px;
   }
 
   .summary-text {

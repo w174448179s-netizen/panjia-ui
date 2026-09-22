@@ -11,7 +11,7 @@
             placeholder="选择月份"
             clearable
             style="width: 150px"
-            @change="handleQuery"
+            @change="handleScopeChange"
           />
         </el-form-item>
         <el-form-item label="门店/组别" prop="deptId">
@@ -25,8 +25,42 @@
             :clearable="!deptLocked"
             check-strictly
             style="width: 200px"
-            @change="handleQuery"
+            @change="handleScopeChange"
           />
+        </el-form-item>
+        <el-form-item v-if="!isAgent" label="员工" prop="employeeId">
+          <el-select
+            v-model="queryParams.employeeId"
+            filterable
+            remote
+            clearable
+            :remote-method="searchEmployees"
+            :loading="employeeLoading"
+            :no-data-text="employeeNoDataText"
+            placeholder="姓名/工号搜索"
+            style="width: 230px"
+            @change="handleScopeChange"
+            @clear="handleEmployeeClear"
+          >
+            <el-option
+              v-for="emp in employeeOptions"
+              :key="emp.employeeId"
+              :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`"
+              :value="emp.employeeId"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="类型" prop="bizType">
+          <el-select
+            v-model="queryParams.bizType"
+            placeholder="全部类型"
+            clearable
+            filterable
+            style="width: 160px"
+            @change="handleQuery"
+          >
+            <el-option v-for="t in bizTypeOptions" :key="t" :label="t" :value="t" />
+          </el-select>
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="queryParams.status" placeholder="全部状态" clearable style="width: 130px" @change="handleQuery">
@@ -358,6 +392,7 @@ import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Loading } from '@element-plus/icons-vue';
 import { receivedApi, type ReceivedApply, type ReceivedFact, type BatchApproveResult } from '@/api/panjia/received';
+import { performanceApi, type PerformanceEmployeeOption } from '@/api/panjia/performance';
 import { employeeApi } from '@/api/panjia/employee';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { useBizApproval } from '@/hooks/workflow/useBizApproval';
@@ -369,6 +404,8 @@ import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
 
 const route = useRoute();
 const userStore = useUserStore();
+/** 经纪人：本人口径（后端强制按本人 employeeId 过滤），不展示员工筛选 */
+const isAgent = computed(() => userStore.roles.includes('agent'));
 
 /** 是否可以作废：超管全部可操作，普通用户只能操作自己发起的单据 */
 const canCancel = (row: ReceivedApply): boolean => {
@@ -406,6 +443,8 @@ const queryParams = reactive({
   status: '',
   keyword: '',
   deptId: defaultDeptId(),
+  employeeId: undefined as string | undefined,
+  bizType: undefined as string | undefined,
 });
 
 const num = (v: number | string | null | undefined): number => {
@@ -505,6 +544,8 @@ const getList = async () => {
       status: queryParams.status || undefined,
       keyword: queryParams.keyword || undefined,
       deptId: queryParams.deptId || undefined,
+      employeeId: queryParams.employeeId || undefined,
+      bizType: queryParams.bizType || undefined,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
     });
@@ -523,6 +564,45 @@ const handleQuery = () => {
   getList();
 };
 
+// ==================== 类型筛选（选项随期间/部门/员工范围变化） ====================
+const bizTypeOptions = ref<string[]>([]);
+const loadBizTypes = async () => {
+  try {
+    const res = await performanceApi.listSearchBizTypes({
+      period: queryParams.period,
+      deptId: isAgent.value ? undefined : queryParams.deptId,
+      employeeId: isAgent.value ? undefined : queryParams.employeeId,
+    });
+    bizTypeOptions.value = res.data ?? [];
+    // 当前选中类型已不在可见范围内时清空，避免带着失效条件查询
+    if (queryParams.bizType && !bizTypeOptions.value.includes(queryParams.bizType)) {
+      queryParams.bizType = undefined;
+    }
+  } catch { bizTypeOptions.value = []; }
+};
+
+/** 期间/门店/员工范围变化：先按新范围刷新类型选项（顺带剔除失效选中），再查询 */
+const handleScopeChange = () => loadBizTypes().then(handleQuery);
+
+// ==================== 员工筛选（远程搜索，选项受后端部门数据权限约束） ====================
+const employeeOptions = ref<PerformanceEmployeeOption[]>([]);
+const employeeLoading = ref(false);
+const employeeSearched = ref(false);
+const employeeNoDataText = computed(() => (employeeSearched.value ? '无匹配员工' : '输入姓名/工号搜索'));
+
+const searchEmployees = async (query: string) => {
+  const kw = (query ?? '').trim();
+  if (!kw) { employeeOptions.value = []; employeeSearched.value = false; return; }
+  employeeLoading.value = true;
+  try {
+    const res = await performanceApi.searchEmployeeOptions({ keyword: kw, deptId: queryParams.deptId });
+    employeeOptions.value = res.data ?? [];
+    employeeSearched.value = true;
+  } catch { employeeOptions.value = []; }
+  finally { employeeLoading.value = false; }
+};
+const handleEmployeeClear = () => { employeeOptions.value = []; employeeSearched.value = false; handleScopeChange(); };
+
 // 合同号/订单号合并展示：一手房、房产金融、家装荐客以订单号为准，其它以合同号为准（空则回退）
 const contractOrOrderNo = (row: ReceivedApply): string =>
   resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—';
@@ -530,8 +610,11 @@ const resetQuery = () => {
   Object.assign(queryParams, {
     period: currentPeriod(), status: '', keyword: '',
     deptId: defaultDeptId(), pageNum: 1,
+    employeeId: undefined, bizType: undefined,
   });
-  getList();
+  employeeOptions.value = [];
+  employeeSearched.value = false;
+  loadBizTypes().then(handleQuery);
 };
 
 // 详情
@@ -686,6 +769,7 @@ useWorkflowRouteOpen('/performance/received', openFromWorkflow);
 onMounted(() => {
   loadDeptTree();
   loadEmployeeMap();
+  loadBizTypes();
   getList();
 });
 </script>

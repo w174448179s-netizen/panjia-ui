@@ -36,6 +36,10 @@ export interface CommissionAdjustQuery extends PageQuery {
   status?: string;
   period?: string;
   applicationId?: number | string;   // 19 位雪花 ID 以字符串下发/输入
+  deptId?: string;
+  employeeId?: string;
+  bizType?: string;
+  keyword?: string;
 }
 
 export interface CommissionAdjustCreateDTO {
@@ -134,6 +138,8 @@ export interface CommissionItemDetail {
 export interface CommissionApplyQuery extends PageQuery {
   period?: string;
   deptId?: number | string;   // 19 位雪花 ID 由后端以字符串下发，禁止 Number() 转换
+  employeeId?: string;
+  bizType?: string;
   status?: string;
   currentNode?: string;
   keyword?: string;

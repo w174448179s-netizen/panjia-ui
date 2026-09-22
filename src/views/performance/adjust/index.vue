@@ -12,7 +12,7 @@
               placeholder="选择月份"
               clearable
               style="width: 160px"
-              @change="handleQuery"
+              @change="handleScopeChange"
             />
           </el-form-item>
           <el-form-item label="调整类型" prop="adjustType">
@@ -57,7 +57,7 @@
               :remote-method="searchEmployee"
               :loading="employeeLoading"
               style="width: 220px"
-              @change="handleQuery"
+              @change="handleScopeChange"
             >
               <el-option
                 v-for="emp in employeeOptions"
@@ -78,7 +78,29 @@
               :clearable="!deptLocked"
               check-strictly
               style="width: 220px"
+              @change="handleScopeChange"
+            />
+          </el-form-item>
+          <el-form-item label="类型" prop="bizType">
+            <el-select
+              v-model="queryParams.bizType"
+              placeholder="全部类型"
+              clearable
+              filterable
+              style="width: 160px"
               @change="handleQuery"
+            >
+              <el-option v-for="t in bizTypeOptions" :key="t" :label="t" :value="t" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="关键字" prop="keyword">
+            <el-input
+              v-model.trim="queryParams.keyword"
+              placeholder="合同号/订单号/物业地址"
+              clearable
+              style="width: 260px"
+              @keyup.enter="handleQuery"
+              @clear="handleQuery"
             />
           </el-form-item>
           <el-form-item>
@@ -432,8 +454,29 @@ const queryParams = reactive<AdjustQuery & { pageNum: number; pageSize: number }
   adjustType: undefined,
   status: undefined,
   employeeId: undefined,
-  deptId: defaultDeptId()
+  deptId: defaultDeptId(),
+  bizType: undefined as string | undefined,
+  keyword: undefined as string | undefined
 });
+
+// ==================== 业务类型下拉（数据范围与列表一致；随期间/部门/员工变化刷新） ====================
+const bizTypeOptions = ref<string[]>([]);
+const loadBizTypes = async () => {
+  try {
+    const res = await performanceApi.listSearchBizTypes({
+      period: queryParams.period,
+      deptId: queryParams.deptId,
+      employeeId: queryParams.employeeId
+    });
+    bizTypeOptions.value = res.data ?? [];
+    // 当前选中类型已不在可见范围内时清空，避免带着失效条件查询
+    if (queryParams.bizType && !bizTypeOptions.value.includes(queryParams.bizType)) {
+      queryParams.bizType = undefined;
+    }
+  } catch {
+    bizTypeOptions.value = [];
+  }
+};
 
 // ==================== 列表 ====================
 const loading = ref(false);
@@ -450,7 +493,9 @@ const getList = async () => {
       adjustType: queryParams.adjustType || undefined,
       status: queryParams.status || undefined,
       employeeId: queryParams.employeeId || undefined,
-      deptId: queryParams.deptId || undefined
+      deptId: queryParams.deptId || undefined,
+      bizType: queryParams.bizType || undefined,
+      keyword: queryParams.keyword || undefined
     });
     adjustList.value = res.data?.rows ?? [];
     total.value = res.data?.total ?? 0;
@@ -464,6 +509,11 @@ const handleQuery = () => {
   getList();
 };
 
+/** 期间/部门/员工范围变化：先按新范围刷新类型选项（顺带剔除失效选中），再触发查询 */
+const handleScopeChange = () => {
+  loadBizTypes().then(handleQuery);
+};
+
 const resetQuery = () => {
   Object.assign(queryParams, {
     period: undefined,
@@ -471,9 +521,11 @@ const resetQuery = () => {
     status: undefined,
     employeeId: undefined,
     deptId: defaultDeptId(),
+    bizType: undefined,
+    keyword: undefined,
     pageNum: 1
   });
-  getList();
+  loadBizTypes().then(getList);
 };
 
 // ==================== 工具方法 ====================
@@ -631,6 +683,7 @@ useWorkflowRouteOpen('/performance/adjustment', openFromWorkflow);
 
 onMounted(() => {
   loadDeptTree();
+  loadBizTypes();
   getList();
 });
 </script>

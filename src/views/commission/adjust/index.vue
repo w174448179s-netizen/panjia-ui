@@ -1,42 +1,90 @@
 <template>
   <div class="commission-adjust" style="padding: 12px;">
     <el-card>
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-semibold">结佣调整</h3>
-      </div>
+
 
       <!-- 筛选 -->
       <el-form :inline="true" :model="queryParams" @submit.prevent>
-        <el-form-item label="期间">
+        <el-form-item label="期间" prop="period">
           <el-date-picker
             v-model="queryParams.period"
             type="month"
             value-format="YYYY-MM"
-            placeholder="选择月份"
+            placeholder="全部期间"
             clearable
             style="width: 160px"
-            @change="handleQuery"
+            @change="handleScopeChange"
           />
         </el-form-item>
-        <el-form-item label="类型">
+        <el-form-item v-if="!isAgent" label="门店/组别" prop="deptId">
+          <el-tree-select
+            v-model="queryParams.deptId"
+            :data="deptTreeData"
+            :props="{ label: 'deptName', children: 'children' } as any"
+            value-key="deptId"
+            node-key="deptId"
+            :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
+            :clearable="!deptLocked"
+            check-strictly
+            style="width: 200px"
+            @change="handleDeptChange"
+          />
+        </el-form-item>
+        <el-form-item v-if="!isAgent" label="员工" prop="employeeId">
+          <el-select
+            v-model="queryParams.employeeId"
+            filterable
+            remote
+            clearable
+            :remote-method="searchEmployees"
+            :loading="employeeLoading"
+            :no-data-text="employeeNoDataText"
+            placeholder="姓名/工号搜索"
+            style="width: 230px"
+            @change="handleEmployeeChange"
+            @clear="handleEmployeeClear"
+          >
+            <el-option
+              v-for="emp in employeeOptions"
+              :key="emp.employeeId"
+              :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`"
+              :value="emp.employeeId"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="类型" prop="bizType">
+          <el-select
+            v-model="queryParams.bizType"
+            placeholder="全部类型"
+            clearable
+            filterable
+            style="width: 160px"
+            @change="handleQuery"
+          >
+            <el-option v-for="t in bizTypeOptions" :key="t" :label="t" :value="t" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="关键字" prop="keyword">
+          <el-input
+            v-model.trim="queryParams.keyword"
+            placeholder="合同号/订单号/物业地址"
+            clearable
+            style="width: 260px"
+            @keyup.enter="handleQuery"
+            @clear="handleQuery"
+          />
+        </el-form-item>
+        <el-form-item label="调整类型" prop="adjustType">
           <el-select v-model="queryParams.adjustType" placeholder="全部类型" clearable style="width: 140px" @change="handleQuery">
             <el-option v-for="opt in typeOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态">
+        <el-form-item label="状态" prop="status">
           <el-select v-model="queryParams.status" placeholder="全部状态" clearable style="width: 130px" @change="handleQuery">
             <el-option v-for="opt in statusOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="申请单ID">
-          <el-input
-            v-model="queryParams.applicationId"
-            placeholder="申请单ID"
-            clearable
-            style="width: 160px"
-            @keyup.enter="handleQuery"
-          />
-        </el-form-item>
+
         <el-form-item>
           <el-button type="primary" @click="handleQuery">搜索</el-button>
           <el-button @click="resetQuery">重置</el-button>
@@ -142,13 +190,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { commissionApi, type CommissionAdjust } from '@/api/panjia/commission';
+import { performanceApi, type PerformanceEmployeeOption } from '@/api/panjia/performance';
+import { useDeptScope } from '@/hooks/useDeptScope';
+import { useUserStore } from '@/store/modules/user';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
 const route = useRoute();
+
+const userStore = useUserStore();
+/** 经纪人：本人口径（后端强制按本人 employeeId 过滤），不展示门店/组别/员工筛选 */
+const isAgent = computed(() => userStore.roles.includes('agent'));
+const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
 
 const loading = ref(false);
 const adjustList = ref<CommissionAdjust[]>([]);
@@ -158,6 +214,10 @@ const queryParams = reactive({
   pageNum: 1,
   pageSize: 20,
   period: '' as string,
+  deptId: undefined as string | undefined,
+  employeeId: undefined as string | undefined,
+  bizType: undefined as string | undefined,
+  keyword: '' as string,
   adjustType: '' as string,
   status: '' as string,
   applicationId: '' as string,
@@ -198,12 +258,75 @@ const amountClass = (n: number | undefined) => {
   return '';
 };
 
+// ==================== 员工筛选（远程搜索，选项受后端部门数据权限约束） ====================
+const employeeOptions = ref<PerformanceEmployeeOption[]>([]);
+const employeeLoading = ref(false);
+/** 是否已发起过搜索（未搜索时提示输入，搜索无结果时提示无匹配） */
+const employeeSearched = ref(false);
+const employeeNoDataText = computed(() => (employeeSearched.value ? '无匹配员工' : '输入姓名/工号搜索'));
+
+const searchEmployees = async (query: string) => {
+  const kw = (query ?? '').trim();
+  if (!kw) { employeeOptions.value = []; employeeSearched.value = false; return; }
+  employeeLoading.value = true;
+  try {
+    const res = await performanceApi.searchEmployeeOptions({
+      keyword: kw,
+      deptId: isAgent.value ? undefined : queryParams.deptId,
+    });
+    employeeOptions.value = res.data ?? [];
+    employeeSearched.value = true;
+  } catch {
+    employeeOptions.value = [];
+  } finally {
+    employeeLoading.value = false;
+  }
+};
+
+/** 员工变化后类型可见范围随之变化，先刷新类型选项（顺带剔除失效选中）再查询 */
+const handleEmployeeChange = () => { loadBizTypes().then(handleQuery); };
+const handleEmployeeClear = () => {
+  employeeOptions.value = [];
+  employeeSearched.value = false;
+  loadBizTypes().then(handleQuery);
+};
+
+/** 清空员工筛选（部门范围变化/重置时调用：原员工可能已不在新部门范围内） */
+const clearEmployeeFilter = () => {
+  queryParams.employeeId = undefined;
+  employeeOptions.value = [];
+  employeeSearched.value = false;
+};
+
+// ==================== 类型下拉选项（随期间/部门数据范围实时变化） ====================
+const bizTypeOptions = ref<string[]>([]);
+const loadBizTypes = async () => {
+  try {
+    const res = await performanceApi.listSearchBizTypes({
+      period: queryParams.period,
+      deptId: isAgent.value ? undefined : queryParams.deptId,
+      employeeId: isAgent.value ? undefined : queryParams.employeeId,
+    });
+    bizTypeOptions.value = res.data ?? [];
+    // 当前选中类型已不在可见范围内时清空，避免带着失效条件查询
+    if (queryParams.bizType && !bizTypeOptions.value.includes(queryParams.bizType)) {
+      queryParams.bizType = undefined;
+    }
+  } catch {
+    bizTypeOptions.value = [];
+  }
+};
+
 // 列表
 const getList = async () => {
   loading.value = true;
   try {
     const res = await commissionApi.listAdjusts({
       period: queryParams.period || undefined,
+      deptId: isAgent.value ? undefined : queryParams.deptId,
+      employeeId: isAgent.value ? undefined : queryParams.employeeId,
+      bizType: queryParams.bizType,
+      keyword: queryParams.keyword || undefined,
       adjustType: queryParams.adjustType || undefined,
       status: queryParams.status || undefined,
       applicationId: queryParams.applicationId || undefined,
@@ -226,9 +349,28 @@ const handleQuery = () => {
   getList();
 };
 
+/** 期间变化：先按新范围刷新类型选项（顺带剔除失效选中），再触发查询 */
+const handleScopeChange = () => { loadBizTypes().then(handleQuery); };
+/** 门店/组别变化：原选中员工可能不在新部门范围内，清空员工筛选后再按新范围查询 */
+const handleDeptChange = () => {
+  clearEmployeeFilter();
+  handleScopeChange();
+};
+
 const resetQuery = () => {
-  Object.assign(queryParams, { period: '', adjustType: '', status: '', applicationId: '', pageNum: 1 });
-  getList();
+  Object.assign(queryParams, {
+    period: '',
+    deptId: defaultDeptId(),
+    employeeId: undefined,
+    bizType: undefined,
+    keyword: '',
+    adjustType: '',
+    status: '',
+    applicationId: '',
+    pageNum: 1,
+  });
+  clearEmployeeFilter();
+  loadBizTypes().then(handleQuery);
 };
 
 // 详情
@@ -262,6 +404,10 @@ const openFromWorkflow = async () => {
 useWorkflowRouteOpen('/commission/adjust', openFromWorkflow);
 
 onMounted(() => {
+  // 受限角色（店长/总监）默认选中本部门，首屏即按本部门查询
+  queryParams.deptId = defaultDeptId();
+  loadDeptTree();
+  loadBizTypes();
   getList();
 });
 </script>

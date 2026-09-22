@@ -107,6 +107,8 @@ export interface AdjustQuery extends PageQuery {
   status?: string;
   employeeId?: string;
   deptId?: string;
+  bizType?: string;
+  keyword?: string;
 }
 
 export interface AdjustCreateForm {
@@ -183,6 +185,7 @@ export interface ManageQuery {
   period: string;
   factType: string;          // PERF_REAL / PERF_EXPECT
   deptId?: string;
+  employeeId?: string;        // 员工 ID（合同维度页按员工过滤）
   bizType?: string;
   settled?: boolean;
   keyword?: string;          // 员工号/姓名/合同号/订单号/房源地址/角色/门店/店组

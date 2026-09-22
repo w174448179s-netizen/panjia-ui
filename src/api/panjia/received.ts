@@ -78,6 +78,10 @@ export interface ReceivedQuery extends PageQuery {
   keyword?: string;
   /** 门店/组别（含下级组别，后端按部门子树过滤） */
   deptId?: string;
+  /** 员工 ID */
+  employeeId?: string;
+  /** 业务类型 */
+  bizType?: string;
 }
 
 export type ReceivedPage = PageResult<ReceivedApply>;
