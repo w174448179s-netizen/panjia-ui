@@ -201,7 +201,7 @@ export interface PerformanceManageEmployee {
   employeeName?: string;     // 签约人
   deptPath?: string;         // 门店/组别全路径：大区-门店-组（组与门店同名时只到两级）
   amount: number;            // 金额合计（调整后，PERF_EXPECT=应收 / PERF_REAL=实收）
-  originalAmount: number;    // 原始金额合计（调整前，未调整时 = amount）
+  originalAmount: number | null;    // 原始金额合计（调整前，未调整时为 null）
   contractCount: number;     // 合同数
   detailCount: number;       // 明细条数
   unsettledCount: number;    // 未结算条数
@@ -237,7 +237,7 @@ export interface PerformanceManageContract {
   propertyAddress?: string;  // 房源地址
   businessDate?: string;     // 签约/认购日期
   amount: number;            // 合同金额合计（调整后，PERF_EXPECT=应收 / PERF_REAL=实收）
-  originalAmount: number;    // 原始金额合计（调整前，未调整时 = amount）
+  originalAmount: number | null;    // 原始金额合计（调整前，未调整时为 null）
   convertedAmount?: number;  // 折算后金额合计（amount × conversionFactor）
   originalConvertedAmount?: number; // 折算后原始金额合计（originalAmount × conversionFactor）
   employeeCount: number;     // 涉及签约人数
@@ -247,9 +247,11 @@ export interface PerformanceManageContract {
 }
 
 /** 合同明细懒加载查询参数（展开合同时按合同号查） */
-export type ManageContractDetailQuery = Omit<ManageQuery, 'pageNum' | 'pageSize'> & {
+export interface ManageContractDetailQuery {
+  period: string;
+  factType: string;
   contractNos: string;       // 合同号，逗号分隔（单合同展开传 1 个）
-};
+}
 
 /** 业绩管理合同维度分页结果（rows=当前页合同聚合行，明细懒加载） */
 export interface PerformanceManageContractPage {

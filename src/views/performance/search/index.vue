@@ -569,11 +569,11 @@ const formatMoney = (val?: number | null): string => {
  */
 const isExpectAdjusted = (
   row: { expectAmount?: number | string | null; expectOriginalAmount?: number | string | null } | null | undefined,
-): boolean => !!row && num(row.expectAmount) !== num(row.expectOriginalAmount);
+): boolean => !!row && row.expectOriginalAmount != null && num(row.expectAmount) !== num(row.expectOriginalAmount);
 /** 合同明细行：字段名不同（originalExpectAmount），判定口径与列表行一致 */
 const isRowAdjusted = (
   row: { expectAmount?: number | string | null; originalExpectAmount?: number | string | null } | null | undefined,
-): boolean => !!row && num(row.expectAmount) !== num(row.originalExpectAmount);
+): boolean => !!row && row.originalExpectAmount != null && num(row.expectAmount) !== num(row.originalExpectAmount);
 
 const formatDate = (val?: string | null): string => {
   if (!val) return '—';

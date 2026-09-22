@@ -42,10 +42,10 @@
           </template>
           <template v-else>
             新签业绩合计：
-            <b :class="{ 'amount-negative': totalOriginalAmount < 0 }">{{ formatAmount(totalOriginalAmount) }}</b>
+            <b :class="{ 'amount-negative': totalAmount < 0 }">{{ formatAmount(totalAmount) }}</b>
             <span class="summary-sep">|</span>
             折算后：
-            <b :class="{ 'amount-negative': totalOriginalConvertedAmount < 0 }">{{ formatAmount(totalOriginalConvertedAmount) }}</b>
+            <b :class="{ 'amount-negative': totalConvertedAmount < 0 }">{{ formatAmount(totalConvertedAmount) }}</b>
           </template>
         </span>
       </div>
@@ -84,7 +84,7 @@
               <span class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
               <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
             </template>
-            <span v-else class="amount-original">{{ formatAmount(scope.row.originalAmount) }}</span>
+            <span v-else class="amount-original">{{ formatAmount(scope.row.amount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="180">
@@ -94,7 +94,7 @@
               <span class="amount-arrow">→</span>
               <span class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
             </template>
-            <span v-else class="amount amount-ink">{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
+            <span v-else class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="状态" align="center" width="80">
@@ -237,7 +237,7 @@ const totalOriginalAmount = computed(() => activeList.value.reduce((sum, r) => s
 const totalConvertedAmount = computed(() => activeList.value.reduce((sum, r) => sum + num(r.convertedAmount), 0));
 const totalOriginalConvertedAmount = computed(() => activeList.value.reduce((sum, r) => sum + num(r.originalConvertedAmount), 0));
 // 存在已调整的行时，合计与明细列均按「原值 → 调整后」展示；未调整时不展示调整后值
-const hasAdjustRow = computed(() => activeList.value.some(r => num(r.amount) !== num(r.originalAmount)));
+const hasAdjustRow = computed(() => activeList.value.some(r => r.originalAmount != null && num(r.amount) !== num(r.originalAmount)));
 
 // ==================== 工具 ====================
 const num = (v: number | string | undefined | null): number => {
@@ -247,12 +247,11 @@ const num = (v: number | string | undefined | null): number => {
 };
 
 /**
- * 是否已调整：调整后金额与原值不等即为已调整。
- * 统一走 num() 做数值比较（避免后端 number/string 混用导致的误判），
- * 与汇总条 hasAdjustRow 同口径 —— 未调整的行不展示「调整后」值。
+ * 是否已调整：originalAmount 为 null 表示从未被调整，不算已调整；
+ * originalAmount 非空且与 amount 不等时才算已调整。
  */
 const isAdjusted = (row: { amount?: number | string | null; originalAmount?: number | string | null }): boolean =>
-  num(row.amount) !== num(row.originalAmount);
+  row.originalAmount != null && num(row.amount) !== num(row.originalAmount);
 
 const formatAmount = (val: number | string | undefined | null): string => {
   if (val === undefined || val === null || val === '') return '—';

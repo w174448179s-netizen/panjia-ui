@@ -121,7 +121,7 @@
               <span class="amount-arrow">→</span>
               <span class="amount amount-contract">{{ formatAmount(scope.row.amount) }}</span>
             </template>
-            <span v-else class="amount-original">{{ formatAmount(scope.row.originalAmount) }}</span>
+            <span v-else class="amount-original">{{ formatAmount(scope.row.amount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="170" fixed="left">
@@ -131,7 +131,7 @@
               <span class="amount-arrow">→</span>
               <span class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
             </template>
-            <span v-else class="amount amount-ink">{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
+            <span v-else class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="类型" align="center" width="100">
@@ -313,10 +313,10 @@
           </template>
           <template v-else>
             新签业绩合计：
-            <b :class="{ 'amount-negative': detailSummary.totalOriginalAmount < 0 }">{{ formatAmount(detailSummary.totalOriginalAmount) }}</b>
+            <b :class="{ 'amount-negative': detailSummary.totalAmount < 0 }">{{ formatAmount(detailSummary.totalAmount) }}</b>
             <span class="summary-sep">|</span>
             折算后：
-            <b :class="{ 'amount-negative': detailSummary.totalOriginalConvertedAmount < 0 }">{{ formatAmount(detailSummary.totalOriginalConvertedAmount) }}</b>
+            <b :class="{ 'amount-negative': detailSummary.totalConvertedAmount < 0 }">{{ formatAmount(detailSummary.totalConvertedAmount) }}</b>
           </template>
         </span>
       </div>
@@ -355,7 +355,7 @@
               <span class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
               <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
             </template>
-            <span v-else class="amount-original">{{ formatAmount(scope.row.originalAmount) }}</span>
+            <span v-else class="amount-original">{{ formatAmount(scope.row.amount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="180">
@@ -365,7 +365,7 @@
               <span class="amount-arrow">→</span>
               <span class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
             </template>
-            <span v-else class="amount amount-ink">{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
+            <span v-else class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="状态" align="center" width="80">
@@ -580,7 +580,7 @@ const detailSummary = computed(() => {
     totalOriginalAmount: list.reduce((sum, r) => sum + num(r.originalAmount), 0),
     totalConvertedAmount: list.reduce((sum, r) => sum + num(r.convertedAmount), 0),
     totalOriginalConvertedAmount: list.reduce((sum, r) => sum + num(r.originalConvertedAmount), 0),
-    hasAdjustRow: list.some(r => num(r.amount) !== num(r.originalAmount)),
+    hasAdjustRow: list.some(r => r.originalAmount != null && num(r.amount) !== num(r.originalAmount)),
   };
 });
 
@@ -768,7 +768,7 @@ const adjustDeltaClass = (v: number | undefined): string => {
  * 与汇总条的 hasAdjustRow 同口径 —— 未调整的行不展示「调整后」值，避免与「新签业绩」重复。
  */
 const isAdjusted = (row: { amount?: number | string | null; originalAmount?: number | string | null }): boolean =>
-  num(row.amount) !== num(row.originalAmount);
+  row.originalAmount != null && num(row.amount) !== num(row.originalAmount);
 
 const formatRatio = (val: number | string | undefined | null): string => {
   if (val === undefined || val === null || val === '') return '—';
