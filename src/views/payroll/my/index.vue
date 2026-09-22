@@ -50,11 +50,11 @@
           </div>
           <div class="stat-card">
             <div class="stat-label">扣款合计</div>
-            <div class="stat-value deduct-text">¥{{ fmt(vo.detail.deduct) }}</div>
+            <div class="stat-value deduct-text">¥{{ fmtNeg(vo.detail.deduct) }}</div>
           </div>
           <div class="stat-card">
             <div class="stat-label">个税</div>
-            <div class="stat-value deduct-text">¥{{ fmt(vo.detail.tax) }}</div>
+            <div class="stat-value deduct-text">¥{{ fmtNeg(vo.detail.tax) }}</div>
           </div>
           <div class="stat-card">
             <div class="stat-label">绩效等级 / 综合提点</div>
@@ -117,6 +117,11 @@ const roleLabel = (r: string) => ({ AGENT: '经纪人', MANAGER: '店长', DIREC
 const roleTagType = (r: string) => (r === 'MANAGER' ? 'warning' : r === 'DIRECTOR' ? 'danger' : 'info');
 const fmt = (n: number | null | undefined) =>
   n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** 扣款展示：统一加负号 */
+const fmtNeg = (n: number | null | undefined) => {
+  const v = Math.abs(Number(n) || 0);
+  return '-' + v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
 const currentBatch = computed(() => batches.value.find((b) => b.id === selectedBatchId.value) || null);
 

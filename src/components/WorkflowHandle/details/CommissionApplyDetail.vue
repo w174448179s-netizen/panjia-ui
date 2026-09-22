@@ -1,7 +1,7 @@
 <template>
   <div v-loading="loading" class="wf-detail-body">
     <el-alert v-if="loadError" type="error" :title="loadError" :closable="false" show-icon />
-    <template v-if="detail">
+    <template v-if="detail && !adjustOnly">
       <el-descriptions :column="3" border size="small" class="detail-desc">
         <el-descriptions-item label="审批单号">{{ detail.applyNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="期间">{{ detail.period || '—' }}</el-descriptions-item>
@@ -49,12 +49,7 @@
       <div class="detail-table-wrap">
         <div class="detail-table-title">
           <span>每人结佣明细（{{ items.length }} 条）</span>
-          <el-button
-            v-if="detail && detail.status === 'LOCKED'"
-            type="warning"
-            size="small"
-            @click="openAdjust('CONTRACT')"
-          >结佣调整（合同级）</el-button>
+          <el-button v-if="detail && detail.status === 'LOCKED' && !props.periodClosed" type="danger" size="small" @click="onCancel">作废</el-button>
         </div>
         <el-table :data="items" border max-height="420" class="detail-facts-table">
           <el-table-column label="序号" type="index" width="55" align="center" />
@@ -112,9 +107,9 @@
               <span v-else class="amount amount-ink">¥{{ formatAmount(scope.row.expectedConvertedAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="detail && detail.status === 'LOCKED'" label="操作" align="center" width="90" fixed="right">
+          <el-table-column v-if="detail && detail.status === 'LOCKED' && !props.periodClosed && checkPermi(['commission:adjust:add'])" label="操作" align="center" width="90" fixed="right">
             <template #default="scope">
-              <el-button link type="warning" @click="openAdjust('DETAIL', scope.row)">调整</el-button>
+              <el-button v-if="detail && detail.status === 'LOCKED' && !props.periodClosed && checkPermi(['commission:adjust:add'])" link type="warning" @click="openAdjust('DETAIL', scope.row)">调整</el-button>
             </template>
           </el-table-column>
           <template #empty>
@@ -124,7 +119,7 @@
       </div>
     </template>
     <!-- 未发起模式：无审批单，界面骨架与审批详情一致，明细为该合同新签业绩构成 -->
-    <template v-else-if="summary">
+    <template v-else-if="summary && !adjustOnly">
       <el-descriptions :column="3" border size="small" class="detail-desc">
         <el-descriptions-item label="期间">{{ summary.period || '—' }}</el-descriptions-item>
         <el-descriptions-item label="状态"><el-tag type="info" size="small">未发起</el-tag></el-descriptions-item>
@@ -220,7 +215,7 @@
     </template>
 
     <!-- 结佣调整弹窗（合同级 / 明细级共用） -->
-    <el-dialog v-model="adjustDialog.visible" :title="adjustDialog.scope === 'CONTRACT' ? '结佣调整（合同级）' : '结佣调整（明细级）'" width="520px" append-to-body destroy-on-close>
+    <el-dialog v-model="adjustDialog.visible" :title="adjustDialog.scope === 'CONTRACT' ? '结佣调整（合同级）' : '结佣调整（明细级）'" width="520px" append-to-body destroy-on-close @close="onAdjustDialogClose">
       <el-form ref="adjustFormRef" :model="adjustForm" :rules="adjustRules" label-width="110px">
         <el-form-item label="调整类型" prop="adjustType">
           <el-radio-group v-model="adjustForm.adjustType">
@@ -274,13 +269,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, onMounted } from 'vue';
-import { ElMessage } from 'element-plus';
+import { computed, reactive, ref, onMounted, watch } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import { commissionApi, type CommissionApplication, type CommissionItemDetail, type CommissionContractVO } from '@/api/panjia/commission';
 import { performanceApi, type PerformanceManageRow } from '@/api/panjia/performance';
 import { useEmployeeMap } from '../useEmployeeMap';
 import { useDeptScope } from '@/hooks/useDeptScope';
+import { checkPermi } from '@/utils/permission';
 
 const props = defineProps<{
   /** 已发起模式：结佣申请单 businessId（工作流查看/办理、结佣明细页已发起行） */
@@ -289,6 +285,12 @@ const props = defineProps<{
   summary?: CommissionContractVO | null;
   /** 未发起模式的查询号（合同号，一手房等无合同号时传订单号） */
   bizNo?: string;
+  /** 从列表「调整」入口进入：详情加载后自动弹出合同级调整弹窗（仅 LOCKED 生效） */
+  autoAdjust?: boolean;
+  /** 仅调整模式：不渲染详情内容，只展示调整弹窗（配合 autoAdjust 使用） */
+  adjustOnly?: boolean;
+  /** 该期间是否已封账（封账后隐藏作废/调整按钮） */
+  periodClosed?: boolean;
 }>();
 
 const loading = ref(false);
@@ -420,7 +422,7 @@ const adjustDeltaClass = (v: number | undefined) => {
   return d > 0 ? 'amount-positive' : d < 0 ? 'amount-negative' : '';
 };
 
-const emit = defineEmits(['adjusted']);
+const emit = defineEmits(['adjusted', 'cancelled', 'adjust-closed']);
 
 const openAdjust = (scope: 'CONTRACT' | 'DETAIL', row?: any) => {
   if (!detail.value) return;
@@ -461,6 +463,37 @@ const submitAdjust = async () => {
     adjustSubmitting.value = false;
   }
 };
+
+/** 调整弹窗关闭（含取消/点 X）：通知父组件清理状态 */
+const onAdjustDialogClose = () => {
+  emit('adjust-closed');
+};
+
+/** 作废已锁定申请单：冲销全部明细，不再计入工资，可重新发起 */
+const onCancel = async () => {
+  if (!detail.value) return;
+  try {
+    await ElMessageBox.confirm(
+      `确认作废已锁定申请单「${detail.value.applyNo}」？\n作废后该单全部结佣明细将冲销，不再计入工资；业绩事实释放，可重新发起并按发起日生成当月结佣记录。`,
+      '提示',
+      { type: 'warning' },
+    );
+  } catch {
+    return;
+  }
+  try {
+    await commissionApi.cancelApplication(detail.value.id);
+    ElMessage.success('已作废');
+    emit('cancelled');
+  } catch { /* 拦截器处理 */ }
+};
+
+/** 列表「调整」入口：详情加载完成且已锁定时，自动弹出合同级调整弹窗 */
+watch(() => detail.value, (d) => {
+  if (props.autoAdjust && d && d.status === 'LOCKED') {
+    openAdjust('CONTRACT');
+  }
+});
 
 onMounted(async () => {
   // 未发起模式：无审批单，按合同/订单号拉新签业绩构成（PERF_EXPECT），

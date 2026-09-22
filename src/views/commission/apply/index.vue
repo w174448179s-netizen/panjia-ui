@@ -144,18 +144,20 @@
         <el-table-column label="发起人" align="center" width="100">
           <template #default="{ row }">{{ row.applicantName || '—' }}</template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="260" fixed="right">
+        <el-table-column label="操作" align="center" width="300" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
               <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
+              <!-- 结佣调整：仅已锁定（LOCKED）且已发起、期间未封账的行可发起；权限仅限财务/总监 -->
+              <el-button v-if="row.status === 'LOCKED' && row.applicationId && !row.periodClosed && checkPermi(['commission:adjust:add'])" link type="warning" @click="onAdjust(row)">调整</el-button>
               <el-button v-if="row.status === 'SUBMITTED' && row.applicationId && checkPermi(['workflow:task:edit'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.applicationId)">审批</el-button>
               <el-button
                 v-if="canOriginate(row) || row.status === 'REJECTED'"
                 link type="warning"
                 :loading="submittingMap[contractOrOrderNo(row)]"
                 @click="onSubmit(row as CommissionContractVO)">{{ row.status === 'REJECTED' ? '重提' : '提交' }}</el-button>
-              <!-- 可作废：未发起（占位作废，本期不再发起）/ 审批中 / 已驳回；已锁定、已作废除外 -->
-              <el-button v-if="['NONE', 'DRAFT', 'SUBMITTED', 'REJECTED'].includes(row.status) && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
+              <!-- 可作废：未发起 / 审批中 / 已驳回 / 已锁定；已作废除外；封账期间不可作废 -->
+              <el-button v-if="['NONE', 'DRAFT', 'SUBMITTED', 'REJECTED', 'LOCKED'].includes(row.status) && canCancel(row) && !row.periodClosed" link type="info" @click="cancel(row)">作废</el-button>
             </div>
           </template>
         </el-table-column>
@@ -186,11 +188,24 @@
         :business-id="detailApplicationId ?? undefined"
         :summary="detailSummary"
         :biz-no="detailBizNo ?? undefined"
+        :period-closed="detailPeriodClosed"
+        @cancelled="onDetailCancelled"
       />
       <template #footer>
         <el-button @click="showDetail = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 结佣调整弹窗：直接打开合同级调整，不经过详情页 -->
+    <CommissionApplyDetail
+      v-if="adjustApplicationId"
+      :business-id="adjustApplicationId"
+      :auto-adjust="true"
+      :adjust-only="true"
+      :period-closed="adjustPeriodClosed"
+      @adjusted="onAdjusted"
+      @adjust-closed="adjustApplicationId = null"
+    />
 
     <!-- 批量发起弹窗：录入合同号 → 等待处理完成 → 展示结果 -->
     <el-dialog v-model="showBatchApply" title="批量发起结佣" width="560px" @close="resetBatchApply">
@@ -577,13 +592,16 @@ const doBatchApprove = async () => {
 // 作废：未发起行创建 CANCELLED 占位单（本期不再发起，仍可重新发起）；已发起行走单据作废
 const cancel = async (row: CommissionContractVO) => {
   const unapplied = !row.applicationId;
+  const isLocked = row.status === 'LOCKED';
   try {
     await ElMessageBox.confirm(
       unapplied
         ? `确认作废合同「${resolveBizNo(row.bizType, row.contractNo, row.orderNo)}」本期结佣？作废后本期不再发起，仍可重新发起。`
-        : `确认作废申请单「${row.applyNo}」？作废后不可恢复。`,
+        : isLocked
+          ? `确认作废已锁定申请单「${row.applyNo}」？\n作废后该单全部结佣明细将冲销，不再计入工资；业绩事实释放，可重新发起并按发起日生成当月结佣记录。`
+          : `确认作废申请单「${row.applyNo}」？作废后不可恢复。`,
       '提示',
-      { type: 'warning' },
+      { type: 'warning', dangerouslyUseHTMLString: false },
     );
   } catch {
     return;
@@ -606,6 +624,8 @@ const detailApplicationId = ref<number | string | null>(null);
 // 未发起行的合同摘要 + 查询号（合同号，一手房无合同号时为订单号）
 const detailSummary = ref<CommissionContractVO | null>(null);
 const detailBizNo = ref<string | null>(null);
+// 选中行的期间封账状态（封账后详情弹窗内隐藏作废/调整按钮）
+const detailPeriodClosed = ref(false);
 
 const viewDetail = (row: CommissionContractVO) => {
   detailSummary.value = row.applicationId ? null : row;
@@ -613,7 +633,32 @@ const viewDetail = (row: CommissionContractVO) => {
     ? null
     : (resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || null);
   detailApplicationId.value = row.applicationId ?? null;
+  detailPeriodClosed.value = !!row.periodClosed;
   showDetail.value = true;
+};
+
+/** 结佣调整入口（仅 LOCKED）：直接弹出合同级调整弹窗，不经过详情页 */
+// applicationId 可能为大整数字符串（后端 BigNumberSerializer 超范围序列化为 string），禁止 Number() 转换以免丢精度
+const adjustApplicationId = ref<string | number | null>(null);
+const adjustPeriodClosed = ref(false);
+const onAdjust = (row: CommissionContractVO) => {
+  if (row.status !== 'LOCKED' || !row.applicationId) {
+    ElMessage.warning('仅已锁定的结佣单可发起调整');
+    return;
+  }
+  adjustApplicationId.value = row.applicationId;
+  adjustPeriodClosed.value = !!row.periodClosed;
+};
+/** 调整提交后关闭调整弹窗并刷新列表 */
+const onAdjusted = () => {
+  adjustApplicationId.value = null;
+  getList();
+};
+
+/** 详情弹窗内作废后：关闭弹窗并刷新列表 */
+const onDetailCancelled = () => {
+  showDetail.value = false;
+  getList();
 };
 
 // 发起并提交一步到位：后端 POST /commission/apply 一次完成发起+提交，并自动处理驳回单重提（不新建单）

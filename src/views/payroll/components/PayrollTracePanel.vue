@@ -17,7 +17,7 @@
           <div v-if="!incomeItems.length" class="compose-empty">本期无收入项</div>
         </div>
         <div class="compose-block deduct">
-          <div class="compose-head">扣款项 <span>合计 ¥{{ fmt(row.deduct) }} · 个税 ¥{{ fmt(row.tax) }}</span></div>
+          <div class="compose-head">扣款项 <span>合计 ¥-{{ fmt(row.deduct) }} · 个税 ¥-{{ fmt(row.tax) }}</span></div>
           <div v-for="it in deductItems" :key="it.label" class="compose-item">
             <span class="compose-name">{{ it.label }}<i class="compose-src">{{ it.source }}</i></span>
             <span class="compose-val">-{{ fmt(it.value) }}</span>

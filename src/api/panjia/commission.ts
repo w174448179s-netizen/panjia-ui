@@ -171,6 +171,8 @@ export interface CommissionContractVO {
   employeeCount: number;
   detailCount: number;
   period: string;
+  /** 该期间是否已封账（封账后不可作废/调整） */
+  periodClosed?: boolean;
   deptId?: number;
   status: string;           // NONE / DRAFT / SUBMITTED / LOCKED / REJECTED / CANCELLED
   receivedStatus?: string;   // 实收审批状态 APPROVED / SUBMITTED / DRAFT / null
@@ -230,6 +232,4 @@ export const commissionApi = {
     panjiaRequest.get<CommissionAdjust>(`/commission/adjust/${id}`),
   createAdjust: (data: CommissionAdjustCreateDTO) =>
     panjiaRequest.post<number>('/commission/adjust', data),
-  cancelAdjust: (id: number) =>
-    panjiaRequest.post<void>(`/commission/adjust/${id}/cancel`),
 };

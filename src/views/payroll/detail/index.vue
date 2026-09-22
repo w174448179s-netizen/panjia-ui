@@ -44,7 +44,7 @@
         </div>
         <div class="stat-card">
           <div class="stat-label">扣款 + 个税</div>
-          <div class="stat-value deduct-text">¥{{ fmt(Number(currentBatch.deductTotal) + Number(currentBatch.taxTotal)) }}</div>
+          <div class="stat-value deduct-text">¥{{ fmtNeg(Number(currentBatch.deductTotal) + Number(currentBatch.taxTotal)) }}</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">参与人数</div>
@@ -179,19 +179,19 @@
           >
             <template #default="{ row }">
               <span v-if="isZero(row[c.prop])" class="zero-val">—</span>
-              <span v-else class="money deduct-text">{{ fmt(row[c.prop]) }}</span>
+              <span v-else class="money deduct-text">{{ fmtNeg(row[c.prop]) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="扣款合计" width="110" align="right">
             <template #default="{ row }">
               <span v-if="isZero(row.deduct)" class="zero-val">—</span>
-              <b v-else class="money deduct-text">{{ fmt(row.deduct) }}</b>
+              <b v-else class="money deduct-text">{{ fmtNeg(row.deduct) }}</b>
             </template>
           </el-table-column>
           <el-table-column label="个税" width="90" align="right">
             <template #default="{ row }">
               <span v-if="isZero(row.tax)" class="zero-val">—</span>
-              <span v-else class="money deduct-text">{{ fmt(row.tax) }}</span>
+              <span v-else class="money deduct-text">{{ fmtNeg(row.tax) }}</span>
             </template>
           </el-table-column>
         </el-table-column>
@@ -250,6 +250,17 @@ const statusTag = (s: string) => (STATUS_TAG[s] || 'info') as any;
 const roleLabel = (r: string) => ({ AGENT: '经纪人', MANAGER: '店长', DIRECTOR: '总监' }[r] || r || '—');
 const fmt = (n: number | null | undefined) =>
   n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** 扣款列展示：统一加负号（入库均为正数，负工资结转取绝对值后取负） */
+const fmtNeg = (n: number | null | undefined) => {
+  const v = Math.abs(Number(n) || 0);
+  return '-' + v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+/** 扣款字段集合（列表与合计行展示时统一加负号） */
+const DEDUCT_PROPS = new Set([
+  'socialFee', 'housingFund', 'attendanceFee', 'pointsFee',
+  'commercialInsurance', 'dormitoryFee', 'negativeCarryover', 'otherDeduct',
+  'deduct', 'tax',
+]);
 /** 提成点调整叠加值 → 百分比文案（-0.02 → -2%） */
 const ratePercent = (v: number | string | null | undefined) => `${Number((Number(v) * 100).toFixed(2))}%`;
 const isZero = (v: number | null | undefined) => !v || Number(v) === 0;
@@ -385,7 +396,7 @@ const summaryMethod = ({ columns, data }: any) => {
     const prop = col.property;
     if (prop && MONEY_PROPS.includes(prop)) {
       const total = data.reduce((s: number, r: any) => s + (Number(r[prop]) || 0), 0);
-      sums[idx] = fmt(total);
+      sums[idx] = DEDUCT_PROPS.has(prop) ? fmtNeg(total) : fmt(total);
     } else {
       sums[idx] = '';
     }

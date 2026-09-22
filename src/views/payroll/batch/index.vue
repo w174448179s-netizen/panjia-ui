@@ -107,28 +107,28 @@
               <template #default="{ row }">{{ num(row.bonus) }}</template>
             </el-table-column>
             <el-table-column label="考勤扣款" width="90" align="right">
-              <template #default="{ row }">{{ num(Math.abs(Number(row.attendanceFee) || 0)) }}</template>
+              <template #default="{ row }">{{ neg(row.attendanceFee) }}</template>
             </el-table-column>
             <el-table-column label="积分扣款" prop="pointsFee" width="90" align="right">
-              <template #default="{ row }">{{ num(row.pointsFee) }}</template>
+              <template #default="{ row }">{{ neg(row.pointsFee) }}</template>
             </el-table-column>
             <el-table-column label="应发工资" prop="gross" width="110" align="right">
               <template #default="{ row }"><b>{{ num(row.gross) }}</b></template>
             </el-table-column>
             <el-table-column label="社保扣款" prop="socialFee" width="90" align="right">
-              <template #default="{ row }">{{ num(row.socialFee) }}</template>
+              <template #default="{ row }">{{ neg(row.socialFee) }}</template>
             </el-table-column>
             <el-table-column label="公积金扣款" prop="housingFund" width="100" align="right">
-              <template #default="{ row }">{{ num(row.housingFund) }}</template>
+              <template #default="{ row }">{{ neg(row.housingFund) }}</template>
             </el-table-column>
             <el-table-column label="往月负工资" width="100" align="right">
-              <template #default="{ row }">{{ num(Math.abs(Number(row.negativeCarryover) || 0)) }}</template>
+              <template #default="{ row }">{{ neg(Math.abs(Number(row.negativeCarryover) || 0)) }}</template>
             </el-table-column>
             <el-table-column label="商业保险" prop="commercialInsurance" width="90" align="right">
-              <template #default="{ row }">{{ num(row.commercialInsurance) }}</template>
+              <template #default="{ row }">{{ neg(row.commercialInsurance) }}</template>
             </el-table-column>
             <el-table-column label="宿舍管理费" prop="dormitoryFee" width="100" align="right">
-              <template #default="{ row }">{{ num(row.dormitoryFee) }}</template>
+              <template #default="{ row }">{{ neg(row.dormitoryFee) }}</template>
             </el-table-column>
             <el-table-column label="工资合计" width="110" align="right">
               <template #default="{ row }">{{ num((Number(row.gross) || 0) - (Number(row.deduct) || 0)) }}</template>
@@ -137,7 +137,7 @@
               <template #default="{ row }"><b class="text-primary">{{ num(row.net) }}</b></template>
             </el-table-column>
             <el-table-column label="个税扣除" prop="tax" width="90" align="right">
-              <template #default="{ row }">{{ num(row.tax) }}</template>
+              <template #default="{ row }">{{ neg(row.tax) }}</template>
             </el-table-column>
             <el-table-column label="最终发放" prop="net" width="120" align="right" fixed="right">
               <template #default="{ row }"><b class="text-primary">{{ num(row.net) }}</b></template>
@@ -470,6 +470,7 @@ const summaryMethod = ({ columns, data }: any) => {
   // 工资表 sheet：与导出一致，仅对有 prop 的金额列求和
   // 底薪列无 prop（经纪人取 baseSalary，店长取 teamIncome + guaranteeFill），单独处理
   const moneyProps = ['commissionIncome', 'mentorBonus', 'bonus', 'pointsFee', 'gross', 'socialFee', 'housingFund', 'commercialInsurance', 'dormitoryFee', 'net', 'tax'];
+  const deductProps = new Set(['pointsFee', 'socialFee', 'housingFund', 'commercialInsurance', 'dormitoryFee', 'tax']);
   columns.forEach((col: any, idx: number) => {
     if (idx === 0) {
       sums[idx] = '合计';
@@ -478,7 +479,7 @@ const summaryMethod = ({ columns, data }: any) => {
     const prop = col.property;
     if (prop && moneyProps.includes(prop)) {
       const total = data.reduce((s: number, r: any) => s + (Number(r[prop]) || 0), 0);
-      sums[idx] = fmt(total);
+      sums[idx] = deductProps.has(prop) ? neg(total) : fmt(total);
     } else if (col.label === '底薪') {
       const total = data.reduce((s: number, r: any) => s + baseSalaryOf(r), 0);
       sums[idx] = fmt(total);
@@ -493,6 +494,7 @@ const managerSummary = ({ columns, data }: any) => {
   const sums: string[] = [];
   // 店长 sheet 金额列（不含 gross：店长工资 = teamIncome + guaranteeFill，不含结佣提成和个人新签递延）
   const moneyProps = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'teamIncome', 'personalNewsignIncome', 'minSalary', 'guaranteeFill', 'otherDeduct'];
+  const deductProps = new Set(['deptEmployerSocialTotal', 'otherDeduct']);
   columns.forEach((col: any, idx: number) => {
     if (idx === 0) {
       sums[idx] = '合计';
@@ -505,7 +507,7 @@ const managerSummary = ({ columns, data }: any) => {
       sums[idx] = fmt(total);
     } else if (prop && moneyProps.includes(prop)) {
       const total = data.reduce((s: number, r: any) => s + (Number(r[prop]) || 0), 0);
-      sums[idx] = fmt(total);
+      sums[idx] = deductProps.has(prop) ? neg(total) : fmt(total);
     } else {
       sums[idx] = '';
     }
@@ -518,6 +520,7 @@ const directorSummary = ({ columns, data }: any) => {
   // 只汇总顶层汇总行（_isSummary），避免子行 double-count
   const topRows = data.filter((r: any) => r._isSummary);
   const moneyProps = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'storeIncome', 'baseSalary', 'fullAttendance', 'bonus', 'commissionPerformance', 'commissionIncome', 'mentorBonus', 'socialFee', 'housingFund', 'commercialInsurance', 'gross', 'tax', 'net'];
+  const deductProps = new Set(['deptEmployerSocialTotal', 'socialFee', 'housingFund', 'commercialInsurance', 'tax']);
   columns.forEach((col: any, idx: number) => {
     if (idx === 0) {
       sums[idx] = '合计';
@@ -526,7 +529,7 @@ const directorSummary = ({ columns, data }: any) => {
     const prop = col.property;
     if (prop && moneyProps.includes(prop)) {
       const total = topRows.reduce((s: number, r: any) => s + (Number(r[prop]) || 0), 0);
-      sums[idx] = fmt(total);
+      sums[idx] = deductProps.has(prop) ? neg(total) : fmt(total);
     } else {
       sums[idx] = '';
     }
