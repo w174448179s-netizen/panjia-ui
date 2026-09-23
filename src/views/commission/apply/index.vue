@@ -111,14 +111,25 @@
             </el-button>
           </template>
         </el-table-column>
-        <el-table-column label="结佣业绩" align="right" width="120" fixed="left">
+        <!-- 结佣业绩：结佣调整生效时展示「原值 → 调整后值」，未调整只展示一个值 -->
+        <el-table-column label="结佣业绩" align="right" width="200" fixed="left">
           <template #default="{ row }">
-            <span class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
+            <template v-if="isReceivedAdjusted(row)">
+              <span class="amount-strike">¥{{ formatAmount(row.originalAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
+            </template>
+            <span v-else class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="折算后" align="right" width="120">
+        <el-table-column label="折算后" align="right" width="190">
           <template #default="{ row }">
-            <span class="amount amount-ink">¥{{ formatAmount(row.convertedAmount) }}</span>
+            <template v-if="isReceivedAdjusted(row)">
+              <span class="amount-strike">¥{{ formatAmount(row.originalReceivedConvertedAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount amount-ink">¥{{ formatAmount(row.convertedAmount) }}</span>
+            </template>
+            <span v-else class="amount amount-ink">¥{{ formatAmount(row.convertedAmount) }}</span>
           </template>
         </el-table-column>
         <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值（同实收明细） -->
@@ -451,6 +462,14 @@ const formatAmount = (n: number | string | null | undefined) =>
 const isAdjusted = (
   row: { expectedAdjusted?: boolean | null; originalExpectedAmount?: number | string | null } | null | undefined,
 ): boolean => !!row?.expectedAdjusted && row.originalExpectedAmount != null;
+
+/**
+ * 结佣业绩（PERF_REAL）是否按「原值 → 调整后值」展示：需后端 receivedAdjusted 标记与
+ * 调整前合计同时成立（结佣调整 AMOUNT 生效；部门划转金额不变不展示）。
+ */
+const isReceivedAdjusted = (
+  row: { receivedAdjusted?: boolean | null; originalAmount?: number | string | null } | null | undefined,
+): boolean => !!row?.receivedAdjusted && row.originalAmount != null;
 
 // 合同号/订单号合并展示：一手房、房产金融、家装荐客以订单号为准，其它以合同号为准（空则回退）
 const contractOrOrderNo = (row: CommissionContractVO): string =>

@@ -123,14 +123,20 @@ export interface CommissionItemDetail {
   expectedAdjusted?: boolean;
   /** 调整前新签业绩（同 sourceKey 最早一条 REVERSED 的 PERF_EXPECT；无调整时 = expectedAmount） */
   originalExpectedAmount?: number;
-  /** 结佣业绩 */
+  /** 结佣业绩（结佣调整后为新事实金额） */
   amount: number;
+  /** 结佣原值（调整前，同 sourceKey 最早一条 PERF_REAL；未调整时 = amount） */
+  originalAmount?: number;
+  /** 该行结佣业绩已被调整（同 sourceKey 存在 REVERSED 的 PERF_REAL 事实） */
+  receivedAdjusted?: boolean;
   /** 新签业绩折算后金额（expectedAmount × 当前生效折算因子） */
   expectedConvertedAmount?: number;
   /** 调整前新签业绩折算后金额（originalExpectedAmount × 当前生效折算因子） */
   originalConvertedAmount?: number;
   /** 结佣业绩折算后金额（amount × 当前生效折算因子） */
   convertedAmount?: number;
+  /** 调整前结佣业绩折算后金额（originalAmount × 当前生效折算因子） */
+  originalReceivedConvertedAmount?: number;
   feeItem?: string;
   status: string;        // DRAFT / PENDING / APPROVED / REVERSED
 }
@@ -162,8 +168,14 @@ export interface CommissionContractVO {
   propertyAddress?: string;
   businessDate?: string;
   amount: number;
+  /** 调整前结佣合计（事实链最早 PERF_REAL 金额合计；仅 receivedAdjusted=true 时有值） */
+  originalAmount?: number;
+  /** 结佣业绩已被调整（结佣调整 AMOUNT 生效；划转金额不变不置标记） */
+  receivedAdjusted?: boolean;
   /** 结佣业绩折算后金额（amount × 当前生效折算因子） */
   convertedAmount?: number;
+  /** 调整前结佣折算后金额（originalAmount × 当前生效折算因子） */
+  originalReceivedConvertedAmount?: number;
   expectedAmount?: number;   // 应收合计
   /** 新签业绩折算后金额（expectedAmount × 当前生效折算因子） */
   expectedConvertedAmount?: number;

@@ -24,6 +24,12 @@ export interface ReceivedApply {
   originalExpectedConvertedAmount?: number;
   /** 实收业绩折算后金额（receivedAmount × 当前生效折算因子） */
   receivedConvertedAmount?: number;
+  /** 实收（结佣调整）已被调整：当前 ACTIVE PERF_REAL 合计 ≠ 事实链最早值 */
+  receivedAdjusted?: boolean;
+  /** 调整前实收合计（事实链最早 PERF_REAL 金额合计；仅 receivedAdjusted=true 时有值） */
+  originalReceivedAmount?: number;
+  /** 调整前实收折算后金额（originalReceivedAmount × 同一折算因子） */
+  originalReceivedConvertedAmount?: number;
   itemCount: number;
   /** 业务类型（建单时快照落库，列表直接读列；「类型」筛选已下推 SQL） */
   bizType?: string;
@@ -60,14 +66,20 @@ export interface ReceivedFact {
   originalExpectedAmount?: number;
   /** 该行应收已被调整（同 sourceKey 存在 REVERSED 的 PERF_EXPECT 事实） */
   expectedAdjusted?: boolean;
-  /** 实收业绩（PERF_REAL 事实金额） */
+  /** 实收业绩（PERF_REAL 事实金额，已含结佣调整） */
   amount: number;
+  /** 实收原值（调整前；未调整时 = amount） */
+  originalAmount?: number;
+  /** 该行实收已被调整（同 sourceKey 存在 REVERSED 的 PERF_REAL 事实） */
+  receivedAdjusted?: boolean;
   /** 新签业绩折算后金额（expectedAmount × 当前生效折算因子） */
   expectedConvertedAmount?: number;
   /** 新签业绩原值折算后金额（originalExpectedAmount × 同一折算因子） */
   originalConvertedAmount?: number;
   /** 实收业绩折算后金额（amount × 当前生效折算因子） */
   convertedAmount?: number;
+  /** 实收原值折算后金额（originalAmount × 同一折算因子） */
+  originalReceivedConvertedAmount?: number;
 }
 
 export interface ReceivedQuery extends PageQuery {

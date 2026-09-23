@@ -14,9 +14,22 @@
         <el-descriptions-item label="发起人">{{ applicantName(detail.applicantName, detail.applicantId) }}</el-descriptions-item>
         <el-descriptions-item label="审批人">{{ detail.approverName || '—' }}</el-descriptions-item>
         <el-descriptions-item label="审批时间">{{ formatDateTime(detail.approveTime) }}</el-descriptions-item>
+        <!-- 结佣合计：结佣调整 AMOUNT 生效时展示「原值 → 调整后值」，折算后同形式（口径同每人明细） -->
         <el-descriptions-item label="结佣合计">
-          <span class="amount amount-red">¥{{ formatAmount(detail.totalAmount) }}</span>
-          <span class="amount amount-gray" style="margin-left: 8px">折算后 ¥{{ formatAmount(totalConvertedAmount) }}</span>
+          <template v-if="detailReceivedAdjusted">
+            <span class="amount-strike">¥{{ formatAmount(totalOriginalReceivedAmount) }}</span>
+            <span class="amount-arrow">→</span>
+            <span class="amount amount-red">¥{{ formatAmount(detail.totalAmount) }}</span>
+          </template>
+          <span v-else class="amount amount-red">¥{{ formatAmount(detail.totalAmount) }}</span>
+          <span class="converted-inline">
+            折算后
+            <template v-if="detailReceivedAdjusted">
+              <span class="amount-strike">¥{{ formatAmount(totalOriginalReceivedConvertedAmount) }}</span>
+              <span class="amount-arrow">→</span>
+            </template>
+            <span class="amount amount-ink">¥{{ formatAmount(totalConvertedAmount) }}</span>
+          </span>
         </el-descriptions-item>
         <!-- 新签合计（应收业绩）：有调整时展示「原值 → 调整后值」，折算后同形式 -->
         <el-descriptions-item label="新签合计">
@@ -76,14 +89,25 @@
           <el-table-column label="角色占比" align="center" width="90">
             <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
           </el-table-column>
-          <el-table-column label="结佣业绩" align="right" width="120">
+          <!-- 结佣业绩：结佣调整生效时展示「原值 → 调整后值」，未调整只展示一个值 -->
+          <el-table-column label="结佣业绩" align="right" width="200">
             <template #default="scope">
-              <span class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
+              <template v-if="isReceivedAdjusted(scope.row)">
+                <span class="amount-strike">¥{{ formatAmount(scope.row.originalAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
+              </template>
+              <span v-else class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="折算后" align="right" width="120">
+          <el-table-column label="折算后" align="right" width="190">
             <template #default="scope">
-              <span class="amount amount-ink">¥{{ formatAmount(scope.row.convertedAmount) }}</span>
+              <template v-if="isReceivedAdjusted(scope.row)">
+                <span class="amount-strike">¥{{ formatAmount(scope.row.originalReceivedConvertedAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount amount-ink">¥{{ formatAmount(scope.row.convertedAmount) }}</span>
+              </template>
+              <span v-else class="amount amount-ink">¥{{ formatAmount(scope.row.convertedAmount) }}</span>
             </template>
           </el-table-column>
           <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值 -->
@@ -310,6 +334,18 @@ const totalOriginalExpectedConvertedAmount = computed(() =>
   items.value.reduce((s, it) => s + num(it.originalConvertedAmount), 0));
 
 /**
+ * 结佣合计「原值 → 调整后值」：头部原值不在申请单快照中（结佣调整直接 supersede 事实），
+ * 与现有 totalConvertedAmount 一样按每人明细同源求和；任一行被结佣金额调整即展示。
+ * 未调整行回退取当前金额，保证合计与表格逐行一致。
+ */
+const detailReceivedAdjusted = computed(() =>
+  items.value.some((it) => !!it.receivedAdjusted && it.originalAmount != null));
+const totalOriginalReceivedAmount = computed(() =>
+  items.value.reduce((s, it) => s + num(it.receivedAdjusted ? it.originalAmount : it.amount), 0));
+const totalOriginalReceivedConvertedAmount = computed(() =>
+  items.value.reduce((s, it) => s + num(it.receivedAdjusted ? it.originalReceivedConvertedAmount : it.convertedAmount), 0));
+
+/**
  * 是否按「原值 → 调整后值」展示：需后端 expectedAdjusted 标记与调整前值同时成立。
  * 两者缺一（如差额行无关联业绩事实）就退回单值展示，避免出现「0.00 → 12000.00」这类误导。
  * 详情头部（CommissionApplication）与每人明细行（CommissionItemDetail）共用同一判定。
@@ -318,6 +354,14 @@ const isAdjusted = (
   row: { expectedAdjusted?: boolean | null; originalExpectedAmount?: number | string | null } | null | undefined,
 ): boolean => !!row?.expectedAdjusted && row.originalExpectedAmount != null;
 const detailAdjusted = computed(() => isAdjusted(detail.value));
+
+/**
+ * 结佣业绩（PERF_REAL）是否按「原值 → 调整后值」展示：需后端 receivedAdjusted 标记与
+ * 调整前值同时成立（结佣调整 AMOUNT 生效；部门划转金额不变不置标记）。
+ */
+const isReceivedAdjusted = (
+  row: { receivedAdjusted?: boolean | null; originalAmount?: number | string | null } | null | undefined,
+): boolean => !!row?.receivedAdjusted && row.originalAmount != null;
 
 const num = (v: number | string | null | undefined): number => {
   if (v === undefined || v === null || v === '') return 0;
