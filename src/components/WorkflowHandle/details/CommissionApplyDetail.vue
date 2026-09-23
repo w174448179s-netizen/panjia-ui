@@ -59,6 +59,19 @@
         <el-descriptions-item label="房源地址" :span="2">{{ detail.propertyAddress || '—' }}</el-descriptions-item>
       </el-descriptions>
 
+      <!-- 实收对齐手工确认：总监通过后有差异进入财务节点时，系统不再自动对齐，由财务审批人人工触发 -->
+      <el-alert v-if="canManualAlign" type="warning" :closable="false" show-icon class="align-alert">
+        <template #title>
+          <span>
+            实收与应收存在差异：实收 ¥{{ formatAmount(detail.totalAmount) }}
+            {{ receivedDiff < 0 ? '＜' : '＞' }} 应收 ¥{{ formatAmount(detail.expectedAmount) }}
+            （差 ¥{{ formatAmount(Math.abs(receivedDiff)) }}）。
+            可执行「实收对齐应收」将实收业绩调整为应收口径（每人明细同步更新，不可撤销），或按实收原样审批。
+          </span>
+          <el-button type="warning" size="small" class="align-btn" @click="onAlign">实收对齐应收</el-button>
+        </template>
+      </el-alert>
+
       <div class="detail-table-wrap">
         <div class="detail-table-title">
           <span>每人结佣明细（{{ items.length }} 条）</span>
@@ -532,12 +545,68 @@ const onCancel = async () => {
   } catch { /* 拦截器处理 */ }
 };
 
+// ==================== 实收对齐手工确认（§3.5 改造） ====================
+
+/** 实收与应收差异（四舍五入到分）；正=实收多、负=实收少 */
+const receivedDiff = computed(() => {
+  if (!detail.value) return 0;
+  return Math.round((num(detail.value.totalAmount) - num(detail.value.expectedAmount)) * 100) / 100;
+});
+
+/**
+ * 手工对齐入口可见性：审批中 + 未对齐 + 差异超过 1 元容忍阈值（与列表「有差异」、
+ * 后端 isWithinTolerance 默认口径一致）+ 有审批权限（对齐是财务审批动作）。
+ */
+const canManualAlign = computed(() =>
+  !!detail.value
+  && detail.value.status === 'SUBMITTED'
+  && !detail.value.aligned
+  && Math.abs(receivedDiff.value) > 1
+  && checkPermi(['commission:apply:approve']));
+
+/** 手工对齐确认：实收事实调整为应收口径后重载详情，审批人可继续通过/驳回 */
+const onAlign = async () => {
+  if (!detail.value) return;
+  try {
+    await ElMessageBox.confirm(
+      `确认将实收对齐应收？实收 ¥${formatAmount(detail.value.totalAmount)} → 应收 ¥${formatAmount(detail.value.expectedAmount)}；`
+      + '实收业绩事实（合同级+每人明细）将调整为应收口径且不可撤销，调整后可继续审批或驳回。',
+      '实收对齐应收',
+      { type: 'warning', confirmButtonText: '确认对齐', cancelButtonText: '取 消' },
+    );
+  } catch {
+    return;
+  }
+  try {
+    await commissionApi.alignApplication(detail.value.id);
+    ElMessage.success('对齐完成，实收已调整为应收口径');
+    await loadDetail();
+  } catch { /* 拦截器处理 */ }
+};
+
 /** 列表「调整」入口：详情加载完成且已锁定时，自动弹出合同级调整弹窗 */
 watch(() => detail.value, (d) => {
   if (props.autoAdjust && d && d.status === 'LOCKED') {
     openAdjust('CONTRACT');
   }
 });
+
+/** 已发起模式：加载申请单详情 + 每人明细（对齐后重载复用） */
+const loadDetail = async () => {
+  if (props.businessId == null || props.businessId === '') return;
+  loading.value = true;
+  try {
+    const [res] = await Promise.all([commissionApi.getApplication(props.businessId), loadEmployees()]);
+    const data = (res as any).data ?? {};
+    detail.value = data.application ?? null;
+    items.value = data.items ?? [];
+    if (!detail.value) loadError.value = '未找到该结佣审批单';
+  } catch {
+    loadError.value = '加载结佣审批单详情失败';
+  } finally {
+    loading.value = false;
+  }
+};
 
 onMounted(async () => {
   // 未发起模式：无审批单，按合同/订单号拉新签业绩构成（PERF_EXPECT），
@@ -574,18 +643,7 @@ onMounted(async () => {
     }
     return;
   }
-  loading.value = true;
-  try {
-    const [res] = await Promise.all([commissionApi.getApplication(props.businessId), loadEmployees()]);
-    const data = (res as any).data ?? {};
-    detail.value = data.application ?? null;
-    items.value = data.items ?? [];
-    if (!detail.value) loadError.value = '未找到该结佣审批单';
-  } catch {
-    loadError.value = '加载结佣审批单详情失败';
-  } finally {
-    loading.value = false;
-  }
+  await loadDetail();
 });
 </script>
 
@@ -655,5 +713,21 @@ onMounted(async () => {
   margin-left: 10px;
   font-size: 13px;
   color: #909399;
+}
+/* 实收对齐手工确认提示条：差异说明 + 对齐按钮（仅财务审批节点有差异时展示） */
+.align-alert {
+  margin-top: 12px;
+
+  :deep(.el-alert__title) {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    line-height: 1.6;
+    white-space: normal;
+  }
+}
+.align-btn {
+  flex: 0 0 auto;
 }
 </style>

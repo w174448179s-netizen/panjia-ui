@@ -225,6 +225,9 @@ export const commissionApi = {
     panjiaRequest.post<number>('/commission/apply', data),
   cancelApplication: (id: number | string) =>
     panjiaRequest.post<void>(`/commission/apply/${id}/cancel`),
+  /** 手工对齐确认：财务审批人核对差异后人工执行「实收对齐应收」（系统不再自动对齐） */
+  alignApplication: (id: number | string) =>
+    panjiaRequest.post<void>(`/commission/apply/${id}/align`),
   /** 作废未发起的合同结佣（本期不再发起，创建 CANCELLED 占位单，后续仍可重新发起） */
   cancelUnapplied: (period: string, contractNo: string) =>
     panjiaRequest.post<void>('/commission/apply/cancel-unapplied', null, {
