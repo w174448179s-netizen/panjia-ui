@@ -290,4 +290,14 @@ export const orgCommissionTraceApi = {
   allNewSign(period: string) {
     return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/all-newsign', { period });
   },
+  /** 历史工资 Excel 导入（仅超级管理员） */
+  historyImport(period: string, file: File) {
+    const formData = new FormData();
+    formData.append('period', period);
+    formData.append('file', file);
+    return panjiaRequest.post<string>('/payroll/batch/history-import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    });
+  },
 };
