@@ -231,8 +231,8 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Lock, Download, InfoFilled, RefreshLeft } from '@element-plus/icons-vue';
-import { payrollApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
-import { exportMultiSheet } from '../components/payroll-export';
+import { payrollApi, orgCommissionTraceApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
+import { exportMultiSheet, type ExportExtraData } from '../components/payroll-export';
 import PayrollTracePanel from '../components/PayrollTracePanel.vue';
 
 /* ───────────── 基础状态 ───────────── */
@@ -419,12 +419,23 @@ const summaryMethod = ({ columns, data }: any) => {
   return sums;
 };
 
-/* ───────────── 导出（xlsx 三 sheet：经纪人/店长/总监各一 sheet，列对齐天街工资表） ───────────── */
-const exportExcel = () => {
+/* ───────────── 导出（xlsx 七 sheet，与算薪批次弹窗导出同口径） ───────────── */
+const exportExcel = async () => {
   if (!viewDetails.value.length) return;
-  // ALL 视图导出全量三 sheet；按角色筛选时只导对应 sheet
-  const only = viewRole.value === 'ALL' ? undefined : (viewRole.value as 'AGENT' | 'MANAGER' | 'DIRECTOR');
-  exportMultiSheet(viewDetails.value, currentBatch.value?.period || '', only);
+  const period = currentBatch.value?.period || '';
+  // 并行拉业绩明细（新签+结佣），工资/人事/绩效从已有 details 取
+  let extra: ExportExtraData = {};
+  if (period) {
+    try {
+      const [commissionRes, newSignRes] = await Promise.all([
+        orgCommissionTraceApi.allCommission(period).catch(() => ({ data: [] })),
+        orgCommissionTraceApi.allNewSign(period).catch(() => ({ data: [] })),
+      ]);
+      extra.commissionItems = (commissionRes as any).data ?? [];
+      extra.newSignItems = (newSignRes as any).data ?? [];
+    } catch { /* 拉取失败只导出工资 sheet */ }
+  }
+  exportMultiSheet(viewDetails.value, period, undefined, extra);
   ElMessage.success('导出成功');
 };
 const num = (v: any) => (v == null || v === '' ? '' : Number(v).toFixed(2));

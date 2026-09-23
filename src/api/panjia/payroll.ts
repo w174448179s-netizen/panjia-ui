@@ -282,4 +282,12 @@ export const orgCommissionTraceApi = {
   teamNewSign(period: string, deptId: number | string) {
     return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/team-newsign', { period, deptId });
   },
+  /** 导出用：指定期间全部结佣明细 */
+  allCommission(period: string) {
+    return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/all-commission', { period });
+  },
+  /** 导出用：指定期间全部新签明细 */
+  allNewSign(period: string) {
+    return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/all-newsign', { period });
+  },
 };

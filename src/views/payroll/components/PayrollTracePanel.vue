@@ -75,10 +75,17 @@
       </el-table-column>
       <el-table-column label="合同号/订单号" min-width="180" show-overflow-tooltip>
         <template #default="{ row: it }">
-          <div class="contract-cell">
-            <span class="contract-no">{{ it.contractNo || '—' }}</span>
-            <span v-if="it.orderNo" class="order-no">/{{ it.orderNo }}</span>
-          </div>
+          <span class="contract-no">{{ resolveBizNo(it.bizType, it.contractNo, it.orderNo) || '—' }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="结佣业绩" align="right" width="130">
+        <template #default="{ row: it }">
+          <span :class="{ 'deduct-text': Number(it.amount) < 0 }">¥{{ fmt(it.amount) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="折算后" align="right" width="130">
+        <template #default="{ row: it }">
+          <span :class="{ 'deduct-text': Number(it.convertedAmount) < 0 }">¥{{ fmt(it.convertedAmount) }}</span>
         </template>
       </el-table-column>
       <el-table-column label="类型" prop="bizType" width="100" show-overflow-tooltip />
@@ -90,16 +97,6 @@
       </el-table-column>
       <el-table-column label="角色占比" width="90" align="center">
         <template #default="{ row: it }">{{ it.shareRatio != null ? (Number(it.shareRatio) * 100).toFixed(2) + '%' : '—' }}</template>
-      </el-table-column>
-      <el-table-column label="结佣业绩" align="right" width="130">
-        <template #default="{ row: it }">
-          <span :class="{ 'deduct-text': Number(it.amount) < 0 }">¥{{ fmt(it.amount) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="折算后" align="right" width="130">
-        <template #default="{ row: it }">
-          <span :class="{ 'deduct-text': Number(it.convertedAmount) < 0 }">¥{{ fmt(it.convertedAmount) }}</span>
-        </template>
       </el-table-column>
       <el-table-column label="结算日期" width="110" align="center">
         <template #default="{ row: it }">{{ it.approvedMonth || '—' }}</template>
@@ -115,11 +112,14 @@
         </el-table-column>
         <el-table-column label="合同号/订单号" min-width="180" show-overflow-tooltip>
           <template #default="{ row: it }">
-            <div class="contract-cell">
-              <span class="contract-no">{{ it.contractNo || '—' }}</span>
-              <span v-if="it.orderNo" class="order-no">/{{ it.orderNo }}</span>
-            </div>
+            <span class="contract-no">{{ resolveBizNo(it.bizType, it.contractNo, it.orderNo) || '—' }}</span>
           </template>
+        </el-table-column>
+        <el-table-column label="新签业绩" align="right" width="130">
+          <template #default="{ row: it }">¥{{ fmt(it.amount) }}</template>
+        </el-table-column>
+        <el-table-column label="折算后" align="right" width="130">
+          <template #default="{ row: it }">¥{{ fmt(it.convertedAmount) }}</template>
         </el-table-column>
         <el-table-column label="类型" prop="bizType" width="100" show-overflow-tooltip />
         <el-table-column label="房源地址" min-width="200" show-overflow-tooltip>
@@ -133,12 +133,6 @@
         </el-table-column>
         <el-table-column label="角色占比" width="90" align="center">
           <template #default="{ row: it }">{{ it.shareRatio != null ? (Number(it.shareRatio) * 100).toFixed(2) + '%' : '—' }}</template>
-        </el-table-column>
-        <el-table-column label="新签业绩" align="right" width="130">
-          <template #default="{ row: it }">¥{{ fmt(it.amount) }}</template>
-        </el-table-column>
-        <el-table-column label="折算后" align="right" width="130">
-          <template #default="{ row: it }">¥{{ fmt(it.convertedAmount) }}</template>
         </el-table-column>
       </el-table>
     </template>
@@ -155,6 +149,7 @@ import { ElMessage } from 'element-plus';
 import { Tickets } from '@element-plus/icons-vue';
 import { mySalaryApi, orgCommissionTraceApi, type CommissionTraceItem, type PayrollDetail } from '@/api/panjia/payroll';
 import { useDict } from '@/utils/dict';
+import { resolveBizNo } from '@/utils/panjiaBiz';
 
 const props = defineProps<{
   row: PayrollDetail;

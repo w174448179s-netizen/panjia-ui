@@ -1,13 +1,18 @@
 import * as XLSX from 'xlsx';
-import type { PayrollDetail } from '@/api/panjia/payroll';
+import type { PayrollDetail, CommissionTraceItem } from '@/api/panjia/payroll';
+import { resolveBizNo } from '@/utils/panjiaBiz';
 
 /**
  * 工资明细多 sheet 导出共享模块。
  * <p>
- * 对齐天街工资表 2026.08.xlsx 三个 sheet 列结构：
- * - 工资表 sheet「工资表」28 列（含员工编号，含经纪人 + 店长，比 Excel 多一列）
- * - 店长 sheet「店长工资」15 列（底薪计算与补齐依据）
+ * 对齐天街工资表 2026.08.xlsx 七个 sheet 列结构：
+ * - 工资表 sheet「工资表」28 列（含经纪人 + 店长）
+ * - 新签业绩 sheet「新签业绩」12 列（期间全部新签事实明细）
+ * - 结佣业绩 sheet「结佣业绩」12 列（期间全部结佣事实明细）
+ * - 店长 sheet「店长工资」15 列
  * - 总监 sheet「总监工资」19 列（一人多行，按门店分行）
+ * - 人事数据 sheet「人事数据」18 列（考勤/社保/公积金/积分等）
+ * - 绩效和扣款 sheet「绩效和扣款」19 列（积分等级 + 提成扣点）
  * <p>
  * batch 弹窗和 detail 页面共用此模块，确保导出与显示同口径。
  */
@@ -151,7 +156,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         num(r.minSalary),
         num(r.guaranteeFill),
         neg(r.otherDeduct),
-        num(r.gross),
+        baseSalaryOf(r),                   // 店长工资 = 补足8000部分 + 团队提成金额
       ];
     },
   },
@@ -230,21 +235,119 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
   },
 };
 
+// ════════════════════════════════════════════════════════════════════
+//  业绩明细 sheet（新签/结佣）：与天街 Excel 同列结构
+// ════════════════════════════════════════════════════════════════════
+
+/** 业绩明细行 → Excel 行（新签/结佣共用，12 列，对齐天街工资表） */
+function perfFactRow(it: CommissionTraceItem): (string | number)[] {
+  return [
+    it.signDate || it.businessDate || '',
+    resolveBizNo(it.bizType, it.contractNo, it.orderNo) || '',
+    it.bizType || '',
+    it.propertyAddress || '',
+    it.employeeCode || '',
+    '',                               // 店组（无字段，留空）
+    '',                               // 门店（无字段，留空）
+    it.roleType || '',
+    it.shareRatio != null ? (Number(it.shareRatio) * 100).toFixed(2) + '%' : '',
+    num(it.convertedAmount ?? it.amount), // 85后金额
+    it.status === 'APPROVED' ? '是' : '',
+    it.approvedMonth || '',
+  ];
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  人事数据 sheet（18 列，对齐天街工资表）
+// ════════════════════════════════════════════════════════════════════
+
+const HR_HEADS = [
+  '门店名称', '姓名', '职级', '职位', '底薪', '出勤天数', '考勤扣款', '是否全勤',
+  '全勤', '考勤详情', '成都社保扣款', '公积金扣款', '宿舍管理费', '积分扣款',
+  '新人绩效', '入职未满半年扣除基地训+从业资格证费用', '新人带教', '其他扣款',
+];
+
+function hrRow(r: PayrollDetail): (string | number)[] {
+  return [
+    r.deptName || '',
+    r.employeeName || '',
+    r.levelCode || '',
+    roleLabel(r.employeeRole),
+    num(r.baseSalary),
+    '',                               // 出勤天数（无字段）
+    neg(r.attendanceFee),
+    '',                               // 是否全勤（无字段）
+    r.employeeRole === 'DIRECTOR' ? num(r.fullAttendance) : '',
+    '',                               // 考勤详情（无字段）
+    neg(r.socialFee),
+    neg(r.housingFund),
+    neg(r.dormitoryFee),
+    neg(r.pointsFee),
+    num(r.bonus),                     // 新人绩效/绩效
+    neg(r.negativeCarryover),         // 往月负工资
+    num(r.mentorBonus),               // 新人带教
+    neg(r.otherDeduct),
+  ];
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  绩效和扣款 sheet（19 列，对齐天街工资表）
+// ════════════════════════════════════════════════════════════════════
+
+const PERF_HEADS = [
+  '门店', '姓名', '动态考核', '积分考核', '其他扣款', '', '', '', '',
+  '姓名', '总积分', '出勤天数', '平均积分', '绩效等级', '绩效提成点',
+  '未买社保提成点', '未完成电话考核提成点', '7.1-12.31日何方方提成扣2%', '合计',
+];
+
+function perfDeductRow(r: PayrollDetail): (string | number)[] {
+  return [
+    r.deptName || '',
+    r.employeeName || '',
+    '',                               // 动态考核（无字段）
+    neg(r.pointsFee),                 // 积分考核
+    neg(r.otherDeduct),              // 其他扣款
+    '', '', '', '',                  // 间隔列
+    r.employeeName || '',
+    '',                               // 总积分（无字段）
+    '',                               // 出勤天数（无字段）
+    '',                               // 平均积分（无字段）
+    r.perfGrade || '',
+    r.perfDeduct != null ? ratePercent(r.perfDeduct) : '',
+    '',                               // 未买社保提成点（含在 totalDeduct 里无法拆分）
+    '',                               // 未完成电话考核
+    '',
+    r.totalDeduct != null ? ratePercent(r.totalDeduct) : '',
+  ];
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  导出主函数（七 sheet：工资表 + 新签业绩 + 结佣业绩 + 店长 + 总监 + 人事 + 绩效）
+// ════════════════════════════════════════════════════════════════════
+
+export interface ExportExtraData {
+  newSignItems?: CommissionTraceItem[];
+  commissionItems?: CommissionTraceItem[];
+}
+
 /**
  * 多 sheet xlsx 导出。
- * @param details 工资明细列表（按 employeeRole 自动分流到对应 sheet）
+ * @param details 工资明细列表（按 employeeRole 自动分流到对应工资 sheet）
  * @param period 归属月（YYYY-MM）
- * @param only 仅导出指定角色 sheet（不传则导出全部三 sheet）
+ * @param only 仅导出指定角色工资 sheet（不传则导出全部 sheet）
+ * @param extra 业绩明细数据（新签/结佣），不传则不导出业绩 sheet
  */
 export function exportMultiSheet(
   details: PayrollDetail[],
   period: string,
-  only?: PayrollRole
+  only?: PayrollRole,
+  extra?: ExportExtraData,
 ): void {
   const wb = XLSX.utils.book_new();
-  const roles: PayrollRole[] = only ? [only] : ['AGENT', 'MANAGER', 'DIRECTOR'];
   const monthLabel = period ? period.split('-')[1] : '';
+  const roles: PayrollRole[] = only ? [only] : ['AGENT', 'MANAGER', 'DIRECTOR'];
 
+  // 1) 工资 sheet（工资表/店长/总监）
   for (const role of roles) {
     const cfg = SHEET_CONFIGS[role];
     const sheetRoles = cfg.roles || [role];
@@ -256,6 +359,34 @@ export function exportMultiSheet(
     const heads = cfg.heads.map((h) => h.replace('{period}', monthLabel));
     const ws = XLSX.utils.aoa_to_sheet([heads, ...sheetRows]);
     XLSX.utils.book_append_sheet(wb, ws, cfg.name);
+  }
+
+  // 2) 业绩明细 sheet（仅在导出全部且 extra 有数据时输出）
+  if (!only && extra) {
+    if (extra.newSignItems?.length) {
+      const heads = ['签约/认购日期', '合同号', '类型', '房源地址', '签约人', '店组', '门店', '所属角色', '角色占比', '85后', '是否结算', '结算日期'];
+      const rows = extra.newSignItems.map(perfFactRow);
+      const ws = XLSX.utils.aoa_to_sheet([heads, ...rows]);
+      XLSX.utils.book_append_sheet(wb, ws, '新签业绩');
+    }
+    if (extra.commissionItems?.length) {
+      const heads = ['签约/认购日期', '合同号', '类型', '房源地址', '签约人', '店组', '门店', '所属角色', '角色占比', '85后', '是否结算', '结算日期'];
+      const rows = extra.commissionItems.map(perfFactRow);
+      const ws = XLSX.utils.aoa_to_sheet([heads, ...rows]);
+      XLSX.utils.book_append_sheet(wb, ws, '结佣业绩');
+    }
+    // 3) 人事数据 sheet
+    {
+      const rows = details.map(hrRow);
+      const ws = XLSX.utils.aoa_to_sheet([HR_HEADS, ...rows]);
+      XLSX.utils.book_append_sheet(wb, ws, '人事数据');
+    }
+    // 4) 绩效和扣款 sheet
+    {
+      const rows = details.map(perfDeductRow);
+      const ws = XLSX.utils.aoa_to_sheet([PERF_HEADS, ...rows]);
+      XLSX.utils.book_append_sheet(wb, ws, '绩效和扣款');
+    }
   }
 
   XLSX.writeFile(wb, `工资明细_${period}.xlsx`);

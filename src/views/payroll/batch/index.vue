@@ -48,7 +48,7 @@
       </el-table>
     </el-card>
 
-    <!-- 工资明细弹窗（三 sheet 页：工资表 28 列含经纪人+店长 / 店长工资 15 列 / 总监工资 19 列一人多行） -->
+    <!-- 工资明细弹窗（七 sheet 页：工资表 / 新签业绩 / 结佣业绩 / 店长工资 / 总监工资 / 人事数据 / 绩效和扣款） -->
     <el-dialog
       v-model="detailVisible"
       :title="`工资明细 — ${currentBatch?.period || ''}（${currentBatch ? statusLabel(currentBatch.status) : ''}）`"
@@ -59,12 +59,12 @@
     >
       <div v-if="currentBatch" class="detail-toolbar">
         <el-button :disabled="!details.length" @click="exportExcel">
-          <el-icon><Download /></el-icon>&nbsp;导出（三 sheet）
+          <el-icon><Download /></el-icon>&nbsp;导出（七 sheet）
         </el-button>
       </div>
       <el-tabs v-model="detailTab" class="detail-tabs">
         <!-- ══════════ 工资表 sheet（28 列，含经纪人 + 店长） ══════════ -->
-        <el-tab-pane label="工资表" name="AGENT">
+        <el-tab-pane label="工资表" name="AGENT" lazy>
           <el-table :data="salaryDetails" stripe border max-height="600" :summary-method="summaryMethod" show-summary>
             <el-table-column label="门店" prop="deptName" width="110" fixed="left" />
             <el-table-column label="员工编号" prop="employeeCode" width="90" fixed="left" />
@@ -146,7 +146,7 @@
         </el-tab-pane>
 
         <!-- ══════════ 店长工资 sheet（15 列，底薪计算与补齐依据，对齐天街工资表 店长工资 sheet） ══════════ -->
-        <el-tab-pane label="店长" name="MANAGER">
+        <el-tab-pane label="店长" name="MANAGER" lazy>
           <el-table :data="managerDetails" stripe border max-height="600" :summary-method="managerSummary" show-summary>
             <el-table-column label="门店" prop="deptName" width="110" fixed="left" />
             <el-table-column label="姓名" prop="employeeName" width="80" fixed="left" />
@@ -191,7 +191,7 @@
         </el-tab-pane>
 
         <!-- ══════════ 总监工资 sheet（19 列，树形可展开：汇总行+门店明细子行，对齐天街工资表 总监工资 sheet） ══════════ -->
-        <el-tab-pane label="总监" name="DIRECTOR">
+        <el-tab-pane label="总监" name="DIRECTOR" lazy>
           <el-table :data="directorTreeData" border max-height="600" :summary-method="directorSummary" show-summary
             row-key="_id" :tree-props="{ children: 'children' }" default-expand-all>
             <el-table-column label="姓名" prop="employeeName" width="90" fixed="left" />
@@ -249,6 +249,125 @@
             </el-table-column>
           </el-table>
         </el-tab-pane>
+
+        <!-- ══════════ 新签业绩 sheet（12 列） ══════════ -->
+        <el-tab-pane label="新签业绩" name="NEWSIGN" lazy>
+          <el-table :data="newSignItems" stripe border max-height="600" size="small">
+            <el-table-column label="签约/认购日期" width="170" align="center">
+              <template #default="{ row }">{{ row.signDate || row.businessDate || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="合同号/订单号" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="类型" prop="bizType" width="100" show-overflow-tooltip />
+            <el-table-column label="房源地址" min-width="200" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.propertyAddress || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="签约人" prop="employeeCode" width="90" align="center" />
+            <el-table-column label="所属角色" prop="roleType" width="100" align="center" />
+            <el-table-column label="角色占比" width="90" align="center">
+              <template #default="{ row }">{{ row.shareRatio != null ? (Number(row.shareRatio) * 100).toFixed(2) + '%' : '—' }}</template>
+            </el-table-column>
+            <el-table-column label="85后" align="right" width="130">
+              <template #default="{ row }">¥{{ Number(row.convertedAmount ?? row.amount).toFixed(2) }}</template>
+            </el-table-column>
+            <el-table-column label="是否结算" width="80" align="center">
+              <template #default="{ row }">{{ row.status === 'APPROVED' ? '是' : '' }}</template>
+            </el-table-column>
+            <el-table-column label="结算日期" prop="approvedMonth" width="110" align="center" />
+          </el-table>
+        </el-tab-pane>
+
+        <!-- ══════════ 结佣业绩 sheet（12 列） ══════════ -->
+        <el-tab-pane label="结佣业绩" name="COMMISSION" lazy>
+          <el-table :data="commissionItems" stripe border max-height="600" size="small">
+            <el-table-column label="签约/认购日期" width="170" align="center">
+              <template #default="{ row }">{{ row.signDate || row.businessDate || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="合同号/订单号" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="类型" prop="bizType" width="100" show-overflow-tooltip />
+            <el-table-column label="房源地址" min-width="200" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.propertyAddress || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="签约人" prop="employeeCode" width="90" align="center" />
+            <el-table-column label="所属角色" prop="roleType" width="100" align="center" />
+            <el-table-column label="角色占比" width="90" align="center">
+              <template #default="{ row }">{{ row.shareRatio != null ? (Number(row.shareRatio) * 100).toFixed(2) + '%' : '—' }}</template>
+            </el-table-column>
+            <el-table-column label="85后" align="right" width="130">
+              <template #default="{ row }">¥{{ Number(row.convertedAmount ?? row.amount).toFixed(2) }}</template>
+            </el-table-column>
+            <el-table-column label="是否结算" width="80" align="center">
+              <template #default="{ row }">{{ row.status === 'APPROVED' ? '是' : '' }}</template>
+            </el-table-column>
+            <el-table-column label="结算日期" prop="approvedMonth" width="110" align="center" />
+          </el-table>
+        </el-tab-pane>
+
+        <!-- ══════════ 人事数据 sheet（18 列） ══════════ -->
+        <el-tab-pane label="人事数据" name="HR" lazy>
+          <el-table :data="details" stripe border max-height="600" size="small">
+            <el-table-column label="门店名称" prop="deptName" width="120" fixed="left" />
+            <el-table-column label="姓名" prop="employeeName" width="80" fixed="left" />
+            <el-table-column label="职级" prop="levelCode" width="60" />
+            <el-table-column label="职位" width="70">
+              <template #default="{ row }">{{ roleLabel(row.employeeRole) }}</template>
+            </el-table-column>
+            <el-table-column label="底薪" align="right" width="90">
+              <template #default="{ row }">{{ num(row.baseSalary) }}</template>
+            </el-table-column>
+            <el-table-column label="考勤扣款" align="right" width="100">
+              <template #default="{ row }">{{ neg(row.attendanceFee) }}</template>
+            </el-table-column>
+            <el-table-column label="社保扣款" align="right" width="100">
+              <template #default="{ row }">{{ neg(row.socialFee) }}</template>
+            </el-table-column>
+            <el-table-column label="公积金扣款" align="right" width="100">
+              <template #default="{ row }">{{ neg(row.housingFund) }}</template>
+            </el-table-column>
+            <el-table-column label="宿舍管理费" align="right" width="100">
+              <template #default="{ row }">{{ neg(row.dormitoryFee) }}</template>
+            </el-table-column>
+            <el-table-column label="积分扣款" align="right" width="90">
+              <template #default="{ row }">{{ neg(row.pointsFee) }}</template>
+            </el-table-column>
+            <el-table-column label="新人绩效" align="right" width="90">
+              <template #default="{ row }">{{ num(row.bonus) }}</template>
+            </el-table-column>
+            <el-table-column label="往月负工资" align="right" width="100">
+              <template #default="{ row }">{{ neg(row.negativeCarryover) }}</template>
+            </el-table-column>
+            <el-table-column label="新人带教" align="right" width="90">
+              <template #default="{ row }">{{ num(row.mentorBonus) }}</template>
+            </el-table-column>
+            <el-table-column label="其他扣款" align="right" width="90">
+              <template #default="{ row }">{{ neg(row.otherDeduct) }}</template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <!-- ══════════ 绩效和扣款 sheet（19 列） ══════════ -->
+        <el-tab-pane label="绩效和扣款" name="PERF" lazy>
+          <el-table :data="details" stripe border max-height="600" size="small">
+            <el-table-column label="门店" prop="deptName" width="120" fixed="left" />
+            <el-table-column label="姓名" prop="employeeName" width="80" fixed="left" />
+            <el-table-column label="积分扣款" align="right" width="90">
+              <template #default="{ row }">{{ neg(row.pointsFee) }}</template>
+            </el-table-column>
+            <el-table-column label="其他扣款" align="right" width="90">
+              <template #default="{ row }">{{ neg(row.otherDeduct) }}</template>
+            </el-table-column>
+            <el-table-column label="绩效等级" prop="perfGrade" width="80" align="center" />
+            <el-table-column label="绩效提成点" width="100" align="center">
+              <template #default="{ row }">{{ row.perfDeduct != null ? (Number(row.perfDeduct) * 100).toFixed(2) + '%' : '' }}</template>
+            </el-table-column>
+            <el-table-column label="所有扣点合计" width="110" align="center">
+              <template #default="{ row }">{{ row.totalDeduct != null ? (Number(row.totalDeduct) * 100).toFixed(2) + '%' : '' }}</template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
       </el-tabs>
     </el-dialog>
 
@@ -275,10 +394,11 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Download } from '@element-plus/icons-vue';
-import { payrollApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
+import { payrollApi, orgCommissionTraceApi, type PayrollBatch, type PayrollDetail, type CommissionTraceItem } from '@/api/panjia/payroll';
 import { attendanceApi } from '@/api/panjia/attendance';
 import { scoreApi } from '@/api/panjia/score';
-import { exportMultiSheet, parseStoreItems } from '../components/payroll-export';
+import { exportMultiSheet, parseStoreItems, type ExportExtraData } from '../components/payroll-export';
+import { resolveBizNo } from '@/utils/panjiaBiz';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
 const route = useRoute();
@@ -287,8 +407,11 @@ const batches = ref<PayrollBatch[]>([]);
 const details = ref<PayrollDetail[]>([]);
 const currentBatch = ref<PayrollBatch | null>(null);
 const detailVisible = ref(false);
-const detailTab = ref<'AGENT' | 'MANAGER' | 'DIRECTOR'>('AGENT');
+const detailTab = ref<'AGENT' | 'MANAGER' | 'DIRECTOR' | 'NEWSIGN' | 'COMMISSION' | 'HR' | 'PERF'>('AGENT');
 const filterPeriod = ref('');
+// 业绩明细数据（新签/结佣，导出和 tab 展示共用）
+const newSignItems = ref<CommissionTraceItem[]>([]);
+const commissionItems = ref<CommissionTraceItem[]>([]);
 const showCreate = ref(false);
 const creating = ref(false);
 const createForm = ref({ period: '', deptScope: 'ALL' });
@@ -439,14 +562,23 @@ const doAction = async (row: PayrollBatch, action: string) => {
 const viewDetail = async (row: PayrollBatch) => {
   currentBatch.value = row;
   detailVisible.value = true;
-  const res = await payrollApi.getDetails(row.id);
+  // 并行加载工资明细 + 业绩明细（新签/结佣）
+  const [res, commissionRes, newSignRes] = await Promise.all([
+    payrollApi.getDetails(row.id),
+    orgCommissionTraceApi.allCommission(row.period).catch(() => ({ data: [] })),
+    orgCommissionTraceApi.allNewSign(row.period).catch(() => ({ data: [] })),
+  ]);
   details.value = (res as any).data ?? [];
+  commissionItems.value = (commissionRes as any).data ?? [];
+  newSignItems.value = (newSignRes as any).data ?? [];
 };
 
 const closeDetail = () => {
   detailVisible.value = false;
   currentBatch.value = null;
   details.value = [];
+  newSignItems.value = [];
+  commissionItems.value = [];
 };
 
 // 工作流跳转：查看态加载批次与明细（审批办理已改为「我的待办」原地弹窗）
@@ -537,10 +669,14 @@ const directorSummary = ({ columns, data }: any) => {
   return sums;
 };
 
-/* ───────────── 导出（xlsx 三 sheet：工资表 28 列含经纪人+店长 / 店长工资 15 列 / 总监工资 19 列一人多行） ───────────── */
+/* ───────────── 导出（xlsx 七 sheet：工资表/新签业绩/结佣业绩/店长/总监/人事/绩效） ───────────── */
 const exportExcel = () => {
   if (!details.value.length) return;
-  exportMultiSheet(details.value, currentBatch.value?.period || '');
+  const extra: ExportExtraData = {
+    newSignItems: newSignItems.value,
+    commissionItems: commissionItems.value,
+  };
+  exportMultiSheet(details.value, currentBatch.value?.period || '', undefined, extra);
   ElMessage.success('导出成功');
 };
 
