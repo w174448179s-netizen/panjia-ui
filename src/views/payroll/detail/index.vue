@@ -68,7 +68,7 @@
         <div class="toolbar-left">
           <el-icon class="toolbar-icon"><InfoFilled /></el-icon>
           <span class="toolbar-tip">
-            点击行首 <b>▸</b> 展开每个人的<b>工资构成与追溯</b>；金额为零的项目已淡化显示
+            点击<b>姓名</b>查看每个人的<b>工资构成与追溯</b>；金额为零的项目已淡化显示
           </span>
         </div>
         <div class="toolbar-right">
@@ -100,20 +100,10 @@
         row-key="id"
         :empty-text="selectedBatchId ? (viewRole === 'ALL' ? '该批次暂无明细数据' : '该批次暂无此角色数据') : '请先选择工资批次'"
       >
-        <el-table-column type="expand" width="36">
-          <template #default="{ row }">
-            <PayrollTracePanel
-              :row="(row as any)"
-              :employee-name="row.employeeName"
-              :period="currentBatch?.period || ''"
-            />
-          </template>
-        </el-table-column>
-
         <!-- 基本信息 -->
         <el-table-column label="姓名" fixed="left" width="90">
           <template #default="{ row }">
-            <span class="emp-name">{{ row.employeeName || `员工${row.employeeId}` }}</span>
+            <span class="emp-name clickable" @click="openTrace(row)">{{ row.employeeName || `员工${row.employeeId}` }}</span>
           </template>
         </el-table-column>
         <el-table-column label="门店" fixed="left" min-width="110" show-overflow-tooltip>
@@ -140,10 +130,10 @@
             <span v-else class="zero-val">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="提成点调整" width="100" align="center">
+        <el-table-column label="绩效提成扣点" width="110" align="center">
           <template #default="{ row }">
-            <span v-if="row.manualAdjust != null && Number(row.manualAdjust) !== 0" class="deduct-text">
-              {{ ratePercent(row.manualAdjust) }}
+            <span v-if="row.totalDeduct != null && Number(row.totalDeduct) !== 0" class="deduct-text">
+              {{ ratePercent(row.totalDeduct) }}
             </span>
             <span v-else class="zero-val">—</span>
           </template>
@@ -217,6 +207,23 @@
         />
       </div>
     </el-card>
+
+    <!-- ══════════ 工资构成弹窗（点击姓名打开） ══════════ -->
+    <el-dialog
+      v-model="traceVisible"
+      :title="`${traceRow?.employeeName || ''} · 工资构成（${currentBatch?.period || ''}）`"
+      width="1100px"
+      top="6vh"
+      destroy-on-close
+      class="trace-dialog"
+    >
+      <PayrollTracePanel
+        v-if="traceRow"
+        :row="(traceRow as any)"
+        :employee-name="traceRow.employeeName"
+        :period="currentBatch?.period || ''"
+      />
+    </el-dialog>
   </div>
 </template>
 
@@ -235,6 +242,14 @@ const selectedBatchId = ref<number | null>(null);
 const loading = ref(false);
 const viewRole = ref<'ALL' | 'AGENT' | 'MANAGER' | 'DIRECTOR'>('ALL');
 const showAllColumns = ref(false);
+
+/* ───────────── 工资构成弹窗（点击姓名打开，替代原 expand 行） ───────────── */
+const traceVisible = ref(false);
+const traceRow = ref<PayrollDetail | null>(null);
+const openTrace = (row: PayrollDetail) => {
+  traceRow.value = row;
+  traceVisible.value = true;
+};
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: '草稿', CALCULATING: '计算中', CALCULATED: '已计算', FAILED: '失败',
@@ -455,6 +470,8 @@ onMounted(() => {
 .detail-table :deep(.group-income .el-table__cell) { background: #f4fbf7; }
 .detail-table :deep(.group-deduct .el-table__cell) { background: #fdf5f4; }
 .emp-name { font-weight: 600; color: #1f2d3d; }
+.emp-name.clickable { cursor: pointer; color: #409eff; }
+.emp-name.clickable:hover { text-decoration: underline; }
 .money { font-variant-numeric: tabular-nums; }
 .deduct-text { color: #c0392b; }
 .zero-val { color: #cdd0d6; }

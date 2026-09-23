@@ -80,7 +80,7 @@
               <template #default="{ row }">{{ row.newSignRate != null ? ratePercent(row.newSignRate) : '' }}</template>
             </el-table-column>
             <el-table-column label="绩效提成扣点" width="110" align="right">
-              <template #default="{ row }">{{ row.perfDeduct != null ? ratePercent(row.perfDeduct) : '' }}</template>
+              <template #default="{ row }">{{ row.totalDeduct != null ? ratePercent(row.totalDeduct) : '' }}</template>
             </el-table-column>
             <el-table-column label="个人提点奖励" width="110" align="right">
               <template #default="{ row }">{{ num(row.mentorBonus) }}</template>

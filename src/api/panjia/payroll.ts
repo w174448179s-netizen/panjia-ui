@@ -63,6 +63,8 @@ export interface PayrollDetail {
   perfDeduct?: number | string | null;
   /** 提成点调整叠加值（负值=扣点，算薪时叠加到综合提点；0=无调整） */
   manualAdjust?: number | string | null;
+  /** 所有扣点合计（等级扣点 + 未参保自动扣点 + 人工调整，前端「绩效提成扣点」列统一取此值） */
+  totalDeduct?: number | string | null;
   /** 提成点调整溯源 JSON（RateAdjustItem 数组：type/rate/reason/source/adjustId） */
   rateAdjustJson?: string | null;
   /** 店长/总监 sheet：门店当月新签计薪业绩合计（折算后） */

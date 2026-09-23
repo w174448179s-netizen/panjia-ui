@@ -97,7 +97,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         roleLabel(r.employeeRole),
         num(r.newSignPerformance),
         r.newSignRate != null ? ratePercent(r.newSignRate) : '',
-        r.perfDeduct != null ? ratePercent(r.perfDeduct) : '',
+        r.totalDeduct != null ? ratePercent(r.totalDeduct) : '',
         num(r.mentorBonus),
         r.finalRate != null ? ratePercent(r.finalRate) : '',
         num(r.commissionPerformance),

@@ -91,6 +91,12 @@
                 <el-checkbox v-model="policyJson.parttimeExemptHousing" style="margin-left:16px">免公积金</el-checkbox>
               </el-form-item>
             </el-col>
+            <el-col :span="12">
+              <el-form-item label="未买社保扣点">
+                <el-input-number v-model="policyJson.noSocialDeduct" :min="-1" :max="0" :precision="4" :step="0.01" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">{{ fmtPct(policyJson.noSocialDeduct) }}（0 = 不扣）</span>
+              </el-form-item>
+            </el-col>
           </el-row>
 
           <el-divider content-position="left">考勤规则</el-divider>
@@ -414,6 +420,8 @@ const policyJson = reactive({
   parttimeExemptSocial: true,
   parttimeExemptHousing: true,
   housingFund: 0,
+  // 未买社保扣点（负=扣点，0=不扣），引擎 policy.noSocialDeduct，种子默认 -0.02
+  noSocialDeduct: -0.02,
   attendance: { lateFee: 0, absentNoBaseFee: 0, absentWithBaseTimes: 0, workDaysPerMonth: 0 },
   points: { penaltyFee: 0, gradeA: 0, gradeB: 0, deductA: 0, deductB: 0, deductC: 0 },
   commercialInsurance: 0,
@@ -428,6 +436,7 @@ const loadPolicy = (row: PolicyRule) => {
   policyJson.parttimeExemptSocial = j.parttimeExemptSocial ?? true;
   policyJson.parttimeExemptHousing = j.parttimeExemptHousing ?? true;
   policyJson.housingFund = j.housingFund ?? 0;
+  policyJson.noSocialDeduct = j.noSocialDeduct ?? -0.02;
   policyJson.attendance = { ...j.attendance };
   policyJson.points = { ...j.points };
   policyJson.commercialInsurance = j.commercialInsurance ?? 0;
@@ -447,6 +456,7 @@ const savePolicyInline = async () => {
       parttimeExemptSocial: policyJson.parttimeExemptSocial,
       parttimeExemptHousing: policyJson.parttimeExemptHousing,
       housingFund: policyJson.housingFund,
+      noSocialDeduct: policyJson.noSocialDeduct,
       attendance: policyJson.attendance,
       points: policyJson.points,
       commercialInsurance: policyJson.commercialInsurance,
