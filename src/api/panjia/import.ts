@@ -82,6 +82,21 @@ export const importApi = {
     link.click();
     window.URL.revokeObjectURL(url);
   },
+  /** 下载多模板工作簿（历史工资导入：全部激活模板各渲染一个 Sheet） */
+  async downloadTemplateWorkbook(sourceType: string, fileName: string) {
+    const baseApi = import.meta.env.VITE_APP_BASE_API;
+    const res = await fetch(`${baseApi}/api/panjia/import/template/${sourceType}/workbook?_t=${Date.now()}`, {
+      headers: { Authorization: `Bearer ${getToken()}`, clientid: 'e5cd7e4891bf95d1d19206ce24a7b32e' }
+    });
+    if (!res.ok) throw new Error('模板工作簿下载失败');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  },
   /**
    * 下载批次上传时的原文件（审计/追溯入口）。
    * 用户下载后可用 Excel / WPS / Numbers 直接打开看上传内容，
