@@ -367,6 +367,11 @@ export const performanceApi = {
   reopenPeriod: (period: string) =>
     panjiaRequest.post<void>(`/perf/period/reopen/${period}`),
 
+  // 手工批量提交实收：选合同 → 后端查 PERF_EXPECT → 镜像造 PERF_REAL → 按订单号分组建审批单
+  manualBatchSubmitReceived: (data: { period: string; bizKeys: string[] }) =>
+    panjiaRequest.post<{ createdRealCount: number; createdApplyCount: number; skipped: Record<number, string> }>(
+      '/performance/received/manual-batch-submit', data),
+
   // 完整业绩查询（合同维度；传 employeeId 时金额仅汇总该员工个人份额）
   searchByContract: (params: { period?: string; deptId?: string; bizType?: string; keyword?: string; employeeId?: string; pageNum?: number; pageSize?: number }) =>
     panjiaRequest.get<PageResult<PerformanceFactSearch>>('/perf/fact/search', params),

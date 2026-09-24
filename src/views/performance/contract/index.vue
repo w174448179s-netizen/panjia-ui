@@ -100,12 +100,19 @@
           </span>
         </div>
         <div class="summary-right">
+          <el-button
+            v-if="canSubmitReceived && selectedRows.length > 0"
+            type="primary"
+            :loading="batchSubmitting"
+            @click="openBatchReceivedDialog"
+          >批量提交实收（{{ selectedRows.length }}）</el-button>
           <span class="summary-amount">金额合计：<b>{{ formatAmount(summary.totalAmount) }}</b></span>
         </div>
       </div>
 
       <!-- 合同列表（扁平表格，点击合同号跳转明细页） -->
-      <el-table border class="data-table" :data="contractData">
+      <el-table border class="data-table" :data="contractData" @selection-change="handleSelectionChange">
+        <el-table-column v-if="canSubmitReceived" type="selection" width="45" align="center" />
         <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="scope">
             <el-button type="primary" link class="contract-link" @click="goDetail(scope.row as PerformanceManageContract)">
@@ -155,23 +162,23 @@
             <el-tag v-else type="success" size="small">有效</el-tag>
           </template>
         </el-table-column>
-        <!-- 操作列：详情 + 合同级调整 + 合同级作废/恢复（作废以合同为维度，不区分人员） -->
-        <el-table-column label="操作" align="center" width="200" fixed="right">
+        <!-- 操作列：详情 + 合同级调整 + 提交实收 + 合同级作废/恢复（作废以合同为维度，不区分人员） -->
+        <el-table-column label="操作" align="center" width="220" fixed="right">
           <template #default="scope">
-            <el-button link type="primary" @click="goDetail(scope.row as PerformanceManageContract)">详情</el-button>
-            <el-button v-if="!isBroker && scope.row.factStatus !== 'VOIDED'" link type="warning" @click="openAdjustDialog(scope.row as PerformanceManageContract)">调整</el-button>
-            <el-button
-              v-if="canVoid && scope.row.factStatus !== 'VOIDED'"
-              link
-              type="danger"
-              @click="handleVoidContract(scope.row as PerformanceManageContract)"
-            >作废</el-button>
-            <el-button
-              v-else-if="canVoid && scope.row.factStatus === 'VOIDED'"
-              link
-              type="success"
-              @click="handleRestoreContract(scope.row as PerformanceManageContract)"
-            >恢复</el-button>
+            <div class="action-btns">
+              <el-button size="small" link type="primary" @click="goDetail(scope.row as PerformanceManageContract)">详情</el-button>
+              <el-button v-if="!isBroker && scope.row.factStatus !== 'VOIDED'" size="small" link type="warning" @click="openAdjustDialog(scope.row as PerformanceManageContract)">调整</el-button>
+              <el-dropdown @command="(cmd: string) => handleRowCommand(cmd, scope.row as PerformanceManageContract)">
+                <el-button size="small" link type="primary">更多<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item v-if="canSubmitReceived && scope.row.factStatus !== 'VOIDED'" command="submitReceived">提交实收</el-dropdown-item>
+                    <el-dropdown-item v-if="canVoid && scope.row.factStatus !== 'VOIDED'" command="void">作废</el-dropdown-item>
+                    <el-dropdown-item v-if="canVoid && scope.row.factStatus === 'VOIDED'" command="restore">恢复</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </template>
         </el-table-column>
         <template #empty>
@@ -465,6 +472,7 @@
 
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { ArrowDown } from '@element-plus/icons-vue';
 import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceEmployeeOption, PerformanceManageContract, PerformanceManageRow } from '@/api/panjia/performance';
 import { useUserStore } from '@/store/modules/user';
@@ -475,6 +483,12 @@ import { useDeptScope } from '@/hooks/useDeptScope';
 const userStore = useUserStore();
 const isBroker = computed(() => userStore.roles.includes('agent'));
 const canVoid = computed(() => checkPermi(['perf:fact:void']));
+const canSubmitReceived = computed(() => checkPermi(['perf:received:submit']));
+// 表格多选（合同维度 checkbox，收集 factIds 用于批量提交实收）
+const selectedRows = ref<PerformanceManageContract[]>([]);
+const handleSelectionChange = (rows: PerformanceManageContract[]) => {
+  selectedRows.value = rows;
+};
 
 // ==================== 门店/组别筛选（全系统统一口径：所有用户查本部门及以下） ====================
 const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
@@ -658,6 +672,77 @@ const handleRestoreContract = async (row: PerformanceManageContract) => {
     if (e !== 'cancel' && e?.message !== 'cancel') {
       ElMessage.error(e?.message || '恢复失败');
     }
+  }
+};
+
+// ==================== 手工提交实收 ====================
+const batchSubmitting = ref(false);
+
+const doSubmitReceived = async (rows: PerformanceManageContract[]) => {
+  const bizKeys = rows
+    .map(r => r.contractNo || r.orderNo)
+    .filter(Boolean) as string[];
+  if (bizKeys.length === 0) {
+    ElMessage.warning('所选合同无有效业务键');
+    return;
+  }
+  batchSubmitting.value = true;
+  try {
+    const resp = await performanceApi.manualBatchSubmitReceived({
+      period: queryParams.period,
+      bizKeys,
+    });
+    const data = (resp as any)?.data ?? resp;
+    const skipped = Object.entries(data.skipped || {});
+    ElMessage.success(
+      `PERF_REAL 新建 ${data.createdRealCount} 条，审批单新建 ${data.createdApplyCount} 张`
+      + (skipped.length ? `，跳过 ${skipped.length} 条（${skipped[0]?.[1]}${skipped.length > 1 ? ' 等' : ''}）` : '')
+    );
+    selectedRows.value = [];
+    getList();
+  } catch (e: any) {
+    ElMessage.error(e?.message || '提交失败');
+  } finally {
+    batchSubmitting.value = false;
+  }
+};
+
+const openBatchReceivedDialog = async () => {
+  if (!selectedRows.value.length) return;
+  try {
+    await ElMessageBox.confirm(
+      `将为选中的 ${selectedRows.value.length} 个合同镜像生成 PERF_REAL（实收业绩），\n`
+      + `并按订单号分组建实收审批单。金额默认取新签应收值。`,
+      '批量提交实收',
+      { type: 'warning', confirmButtonText: '确认提交', cancelButtonText: '取消' }
+    );
+    await doSubmitReceived(selectedRows.value);
+  } catch (e: any) {
+    if (e !== 'cancel' && e?.message !== 'cancel') ElMessage.error(e?.message || '提交失败');
+  }
+};
+
+const submitSingleReceived = async (row: PerformanceManageContract) => {
+  try {
+    await ElMessageBox.confirm(
+      `合同 ${row.contractNo || row.orderNo}：将镜像 ${row.detailCount} 条 PERF_EXPECT 为 PERF_REAL 并创建实收审批单。`,
+      '提交实收',
+      { type: 'warning', confirmButtonText: '确认提交', cancelButtonText: '取消' }
+    );
+    await doSubmitReceived([row]);
+  } catch (e: any) {
+    if (e !== 'cancel' && e?.message !== 'cancel') ElMessage.error(e?.message || '提交失败');
+  }
+};
+
+/** 操作列下拉菜单路由 */
+const handleRowCommand = (cmd: string, row: PerformanceManageContract) => {
+  switch (cmd) {
+    case 'detail': goDetail(row); break;
+    case 'adjust': openAdjustDialog(row); break;
+    case 'submitReceived': submitSingleReceived(row); break;
+    case 'void': handleVoidContract(row); break;
+    case 'restore': handleRestoreContract(row); break;
   }
 };
 
@@ -1027,6 +1112,14 @@ onMounted(async () => {
 
 .data-table {
   width: 100%;
+
+  .action-btns {
+    white-space: nowrap;
+
+    .el-dropdown {
+      margin-left: 12px;
+    }
+  }
 
   .contract-link {
     font-weight: 600;

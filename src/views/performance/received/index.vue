@@ -92,7 +92,6 @@
           </span>
         </div>
         <div class="summary-right">
-          <el-button v-if="checkPermi(['perf:received:submit'])" type="warning" plain icon="EditPen" @click="openManualSubmit">手工提交</el-button>
           <el-button v-if="checkPermi(['perf:received:batch'])" type="success" plain icon="DocumentChecked" @click="showBatchApprove = true">批量审批</el-button>
         </div>
       </div>
@@ -335,22 +334,6 @@
       <template #footer>
         <!-- 审批统一由「我的待办」弹窗办理（工作流任务接口），本页只提供查看；不提供业务直批入口 -->
         <el-button @click="showDetail = false">关闭</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 手工提交弹窗 -->
-    <el-dialog v-model="showManual" title="手工提交实收业绩" width="460px">
-      <el-form label-width="80px">
-        <el-form-item label="结算月">
-          <el-date-picker v-model="manualForm.period" type="month" value-format="YYYY-MM" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="合同号">
-          <el-input v-model="manualForm.contractNo" placeholder="合同号（无审批单将自动建单）" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button type="primary" :loading="manualLoading" @click="doManualSubmit">提交</el-button>
-        <el-button @click="showManual = false">取消</el-button>
       </template>
     </el-dialog>
 
@@ -703,31 +686,6 @@ const resubmit = async (row: ReceivedApply) => {
     ElMessage.success('已重提');
     getList();
   } catch { /* 拦截器处理 */ }
-};
-
-// 手工提交
-const showManual = ref(false);
-const manualLoading = ref(false);
-const manualForm = reactive({ period: currentPeriod(), contractNo: '' });
-const openManualSubmit = () => {
-  manualForm.period = queryParams.period || currentPeriod();
-  manualForm.contractNo = '';
-  showManual.value = true;
-};
-const doManualSubmit = async () => {
-  if (!manualForm.period || !manualForm.contractNo.trim()) {
-    ElMessage.warning('请填写结算月与合同号');
-    return;
-  }
-  manualLoading.value = true;
-  try {
-    await receivedApi.submit(manualForm.period, manualForm.contractNo.trim());
-    ElMessage.success('提交成功');
-    showManual.value = false;
-    handleQuery();
-  } catch { /* 拦截器处理 */ } finally {
-    manualLoading.value = false;
-  }
 };
 
 // 批量审批：录入 → 等待 → 展示结果

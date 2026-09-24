@@ -118,9 +118,6 @@ export const receivedApi = {
   /** 按审批单 ID 查流程实例 ID（绕过 workflow:instance:query 权限） */
   getInstanceId: (id: string | number) =>
     panjiaRequest.get<{ instanceId: string | number }>(`/performance/received/${id}/instance`),
-  /** 手工提交（无单自动建单，§2.2 按发起人角色路由），返回审批单 ID */
-  submit: (period: string, contractNo: string) =>
-    panjiaRequest.post<number>('/performance/received/submit', { period, contractNo }),
   /** 驳回后重新提交 */
   resubmit: (id: string | number) =>
     panjiaRequest.post<void>(`/performance/received/${id}/resubmit`),
