@@ -220,7 +220,8 @@ const sourceTypeMap: Record<string, string> = {
   KE_SIGNED: '贝壳业绩明细',
   ATTENDANCE: '考勤',
   POINTS: '积分',
-  OTHERS: '手工费用'
+  OTHERS: '手工费用',
+  HISTORY_PAYROLL: '历史工资'
 };
 const sourceTypeOptions = Object.entries(sourceTypeMap).map(([value, label]) => ({ value, label }));
 
