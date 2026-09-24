@@ -84,6 +84,7 @@
           </el-select>
           <el-input v-model="filterName" placeholder="员工姓名" clearable size="small" style="width: 130px" />
           <el-input v-model="filterCode" placeholder="员工号" clearable size="small" style="width: 130px" />
+          <el-input v-model="filterContractNo" placeholder="合同号/订单号" clearable size="small" style="width: 160px" />
           <el-button size="small" :icon="RefreshLeft" @click="resetFilters">重置</el-button>
           <el-checkbox v-model="showAllColumns" size="small">显示全部金额列（含全零列）</el-checkbox>
         </div>
@@ -286,6 +287,7 @@ const currentBatch = computed(() => batches.value.find((b) => b.id === selectedB
 const filterDeptId = ref<number | string>('');
 const filterName = ref('');
 const filterCode = ref('');
+const filterContractNo = ref('');
 
 /** 门店选项：从当前批次明细行的 deptId/deptName 派生去重（后端翻译后直出） */
 const deptOptions = computed(() => {
@@ -300,9 +302,10 @@ const resetFilters = () => {
   filterDeptId.value = '';
   filterName.value = '';
   filterCode.value = '';
+  filterContractNo.value = '';
 };
 
-/** 当前视图明细：角色 tab → 门店 → 姓名模糊 → 工号模糊 */
+/** 当前视图明细：角色 tab → 门店 → 姓名模糊 → 工号模糊（合同号走后端查询） */
 const viewDetails = computed(() => {
   let list = viewRole.value === 'ALL' ? details.value : details.value.filter((d) => d.employeeRole === viewRole.value);
   if (filterDeptId.value !== '') {
@@ -367,7 +370,16 @@ const pagedDetails = computed(() => {
 /** 筛选条件变化时回到第一页 */
 const resetPage = () => { pageNum.value = 1; };
 
-watch([viewRole, filterDeptId, filterName, filterCode], resetPage);
+/** 筛选条件变化时：合同号变化重新请求后端，其余只重置分页 */
+const onFilterChange = (needReload: boolean) => {
+  resetPage();
+  if (needReload) loadDetails();
+};
+watch(viewRole, () => resetPage());
+watch(filterDeptId, () => resetPage());
+watch(filterName, () => resetPage());
+watch(filterCode, () => resetPage());
+watch(filterContractNo, () => onFilterChange(true));
 
 /* ───────────── 数据加载 ───────────── */
 const loadBatches = async () => {
@@ -385,7 +397,10 @@ const loadDetails = async () => {
   if (!selectedBatchId.value) { details.value = []; return; }
   loading.value = true;
   try {
-    const res = await payrollApi.getDetails(selectedBatchId.value);
+    const contractNo = filterContractNo.value.trim();
+    const res = contractNo
+      ? await payrollApi.getDetailsFiltered(selectedBatchId.value, contractNo)
+      : await payrollApi.getDetails(selectedBatchId.value);
     details.value = (res as any).data ?? [];
     resetPage();
   } catch {

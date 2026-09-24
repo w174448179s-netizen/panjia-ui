@@ -246,9 +246,9 @@ function perfFactRow(it: CommissionTraceItem): (string | number)[] {
     resolveBizNo(it.bizType, it.contractNo, it.orderNo) || '',
     it.bizType || '',
     it.propertyAddress || '',
-    it.employeeCode || '',
-    '',                               // 店组（无字段，留空）
-    '',                               // 门店（无字段，留空）
+    it.deptName || '',                  // 门店
+    it.employeeName || '',              // 签约人姓名
+    it.employeeCode || '',              // 签约人工号
     it.roleType || '',
     it.shareRatio != null ? (Number(it.shareRatio) * 100).toFixed(2) + '%' : '',
     num(it.convertedAmount ?? it.amount), // 85后金额
@@ -364,13 +364,13 @@ export function exportMultiSheet(
   // 2) 业绩明细 sheet（仅在导出全部且 extra 有数据时输出）
   if (!only && extra) {
     if (extra.newSignItems?.length) {
-      const heads = ['签约/认购日期', '合同号', '类型', '房源地址', '签约人', '店组', '门店', '所属角色', '角色占比', '85后', '是否结算', '结算日期'];
+      const heads = ['签约/认购日期', '合同号', '类型', '房源地址', '门店', '签约人', '签约人工号', '所属角色', '角色占比', '85后', '是否结算', '结算日期'];
       const rows = extra.newSignItems.map(perfFactRow);
       const ws = XLSX.utils.aoa_to_sheet([heads, ...rows]);
       XLSX.utils.book_append_sheet(wb, ws, '新签业绩');
     }
     if (extra.commissionItems?.length) {
-      const heads = ['签约/认购日期', '合同号', '类型', '房源地址', '签约人', '店组', '门店', '所属角色', '角色占比', '85后', '是否结算', '结算日期'];
+      const heads = ['签约/认购日期', '合同号', '类型', '房源地址', '门店', '签约人', '签约人工号', '所属角色', '角色占比', '85后', '是否结算', '结算日期'];
       const rows = extra.commissionItems.map(perfFactRow);
       const ws = XLSX.utils.aoa_to_sheet([heads, ...rows]);
       XLSX.utils.book_append_sheet(wb, ws, '结佣业绩');

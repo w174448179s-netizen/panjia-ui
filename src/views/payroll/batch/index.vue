@@ -263,7 +263,9 @@
             <el-table-column label="房源地址" min-width="200" show-overflow-tooltip>
               <template #default="{ row }">{{ row.propertyAddress || '—' }}</template>
             </el-table-column>
-            <el-table-column label="签约人" prop="employeeCode" width="90" align="center" />
+            <el-table-column label="门店" prop="deptName" width="110" show-overflow-tooltip />
+            <el-table-column label="签约人" prop="employeeName" width="80" align="center" />
+            <el-table-column label="签约人工号" prop="employeeCode" width="100" align="center" />
             <el-table-column label="所属角色" prop="roleType" width="100" align="center" />
             <el-table-column label="角色占比" width="90" align="center">
               <template #default="{ row }">{{ row.shareRatio != null ? (Number(row.shareRatio) * 100).toFixed(2) + '%' : '—' }}</template>
@@ -291,7 +293,9 @@
             <el-table-column label="房源地址" min-width="200" show-overflow-tooltip>
               <template #default="{ row }">{{ row.propertyAddress || '—' }}</template>
             </el-table-column>
-            <el-table-column label="签约人" prop="employeeCode" width="90" align="center" />
+            <el-table-column label="门店" prop="deptName" width="110" show-overflow-tooltip />
+            <el-table-column label="签约人" prop="employeeName" width="80" align="center" />
+            <el-table-column label="签约人工号" prop="employeeCode" width="100" align="center" />
             <el-table-column label="所属角色" prop="roleType" width="100" align="center" />
             <el-table-column label="角色占比" width="90" align="center">
               <template #default="{ row }">{{ row.shareRatio != null ? (Number(row.shareRatio) * 100).toFixed(2) + '%' : '—' }}</template>
