@@ -526,6 +526,20 @@
         <span>{{ importDialog.file.name }}</span>
         <el-button link type="danger" icon="Delete" @click="importDialog.file = null">移除</el-button>
       </div>
+      <!-- 生效时间：已有工号覆盖导入时算薪数据切换基准，新员工不受影响 -->
+      <div v-if="!importDialog.batchId" class="import-effective">
+        <span class="label">生效时间：</span>
+        <el-date-picker
+          v-model="importDialog.effectiveDate"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="不选默认当前时间"
+          clearable
+          :disabled="importDialog.loading"
+          style="width: 180px"
+        />
+        <span class="tip">已有工号覆盖导入时算薪数据的切换基准，新员工不受影响</span>
+      </div>
       <div v-if="!importDialog.batchId" class="import-actions">
         <el-button
           type="primary"
@@ -831,6 +845,7 @@ const importDialog = reactive({
   visible: false,
   loading: false,
   file: null as File | null,
+  effectiveDate: '' as string,
   batchId: '' as string,
   batchNo: '',
   batchStatus: '',
@@ -854,6 +869,7 @@ const resetImport = () => {
   stopImportPolling();
   importDialog.loading = false;
   importDialog.file = null;
+  importDialog.effectiveDate = '';
   importDialog.batchId = '';
   importDialog.batchNo = '';
   importDialog.batchStatus = '';
@@ -880,7 +896,7 @@ const doImportUpload = async () => {
   }
   importDialog.loading = true;
   try {
-    const res = await employeeApi.importEmployees(importDialog.file);
+    const res = await employeeApi.importEmployees(importDialog.file, importDialog.effectiveDate || undefined);
     const batchId = res.data;
     importDialog.batchId = batchId;
     importDialog.loading = false;
@@ -1048,6 +1064,25 @@ onMounted(() => {
 
     .el-icon {
       color: var(--el-color-primary);
+    }
+  }
+
+  .import-effective {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: var(--el-fill-color-light);
+    border-radius: 8px;
+    font-size: 13px;
+
+    .label {
+      color: var(--el-text-color-regular);
+    }
+
+    .tip {
+      color: var(--el-text-color-secondary);
     }
   }
 

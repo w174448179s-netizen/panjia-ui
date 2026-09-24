@@ -36,19 +36,19 @@
       <div v-if="currentBatch" class="stat-row">
         <div class="stat-card net">
           <div class="stat-label">实发合计</div>
-          <div class="stat-value">¥{{ fmt(viewNetTotal) }}</div>
+          <div class="stat-value">¥{{ fmt(currentBatch.netTotal) }}</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">应发合计</div>
-          <div class="stat-value">¥{{ fmt(viewGrossTotal) }}</div>
+          <div class="stat-value">¥{{ fmt(currentBatch.grossTotal) }}</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">扣款 + 个税</div>
-          <div class="stat-value deduct-text">¥{{ fmtNeg(viewDeductTotal) }}</div>
+          <div class="stat-value deduct-text">¥{{ fmtNeg(Number(currentBatch.deductTotal) + Number(currentBatch.taxTotal)) }}</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">参与人数</div>
-          <div class="stat-value">{{ viewDetails.length }}<span class="stat-unit">人</span></div>
+          <div class="stat-value">{{ currentBatch.employeeCount }}<span class="stat-unit">人</span></div>
         </div>
         <div class="stat-card view-tabs-card">
           <div class="stat-label">按角色查看</div>
@@ -327,13 +327,6 @@ const viewDetails = computed(() => {
   }
   return list;
 });
-
-/* ───────────── 指标卡片（与表格合计行同源：均基于当前筛选视图 viewDetails，保证一致） ───────────── */
-const sumOf = (props: string[]) =>
-  viewDetails.value.reduce((s: number, r: any) => s + props.reduce((t: number, p: string) => t + (Number(r[p]) || 0), 0), 0);
-const viewNetTotal = computed(() => sumOf(['net']));
-const viewGrossTotal = computed(() => sumOf(['gross']));
-const viewDeductTotal = computed(() => sumOf(['deduct', 'tax']));
 
 /* ───────────── 列定义（含适用角色与溯源口径） ───────────── */
 interface ColDef { prop: string; label: string; width: number; roles?: string[]; source: string }

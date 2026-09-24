@@ -51,10 +51,13 @@ export const employeeApi = {
     return panjiaRequest.post<ReconcileResult>('/people/reconcile/run');
   },
   // ==================== V6.0 员工导入 ====================
-  /** 上传文件导入员工（阶段A同步诊断，阶段B异步落地，返回 batchId 供轮询） */
-  importEmployees(file: File) {
+  /** 上传文件导入员工（阶段A同步诊断，阶段B异步落地，返回 batchId 供轮询）；effectiveDate 为覆盖导入的生效时间，不传默认当前时间 */
+  importEmployees(file: File, effectiveDate?: string) {
     const formData = new FormData();
     formData.append('file', file);
+    if (effectiveDate) {
+      formData.append('effectiveDate', effectiveDate);
+    }
     return panjiaRequest.post<string>('/people/employee/import', formData);
   },
   /** 员工导入批次详情（轮询进度用） */
