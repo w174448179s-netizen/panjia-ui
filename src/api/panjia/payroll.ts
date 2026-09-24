@@ -179,9 +179,6 @@ export const payrollApi = {
   getDetails(id: number | string) {
     return panjiaRequest.get<PayrollDetail[]>(`/payroll/batch/${id}/details`);
   },
-  getDetailsFiltered(id: number, contractNo: string) {
-    return panjiaRequest.get<PayrollDetail[]>(`/payroll/batch/${id}/details`, { params: { contractNo } });
-  },
   getSnapshot(id: number) {
     return panjiaRequest.get<{ snapshotContent: string }>(`/payroll/batch/${id}/snapshot`);
   },

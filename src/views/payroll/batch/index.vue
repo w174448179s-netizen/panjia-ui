@@ -65,7 +65,18 @@
       <el-tabs v-model="detailTab" class="detail-tabs">
         <!-- ══════════ 工资表 sheet（28 列，含经纪人 + 店长） ══════════ -->
         <el-tab-pane label="工资表" name="AGENT" lazy>
-          <el-table :data="salaryDetails" stripe border max-height="600" :summary-method="summaryMethod" show-summary>
+          <div class="tab-toolbar">
+            <el-tree-select v-model="ag.filter.deptId" :data="deptTreeData"
+              :props="{ label: 'deptName', children: 'children' } as any" node-key="deptId" value-key="deptId"
+              placeholder="全部门店/组别" clearable check-strictly style="width: 200px" />
+            <el-select v-model="ag.filter.employeeId" filterable remote clearable :remote-method="agEmp.remoteMethod"
+              :loading="agEmp.loading" no-data-text="输入姓名/工号搜索" placeholder="员工姓名/工号搜索" style="width: 210px"
+              @change="agEmp.onSelect">
+              <el-option v-for="emp in agEmp.options" :key="emp.employeeId"
+                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
+            </el-select>
+          </div>
+          <el-table :data="ag.paged" stripe border max-height="600" :summary-method="summaryMethod" show-summary>
             <el-table-column label="门店" prop="deptName" width="110" fixed="left" />
             <el-table-column label="员工编号" prop="employeeCode" width="90" fixed="left" />
             <el-table-column label="姓名" prop="employeeName" width="80" fixed="left" />
@@ -143,11 +154,24 @@
               <template #default="{ row }"><b class="text-primary">{{ num(row.net) }}</b></template>
             </el-table-column>
           </el-table>
+          <el-pagination class="tab-pagination" v-model:current-page="ag.page" v-model:page-size="ag.pageSize"
+            :total="ag.filtered.length" :page-sizes="[50, 100, 200]" layout="total, sizes, prev, pager, next" size="small" />
         </el-tab-pane>
 
         <!-- ══════════ 店长工资 sheet（15 列，底薪计算与补齐依据，对齐天街工资表 店长工资 sheet） ══════════ -->
         <el-tab-pane label="店长" name="MANAGER" lazy>
-          <el-table :data="managerDetails" stripe border max-height="600" :summary-method="managerSummary" show-summary>
+          <div class="tab-toolbar">
+            <el-tree-select v-model="mf.filter.deptId" :data="deptTreeData"
+              :props="{ label: 'deptName', children: 'children' } as any" node-key="deptId" value-key="deptId"
+              placeholder="全部门店/组别" clearable check-strictly style="width: 200px" />
+            <el-select v-model="mf.filter.employeeId" filterable remote clearable :remote-method="mfEmp.remoteMethod"
+              :loading="mfEmp.loading" no-data-text="输入姓名/工号搜索" placeholder="员工姓名/工号搜索" style="width: 210px"
+              @change="mfEmp.onSelect">
+              <el-option v-for="emp in mfEmp.options" :key="emp.employeeId"
+                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
+            </el-select>
+          </div>
+          <el-table :data="mf.paged" stripe border max-height="600" :summary-method="managerSummary" show-summary>
             <el-table-column label="门店" prop="deptName" width="110" fixed="left" />
             <el-table-column label="姓名" prop="employeeName" width="80" fixed="left" />
             <el-table-column label="职级" prop="levelCode" width="60" />
@@ -188,11 +212,24 @@
               <template #default="{ row }"><b class="text-primary">{{ num(baseSalaryOf(row)) }}</b></template>
             </el-table-column>
           </el-table>
+          <el-pagination class="tab-pagination" v-model:current-page="mf.page" v-model:page-size="mf.pageSize"
+            :total="mf.filtered.length" :page-sizes="[50, 100, 200]" layout="total, sizes, prev, pager, next" size="small" />
         </el-tab-pane>
 
         <!-- ══════════ 总监工资 sheet（19 列，树形可展开：汇总行+门店明细子行，对齐天街工资表 总监工资 sheet） ══════════ -->
         <el-tab-pane label="总监" name="DIRECTOR" lazy>
-          <el-table :data="directorTreeData" border max-height="600" :summary-method="directorSummary" show-summary
+          <div class="tab-toolbar">
+            <el-tree-select v-model="df.filter.deptId" :data="deptTreeData"
+              :props="{ label: 'deptName', children: 'children' } as any" node-key="deptId" value-key="deptId"
+              placeholder="全部组别" clearable check-strictly style="width: 200px" />
+            <el-select v-model="df.filter.employeeId" filterable remote clearable :remote-method="dfEmp.remoteMethod"
+              :loading="dfEmp.loading" no-data-text="输入姓名/工号搜索" placeholder="姓名/工号搜索" style="width: 210px"
+              @change="dfEmp.onSelect">
+              <el-option v-for="emp in dfEmp.options" :key="emp.employeeId"
+                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
+            </el-select>
+          </div>
+          <el-table :data="df.paged" border max-height="600" :summary-method="directorSummary" show-summary
             row-key="_id" :tree-props="{ children: 'children' }" default-expand-all>
             <el-table-column label="姓名" prop="employeeName" width="90" fixed="left" />
             <el-table-column label="组别" prop="deptName" width="120" fixed="left" />
@@ -248,11 +285,24 @@
               <template #default="{ row }"><b class="text-primary">{{ num(row.net) }}</b></template>
             </el-table-column>
           </el-table>
+          <el-pagination class="tab-pagination" v-model:current-page="df.page" v-model:page-size="df.pageSize"
+            :total="df.filtered.length" :page-sizes="[50, 100, 200]" layout="total, sizes, prev, pager, next" size="small" />
         </el-tab-pane>
 
         <!-- ══════════ 新签业绩 sheet（12 列） ══════════ -->
         <el-tab-pane label="新签业绩" name="NEWSIGN" lazy>
-          <el-table :data="newSignItems" stripe border max-height="600" size="small">
+          <div class="tab-toolbar">
+            <el-tree-select v-model="nsf.filter.deptId" :data="deptTreeData"
+              :props="{ label: 'deptName', children: 'children' } as any" node-key="deptId" value-key="deptId"
+              placeholder="全部门店/组别" clearable check-strictly style="width: 200px" />
+            <el-select v-model="nsf.filter.employeeId" filterable remote clearable :remote-method="nsfEmp.remoteMethod"
+              :loading="nsfEmp.loading" no-data-text="输入姓名/工号搜索" placeholder="签约人姓名/工号搜索" style="width: 210px"
+              @change="nsfEmp.onSelect">
+              <el-option v-for="emp in nsfEmp.options" :key="emp.employeeId"
+                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
+            </el-select>
+          </div>
+          <el-table v-loading="perfLoading.newSign" element-loading-text="业绩明细加载中…" :data="nsf.paged" stripe border max-height="600" size="small" show-summary :summary-method="nsfSummary">
             <el-table-column label="签约/认购日期" width="170" align="center">
               <template #default="{ row }">{{ row.signDate || row.businessDate || '—' }}</template>
             </el-table-column>
@@ -270,7 +320,7 @@
             <el-table-column label="角色占比" width="90" align="center">
               <template #default="{ row }">{{ row.shareRatio != null ? (Number(row.shareRatio) * 100).toFixed(2) + '%' : '—' }}</template>
             </el-table-column>
-            <el-table-column label="85后" align="right" width="130">
+            <el-table-column label="85后" prop="convertedAmount" align="right" width="130">
               <template #default="{ row }">¥{{ Number(row.convertedAmount ?? row.amount).toFixed(2) }}</template>
             </el-table-column>
             <el-table-column label="是否结算" width="80" align="center">
@@ -278,11 +328,24 @@
             </el-table-column>
             <el-table-column label="结算日期" prop="approvedMonth" width="110" align="center" />
           </el-table>
+          <el-pagination class="tab-pagination" v-model:current-page="nsf.page" v-model:page-size="nsf.pageSize"
+            :total="nsf.filtered.length" :page-sizes="[50, 100, 200]" layout="total, sizes, prev, pager, next" size="small" />
         </el-tab-pane>
 
         <!-- ══════════ 结佣业绩 sheet（12 列） ══════════ -->
         <el-tab-pane label="结佣业绩" name="COMMISSION" lazy>
-          <el-table :data="commissionItems" stripe border max-height="600" size="small">
+          <div class="tab-toolbar">
+            <el-tree-select v-model="cf.filter.deptId" :data="deptTreeData"
+              :props="{ label: 'deptName', children: 'children' } as any" node-key="deptId" value-key="deptId"
+              placeholder="全部门店/组别" clearable check-strictly style="width: 200px" />
+            <el-select v-model="cf.filter.employeeId" filterable remote clearable :remote-method="cfEmp.remoteMethod"
+              :loading="cfEmp.loading" no-data-text="输入姓名/工号搜索" placeholder="签约人姓名/工号搜索" style="width: 210px"
+              @change="cfEmp.onSelect">
+              <el-option v-for="emp in cfEmp.options" :key="emp.employeeId"
+                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
+            </el-select>
+          </div>
+          <el-table v-loading="perfLoading.commission" element-loading-text="业绩明细加载中…" :data="cf.paged" stripe border max-height="600" size="small" show-summary :summary-method="cfSummary">
             <el-table-column label="签约/认购日期" width="170" align="center">
               <template #default="{ row }">{{ row.signDate || row.businessDate || '—' }}</template>
             </el-table-column>
@@ -300,7 +363,7 @@
             <el-table-column label="角色占比" width="90" align="center">
               <template #default="{ row }">{{ row.shareRatio != null ? (Number(row.shareRatio) * 100).toFixed(2) + '%' : '—' }}</template>
             </el-table-column>
-            <el-table-column label="85后" align="right" width="130">
+            <el-table-column label="85后" prop="convertedAmount" align="right" width="130">
               <template #default="{ row }">¥{{ Number(row.convertedAmount ?? row.amount).toFixed(2) }}</template>
             </el-table-column>
             <el-table-column label="是否结算" width="80" align="center">
@@ -308,11 +371,24 @@
             </el-table-column>
             <el-table-column label="结算日期" prop="approvedMonth" width="110" align="center" />
           </el-table>
+          <el-pagination class="tab-pagination" v-model:current-page="cf.page" v-model:page-size="cf.pageSize"
+            :total="cf.filtered.length" :page-sizes="[50, 100, 200]" layout="total, sizes, prev, pager, next" size="small" />
         </el-tab-pane>
 
         <!-- ══════════ 人事数据 sheet（18 列） ══════════ -->
         <el-tab-pane label="人事数据" name="HR" lazy>
-          <el-table :data="details" stripe border max-height="600" size="small">
+          <div class="tab-toolbar">
+            <el-tree-select v-model="hf.filter.deptId" :data="deptTreeData"
+              :props="{ label: 'deptName', children: 'children' } as any" node-key="deptId" value-key="deptId"
+              placeholder="全部门店/组别" clearable check-strictly style="width: 200px" />
+            <el-select v-model="hf.filter.employeeId" filterable remote clearable :remote-method="hfEmp.remoteMethod"
+              :loading="hfEmp.loading" no-data-text="输入姓名/工号搜索" placeholder="员工姓名/工号搜索" style="width: 210px"
+              @change="hfEmp.onSelect">
+              <el-option v-for="emp in hfEmp.options" :key="emp.employeeId"
+                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
+            </el-select>
+          </div>
+          <el-table :data="hf.paged" stripe border max-height="600" size="small">
             <el-table-column label="门店名称" prop="deptName" width="120" fixed="left" />
             <el-table-column label="姓名" prop="employeeName" width="80" fixed="left" />
             <el-table-column label="职级" prop="levelCode" width="60" />
@@ -350,11 +426,24 @@
               <template #default="{ row }">{{ neg(row.otherDeduct) }}</template>
             </el-table-column>
           </el-table>
+          <el-pagination class="tab-pagination" v-model:current-page="hf.page" v-model:page-size="hf.pageSize"
+            :total="hf.filtered.length" :page-sizes="[50, 100, 200]" layout="total, sizes, prev, pager, next" size="small" />
         </el-tab-pane>
 
         <!-- ══════════ 绩效和扣款 sheet（19 列） ══════════ -->
         <el-tab-pane label="绩效和扣款" name="PERF" lazy>
-          <el-table :data="details" stripe border max-height="600" size="small">
+          <div class="tab-toolbar">
+            <el-tree-select v-model="pf.filter.deptId" :data="deptTreeData"
+              :props="{ label: 'deptName', children: 'children' } as any" node-key="deptId" value-key="deptId"
+              placeholder="全部门店/组别" clearable check-strictly style="width: 200px" />
+            <el-select v-model="pf.filter.employeeId" filterable remote clearable :remote-method="pfEmp.remoteMethod"
+              :loading="pfEmp.loading" no-data-text="输入姓名/工号搜索" placeholder="员工姓名/工号搜索" style="width: 210px"
+              @change="pfEmp.onSelect">
+              <el-option v-for="emp in pfEmp.options" :key="emp.employeeId"
+                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
+            </el-select>
+          </div>
+          <el-table :data="pf.paged" stripe border max-height="600" size="small">
             <el-table-column label="门店" prop="deptName" width="120" fixed="left" />
             <el-table-column label="姓名" prop="employeeName" width="80" fixed="left" />
             <el-table-column label="积分扣款" align="right" width="90">
@@ -371,6 +460,8 @@
               <template #default="{ row }">{{ row.totalDeduct != null ? (Number(row.totalDeduct) * 100).toFixed(2) + '%' : '' }}</template>
             </el-table-column>
           </el-table>
+          <el-pagination class="tab-pagination" v-model:current-page="pf.page" v-model:page-size="pf.pageSize"
+            :total="pf.filtered.length" :page-sizes="[50, 100, 200]" layout="total, sizes, prev, pager, next" size="small" />
         </el-tab-pane>
       </el-tabs>
     </el-dialog>
@@ -394,11 +485,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Download } from '@element-plus/icons-vue';
 import { payrollApi, orgCommissionTraceApi, type PayrollBatch, type PayrollDetail, type CommissionTraceItem } from '@/api/panjia/payroll';
+import { useDeptEmpFilter, useEmployeeSearch } from '@/hooks/useDeptEmpFilter';
 import { attendanceApi } from '@/api/panjia/attendance';
 import { scoreApi } from '@/api/panjia/score';
 import { exportMultiSheet, parseStoreItems, type ExportExtraData } from '../components/payroll-export';
@@ -506,6 +598,73 @@ const loadBatches = async () => {
   batches.value = (res as any).data ?? [];
 };
 
+/* ───────────── tab 通用：统一门店/员工组件过滤 + 前端分页 ─────────────
+ * 门店：统一 el-tree-select + 部门树（含子部门）；员工：统一 el-select 远程搜索；
+ * 数据已全量在内存，过滤分页纯前端，避免全量渲染卡顿。
+ */
+const { deptTreeData, loadDeptTree, collectDeptIds } = useDeptEmpFilter();
+
+/** 统一过滤匹配：门店（含子部门）+ 员工（employeeId 精确），全部 tab 共用 */
+const matchByDeptEmp = (r: any, f: Record<string, any>) => {
+  if (f.deptId && !collectDeptIds(f.deptId).has(String(r.deptId ?? ''))) return false;
+  if (f.employeeId != null && f.employeeId !== '' && String(r.employeeId ?? '') !== String(f.employeeId)) return false;
+  return true;
+};
+
+function pagedTable<T extends Record<string, any>>(source: () => T[]) {
+  const filter = ref<Record<string, any>>({ deptId: '', employeeId: '' });
+  const page = ref(1);
+  const pageSize = ref(50);
+  const filtered = computed(() => {
+    const f = filter.value;
+    const hasFilter = (f.deptId !== '' && f.deptId != null) || (f.employeeId !== '' && f.employeeId != null);
+    return hasFilter ? source().filter((r) => matchByDeptEmp(r, f)) : source();
+  });
+  const paged = computed(() => {
+    const start = (page.value - 1) * pageSize.value;
+    return filtered.value.slice(start, start + pageSize.value);
+  });
+  // 过滤条件或数据源变化时回到第一页（关闭弹窗清空数据后自动复位）
+  watch([filter, () => source().length], () => { page.value = 1; }, { deep: true });
+  return reactive({
+    filter, page, pageSize, filtered, paged,
+    reset: () => { filter.value.deptId = ''; filter.value.employeeId = ''; page.value = 1; },
+  });
+}
+
+const ag = pagedTable(() => salaryDetails.value);
+const agEmp = useEmployeeSearch(() => ag.filter.employeeId, () => ag.filter.deptId);
+const mf = pagedTable(() => managerDetails.value);
+const mfEmp = useEmployeeSearch(() => mf.filter.employeeId, () => mf.filter.deptId);
+const df = pagedTable(() => directorTreeData.value);
+const dfEmp = useEmployeeSearch(() => df.filter.employeeId, () => df.filter.deptId);
+const nsf = pagedTable(() => newSignItems.value);
+const nsfEmp = useEmployeeSearch(() => nsf.filter.employeeId, () => nsf.filter.deptId);
+const cf = pagedTable(() => commissionItems.value);
+const cfEmp = useEmployeeSearch(() => cf.filter.employeeId, () => cf.filter.deptId);
+const hf = pagedTable(() => details.value);
+const hfEmp = useEmployeeSearch(() => hf.filter.employeeId, () => hf.filter.deptId);
+const pf = pagedTable(() => details.value);
+const pfEmp = useEmployeeSearch(() => pf.filter.employeeId, () => pf.filter.deptId);
+
+/* ───────────── 业绩明细汇总行（新签/结佣 tab 共用工厂，合计 = 当前筛选视图全量） ───────────── */
+const fmtMoney = (v: number) => '¥' + v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const mkPerfSummary = (source: () => any[]) => ({ columns }: any) => {
+  const sums: string[] = [];
+  columns.forEach((col: any, idx: number) => {
+    if (idx === 0) { sums[idx] = '合计'; return; }
+    if (col.property === 'convertedAmount') {
+      const total = source().reduce((s: number, r: any) => s + (Number(r.convertedAmount ?? r.amount) || 0), 0);
+      sums[idx] = fmtMoney(total);
+    } else {
+      sums[idx] = '';
+    }
+  });
+  return sums;
+};
+const nsfSummary = mkPerfSummary(() => nsf.filtered);
+const cfSummary = mkPerfSummary(() => cf.filtered);
+
 const createBatch = async () => {
   if (!createForm.value.period) {
     ElMessage.warning('请选择归属月');
@@ -563,18 +722,50 @@ const doAction = async (row: PayrollBatch, action: string) => {
   }
 };
 
+/* 业绩明细按需加载：打开弹窗只拉工资明细（快），首次切到业绩 tab 才拉全期业绩明细（几千条） */
+const perfLoading = ref({ newSign: false, commission: false });
+const loadedPerfPeriod = ref<{ newSign: string; commission: string }>({ newSign: '', commission: '' });
+
+const ensureNewSignLoaded = async () => {
+  const period = currentBatch.value?.period;
+  if (!period || loadedPerfPeriod.value.newSign === period) return;
+  perfLoading.value.newSign = true;
+  try {
+    const res = await orgCommissionTraceApi.allNewSign(period).catch(() => ({ data: [] }));
+    newSignItems.value = (res as any).data ?? [];
+    loadedPerfPeriod.value.newSign = period;
+  } finally {
+    perfLoading.value.newSign = false;
+  }
+};
+const ensureCommissionLoaded = async () => {
+  const period = currentBatch.value?.period;
+  if (!period || loadedPerfPeriod.value.commission === period) return;
+  perfLoading.value.commission = true;
+  try {
+    const res = await orgCommissionTraceApi.allCommission(period).catch(() => ({ data: [] }));
+    commissionItems.value = (res as any).data ?? [];
+    loadedPerfPeriod.value.commission = period;
+  } finally {
+    perfLoading.value.commission = false;
+  }
+};
+
+// 首次切到业绩 tab 时触发对应接口（同批次幂等，不重复拉取）
+watch(detailTab, (name) => {
+  if (name === 'NEWSIGN') ensureNewSignLoaded();
+  if (name === 'COMMISSION') ensureCommissionLoaded();
+});
+
 const viewDetail = async (row: PayrollBatch) => {
   currentBatch.value = row;
   detailVisible.value = true;
-  // 并行加载工资明细 + 业绩明细（新签/结佣）
-  const [res, commissionRes, newSignRes] = await Promise.all([
-    payrollApi.getDetails(row.id),
-    orgCommissionTraceApi.allCommission(row.period).catch(() => ({ data: [] })),
-    orgCommissionTraceApi.allNewSign(row.period).catch(() => ({ data: [] })),
-  ]);
+  loadedPerfPeriod.value = { newSign: '', commission: '' };
+  const res = await payrollApi.getDetails(row.id);
   details.value = (res as any).data ?? [];
-  commissionItems.value = (commissionRes as any).data ?? [];
-  newSignItems.value = (newSignRes as any).data ?? [];
+  // 打开前已停在业绩 tab 时（页签缓存复用/工作流跳转场景）立即补拉
+  if (detailTab.value === 'NEWSIGN') ensureNewSignLoaded();
+  if (detailTab.value === 'COMMISSION') ensureCommissionLoaded();
 };
 
 const closeDetail = () => {
@@ -583,6 +774,8 @@ const closeDetail = () => {
   details.value = [];
   newSignItems.value = [];
   commissionItems.value = [];
+  loadedPerfPeriod.value = { newSign: '', commission: '' };
+  [ag, mf, df, nsf, cf, hf, pf].forEach((t) => t.reset());
 };
 
 // 工作流跳转：查看态加载批次与明细（审批办理已改为「我的待办」原地弹窗）
@@ -601,10 +794,12 @@ const openFromWorkflow = async () => {
   }
 };
 
-const summaryMethod = ({ columns, data }: any) => {
+const summaryMethod = ({ columns }: any) => {
   const sums: string[] = [];
   // 工资表 sheet：与导出一致，仅对有 prop 的金额列求和
   // 底薪列无 prop（经纪人取 baseSalary，店长取 teamIncome + guaranteeFill），单独处理
+  // 合计 = 当前筛选视图全量口径（分页后 data 只是当前页），跨页一致
+  const data = ag.filtered;
   const moneyProps = ['commissionIncome', 'mentorBonus', 'bonus', 'pointsFee', 'gross', 'socialFee', 'housingFund', 'commercialInsurance', 'dormitoryFee', 'net', 'tax'];
   const deductProps = new Set(['pointsFee', 'socialFee', 'housingFund', 'commercialInsurance', 'dormitoryFee', 'tax']);
   columns.forEach((col: any, idx: number) => {
@@ -626,9 +821,11 @@ const summaryMethod = ({ columns, data }: any) => {
   return sums;
 };
 
-const managerSummary = ({ columns, data }: any) => {
+const managerSummary = ({ columns }: any) => {
   const sums: string[] = [];
   // 店长 sheet 金额列（不含 gross：店长工资 = teamIncome + guaranteeFill，不含结佣提成和个人新签递延）
+  // 合计 = 当前筛选视图全量口径（分页后 data 只是当前页）
+  const data = mf.filtered;
   const moneyProps = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'teamIncome', 'personalNewsignIncome', 'minSalary', 'guaranteeFill', 'otherDeduct'];
   const deductProps = new Set(['deptEmployerSocialTotal', 'otherDeduct']);
   columns.forEach((col: any, idx: number) => {
@@ -651,10 +848,11 @@ const managerSummary = ({ columns, data }: any) => {
   return sums;
 };
 
-const directorSummary = ({ columns, data }: any) => {
+const directorSummary = ({ columns }: any) => {
   const sums: string[] = [];
   // 只汇总顶层汇总行（_isSummary），避免子行 double-count
-  const topRows = data.filter((r: any) => r._isSummary);
+  // 合计 = 当前筛选视图全量口径（分页后 data 只是当前页顶层行）
+  const topRows = df.filtered;
   const moneyProps = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'storeIncome', 'baseSalary', 'fullAttendance', 'bonus', 'commissionPerformance', 'commissionIncome', 'mentorBonus', 'socialFee', 'housingFund', 'commercialInsurance', 'gross', 'tax', 'net'];
   const deductProps = new Set(['deptEmployerSocialTotal', 'socialFee', 'housingFund', 'commercialInsurance', 'tax']);
   columns.forEach((col: any, idx: number) => {
@@ -674,8 +872,10 @@ const directorSummary = ({ columns, data }: any) => {
 };
 
 /* ───────────── 导出（xlsx 七 sheet：工资表/新签业绩/结佣业绩/店长/总监/人事/绩效） ───────────── */
-const exportExcel = () => {
+const exportExcel = async () => {
   if (!details.value.length) return;
+  // 兜底补拉业绩明细（若未打开过对应 tab），保证 7 sheet 导出完整
+  await Promise.all([ensureNewSignLoaded(), ensureCommissionLoaded()]);
   const extra: ExportExtraData = {
     newSignItems: newSignItems.value,
     commissionItems: commissionItems.value,
@@ -689,6 +889,7 @@ useWorkflowRouteOpen('/payroll/batch', openFromWorkflow);
 
 onMounted(() => {
   loadBatches();
+  loadDeptTree();
 });
 </script>
 
@@ -709,6 +910,19 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 12px;
+}
+
+.tab-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.tab-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
 }
 
 .text-primary {

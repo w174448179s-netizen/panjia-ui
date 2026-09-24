@@ -72,19 +72,38 @@
           </span>
         </div>
         <div class="toolbar-right">
-          <el-select
+          <el-tree-select
             v-model="filterDeptId"
-            placeholder="门店"
+            :data="deptTreeData"
+            :props="{ label: 'deptName', children: 'children' } as any"
+            node-key="deptId"
+            value-key="deptId"
+            placeholder="全部门店/组别"
             clearable
-            filterable
+            check-strictly
             size="small"
-            style="width: 170px"
+            style="width: 200px"
+          />
+          <el-select
+            v-model="filterEmployeeId"
+            filterable
+            remote
+            clearable
+            :remote-method="empSearch.remoteMethod"
+            :loading="empSearch.loading"
+            no-data-text="输入姓名/工号搜索"
+            placeholder="员工姓名/工号搜索"
+            size="small"
+            style="width: 210px"
+            @change="empSearch.onSelect"
           >
-            <el-option v-for="d in deptOptions" :key="d.deptId" :label="d.deptName" :value="d.deptId" />
+            <el-option
+              v-for="emp in empSearch.options"
+              :key="emp.employeeId"
+              :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`"
+              :value="emp.employeeId"
+            />
           </el-select>
-          <el-input v-model="filterName" placeholder="员工姓名" clearable size="small" style="width: 130px" />
-          <el-input v-model="filterCode" placeholder="员工号" clearable size="small" style="width: 130px" />
-          <el-input v-model="filterContractNo" placeholder="合同号/订单号" clearable size="small" style="width: 160px" />
           <el-button size="small" :icon="RefreshLeft" @click="resetFilters">重置</el-button>
           <el-checkbox v-model="showAllColumns" size="small">显示全部金额列（含全零列）</el-checkbox>
         </div>
@@ -233,6 +252,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Lock, Download, InfoFilled, RefreshLeft } from '@element-plus/icons-vue';
 import { payrollApi, orgCommissionTraceApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
+import { useDeptEmpFilter, useEmployeeSearch } from '@/hooks/useDeptEmpFilter';
 import { exportMultiSheet, type ExportExtraData } from '../components/payroll-export';
 import PayrollTracePanel from '../components/PayrollTracePanel.vue';
 
@@ -283,38 +303,28 @@ const isZero = (v: number | null | undefined) => !v || Number(v) === 0;
 
 const currentBatch = computed(() => batches.value.find((b) => b.id === selectedBatchId.value) || null);
 
-/* ───────────── 筛选条件（门店/姓名/工号，总监·财务组织视角） ───────────── */
+/* ───────────── 筛选条件（统一门店树/员工搜索组件，含子部门口径） ───────────── */
+const { deptTreeData, loadDeptTree, collectDeptIds } = useDeptEmpFilter();
 const filterDeptId = ref<number | string>('');
-const filterName = ref('');
-const filterCode = ref('');
-const filterContractNo = ref('');
-
-/** 门店选项：从当前批次明细行的 deptId/deptName 派生去重（后端翻译后直出） */
-const deptOptions = computed(() => {
-  const map = new Map<string, string>();
-  details.value.forEach((d) => {
-    if (d.deptId != null && d.deptName) map.set(String(d.deptId), d.deptName);
-  });
-  return Array.from(map, ([deptId, deptName]) => ({ deptId, deptName }));
-});
+const filterEmployeeId = ref<number | string>('');
+const empSearch = useEmployeeSearch(() => filterEmployeeId.value, () => filterDeptId.value);
 
 const resetFilters = () => {
   filterDeptId.value = '';
-  filterName.value = '';
-  filterCode.value = '';
-  filterContractNo.value = '';
+  filterEmployeeId.value = '';
+  pageNum.value = 1;
 };
 
-/** 当前视图明细：角色 tab → 门店 → 姓名模糊 → 工号模糊（合同号走后端查询） */
+/** 当前视图明细：角色 tab → 门店（含子部门）→ 员工精确 */
 const viewDetails = computed(() => {
   let list = viewRole.value === 'ALL' ? details.value : details.value.filter((d) => d.employeeRole === viewRole.value);
-  if (filterDeptId.value !== '') {
-    list = list.filter((d) => String(d.deptId) === String(filterDeptId.value));
+  if (filterDeptId.value !== '' && filterDeptId.value != null) {
+    const ids = collectDeptIds(filterDeptId.value);
+    list = list.filter((d) => ids.has(String(d.deptId ?? '')));
   }
-  const name = filterName.value.trim();
-  if (name) list = list.filter((d) => (d.employeeName || '').includes(name));
-  const code = filterCode.value.trim();
-  if (code) list = list.filter((d) => (d.employeeCode || '').includes(code));
+  if (filterEmployeeId.value !== '' && filterEmployeeId.value != null) {
+    list = list.filter((d) => String(d.employeeId ?? '') === String(filterEmployeeId.value));
+  }
   return list;
 });
 
@@ -367,19 +377,10 @@ const pagedDetails = computed(() => {
   return viewDetails.value.slice(start, start + pageSize.value);
 });
 
-/** 筛选条件变化时回到第一页 */
+/** 筛选条件变化时只重置分页（全部前端过滤，无后端重查） */
 const resetPage = () => { pageNum.value = 1; };
-
-/** 筛选条件变化时：合同号变化重新请求后端，其余只重置分页 */
-const onFilterChange = (needReload: boolean) => {
-  resetPage();
-  if (needReload) loadDetails();
-};
 watch(viewRole, () => resetPage());
-watch(filterDeptId, () => resetPage());
-watch(filterName, () => resetPage());
-watch(filterCode, () => resetPage());
-watch(filterContractNo, () => onFilterChange(true));
+watch([filterDeptId, filterEmployeeId], () => resetPage());
 
 /* ───────────── 数据加载 ───────────── */
 const loadBatches = async () => {
@@ -397,10 +398,7 @@ const loadDetails = async () => {
   if (!selectedBatchId.value) { details.value = []; return; }
   loading.value = true;
   try {
-    const contractNo = filterContractNo.value.trim();
-    const res = contractNo
-      ? await payrollApi.getDetailsFiltered(selectedBatchId.value, contractNo)
-      : await payrollApi.getDetails(selectedBatchId.value);
+    const res = await payrollApi.getDetails(selectedBatchId.value);
     details.value = (res as any).data ?? [];
     resetPage();
   } catch {
@@ -418,8 +416,10 @@ const MONEY_PROPS = [
   'dormitoryFee', 'negativeCarryover', 'otherDeduct', 'deduct', 'tax', 'net',
 ];
 
-const summaryMethod = ({ columns, data }: any) => {
+const summaryMethod = ({ columns }: any) => {
   const sums: string[] = [];
+  // 合计固定当前筛选视图全量口径（分页后 data 只是当前页），跨页一致
+  const data = viewDetails.value;
   columns.forEach((col: any, idx: number) => {
     if (idx === 0) { sums[idx] = ''; return; }
     if (idx === 1) { sums[idx] = '合计'; return; }
@@ -457,6 +457,7 @@ const num = (v: any) => (v == null || v === '' ? '' : Number(v).toFixed(2));
 
 onMounted(() => {
   loadBatches();
+  loadDeptTree();
 });
 </script>
 
