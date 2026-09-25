@@ -243,7 +243,6 @@ export interface CommissionTraceItem {
   contractNo?: string;
   orderNo?: string;
   businessDate?: string;
-  signDate?: string;
   propertyAddress?: string;
   shareRatio?: number | string;
   bizType: string;

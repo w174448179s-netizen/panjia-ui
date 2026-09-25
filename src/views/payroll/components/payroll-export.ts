@@ -57,6 +57,13 @@ const baseSalaryOf = (r: PayrollDetail): string | number => {
   return num(r.baseSalary);
 };
 
+/**
+ * 工资合计/实发工资口径：应发 - 扣款（未减个税），两列同值；
+ * 再减个税（tax）后为最终发放（即 net）。
+ */
+export const grossMinusDeduct = (r: { gross?: number | string | null; deduct?: number | string | null }): number =>
+  (Number(r.gross) || 0) - (Number(r.deduct) || 0);
+
 export function parseStoreItems(r: PayrollDetail): DirectorStoreItem[] {
   if (!r.directorStoreItems) return [];
   try {
@@ -92,8 +99,6 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
       '工资合计', '实发工资', '个税扣除', '最终发放',
     ],
     row: (r) => {
-      const gross = Number(r.gross) || 0;
-      const deduct = Number(r.deduct) || 0;
       return [
         r.deptName || '',
         r.employeeCode || '',
@@ -119,10 +124,10 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         neg(Math.abs(Number(r.negativeCarryover) || 0)),
         neg(r.commercialInsurance),
         neg(r.dormitoryFee),
-        num(gross - deduct),
-        num(r.net),
-        neg(r.tax),
-        num(r.net),
+        num(grossMinusDeduct(r)),           // 工资合计 = 应发 - 扣款（未减个税）
+        num(grossMinusDeduct(r)),           // 实发工资 = 工资合计（减个税前）
+        neg(r.tax),                         // 个税扣除
+        num(r.net),                         // 最终发放 = 实发工资 - 个税
       ];
     },
   },
@@ -242,7 +247,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
 /** 业绩明细行 → Excel 行（新签/结佣共用，12 列，对齐天街工资表） */
 function perfFactRow(it: CommissionTraceItem): (string | number)[] {
   return [
-    it.signDate || it.businessDate || '',
+    it.businessDate || '',
     resolveBizNo(it.bizType, it.contractNo, it.orderNo) || '',
     it.bizType || '',
     it.propertyAddress || '',

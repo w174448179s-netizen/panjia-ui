@@ -34,10 +34,6 @@
       </div>
 
       <div v-if="currentBatch" class="stat-row">
-        <div class="stat-card net">
-          <div class="stat-label">实发合计</div>
-          <div class="stat-value">¥{{ fmt(currentBatch.netTotal) }}</div>
-        </div>
         <div class="stat-card">
           <div class="stat-label">应发合计</div>
           <div class="stat-value">¥{{ fmt(currentBatch.grossTotal) }}</div>
@@ -45,6 +41,14 @@
         <div class="stat-card">
           <div class="stat-label">扣款 + 个税</div>
           <div class="stat-value deduct-text">¥{{ fmtNeg(Number(currentBatch.deductTotal) + Number(currentBatch.taxTotal)) }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">实发合计（未扣个税）</div>
+          <div class="stat-value">¥{{ fmt(Number(currentBatch.grossTotal) - Number(currentBatch.deductTotal)) }}</div>
+        </div>
+        <div class="stat-card net">
+          <div class="stat-label">最终发放</div>
+          <div class="stat-value">¥{{ fmt(currentBatch.netTotal) }}</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">参与人数</div>
@@ -209,7 +213,7 @@
         <!-- 结果 -->
         <el-table-column label="实发工资" fixed="right" width="130" align="right" class-name="col-net">
           <template #default="{ row }">
-            <span class="net-value" :class="{ 'net-negative': Number(row.net) < 0 }">¥{{ fmt(row.net) }}</span>
+            <span class="net-value" :class="{ 'net-negative': grossMinusDeduct(row) < 0 }">¥{{ fmt(grossMinusDeduct(row)) }}</span>
           </template>
         </el-table-column>
       </el-table>
@@ -253,7 +257,7 @@ import { ElMessage } from 'element-plus';
 import { Lock, Download, InfoFilled, RefreshLeft } from '@element-plus/icons-vue';
 import { payrollApi, orgCommissionTraceApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
 import { useDeptEmpFilter, useEmployeeSearch } from '@/hooks/useDeptEmpFilter';
-import { exportMultiSheet, type ExportExtraData } from '../components/payroll-export';
+import { exportMultiSheet, grossMinusDeduct, type ExportExtraData } from '../components/payroll-export';
 import PayrollTracePanel from '../components/PayrollTracePanel.vue';
 
 /* ───────────── 基础状态 ───────────── */
@@ -427,6 +431,10 @@ const summaryMethod = ({ columns }: any) => {
     if (prop && MONEY_PROPS.includes(prop)) {
       const total = data.reduce((s: number, r: any) => s + (Number(r[prop]) || 0), 0);
       sums[idx] = DEDUCT_PROPS.has(prop) ? fmtNeg(total) : fmt(total);
+    } else if (col.label === '实发工资') {
+      // 实发工资 = 应发 - 扣款（未减个税），与列展示同口径；减个税后为最终发放
+      const total = data.reduce((s: number, r: any) => s + grossMinusDeduct(r), 0);
+      sums[idx] = fmt(total);
     } else {
       sums[idx] = '';
     }
@@ -453,7 +461,6 @@ const exportExcel = async () => {
   exportMultiSheet(viewDetails.value, period, undefined, extra);
   ElMessage.success('导出成功');
 };
-const num = (v: any) => (v == null || v === '' ? '' : Number(v).toFixed(2));
 
 onMounted(() => {
   loadBatches();

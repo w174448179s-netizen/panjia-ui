@@ -28,7 +28,7 @@
         <el-table-column label="应发合计" prop="grossTotal" width="130" align="right">
           <template #default="{ row }">{{ fmt(row.grossTotal) }}</template>
         </el-table-column>
-        <el-table-column label="实发合计" prop="netTotal" width="130" align="right">
+        <el-table-column label="最终发放" prop="netTotal" width="130" align="right">
           <template #default="{ row }">{{ fmt(row.netTotal) }}</template>
         </el-table-column>
         <el-table-column label="算薪次数" prop="attempt" width="80" align="center" />
@@ -144,8 +144,8 @@
             <el-table-column label="工资合计" width="110" align="right">
               <template #default="{ row }">{{ num((Number(row.gross) || 0) - (Number(row.deduct) || 0)) }}</template>
             </el-table-column>
-            <el-table-column label="实发工资" prop="net" width="110" align="right">
-              <template #default="{ row }"><b class="text-primary">{{ num(row.net) }}</b></template>
+            <el-table-column label="实发工资" width="110" align="right">
+              <template #default="{ row }"><b class="text-primary">{{ num(grossMinusDeduct(row)) }}</b></template>
             </el-table-column>
             <el-table-column label="个税扣除" prop="tax" width="90" align="right">
               <template #default="{ row }">{{ neg(row.tax) }}</template>
@@ -302,9 +302,9 @@
                 :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
             </el-select>
           </div>
-          <el-table :data="nsf.paged" stripe border max-height="600" size="small">
+          <el-table :data="nsf.paged" stripe border max-height="600" size="small" :summary-method="newSignSummary" show-summary>
             <el-table-column label="签约/认购日期" width="170" align="center">
-              <template #default="{ row }">{{ row.signDate || row.businessDate || '—' }}</template>
+              <template #default="{ row }">{{ row.businessDate || '—' }}</template>
             </el-table-column>
             <el-table-column label="合同号/订单号" min-width="180" show-overflow-tooltip>
               <template #default="{ row }">{{ resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—' }}</template>
@@ -345,9 +345,9 @@
                 :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
             </el-select>
           </div>
-          <el-table :data="cf.paged" stripe border max-height="600" size="small">
+          <el-table :data="cf.paged" stripe border max-height="600" size="small" :summary-method="commissionSummary" show-summary>
             <el-table-column label="签约/认购日期" width="170" align="center">
-              <template #default="{ row }">{{ row.signDate || row.businessDate || '—' }}</template>
+              <template #default="{ row }">{{ row.businessDate || '—' }}</template>
             </el-table-column>
             <el-table-column label="合同号/订单号" min-width="180" show-overflow-tooltip>
               <template #default="{ row }">{{ resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—' }}</template>
@@ -493,7 +493,7 @@ import { payrollApi, orgCommissionTraceApi, type PayrollBatch, type PayrollDetai
 import { useDeptEmpFilter, useEmployeeSearch } from '@/hooks/useDeptEmpFilter';
 import { attendanceApi } from '@/api/panjia/attendance';
 import { scoreApi } from '@/api/panjia/score';
-import { exportMultiSheet, parseStoreItems, type ExportExtraData } from '../components/payroll-export';
+import { exportMultiSheet, parseStoreItems, grossMinusDeduct, type ExportExtraData } from '../components/payroll-export';
 import { resolveBizNo } from '@/utils/panjiaBiz';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
@@ -747,6 +747,7 @@ const summaryMethod = ({ columns }: any) => {
   const sums: string[] = [];
   // 工资表 sheet：与导出一致，仅对有 prop 的金额列求和
   // 底薪列无 prop（经纪人取 baseSalary，店长取 teamIncome + guaranteeFill），单独处理
+  // 工资合计/实发工资列无 prop（= 应发-扣款，未减个税）；最终发放列 prop=net（减个税后）
   // 合计固定全量口径（分页后 data 只是当前页），与批次导出对账一致
   const data = salaryDetails.value;
   const moneyProps = ['commissionIncome', 'mentorBonus', 'bonus', 'pointsFee', 'gross', 'socialFee', 'housingFund', 'commercialInsurance', 'dormitoryFee', 'net', 'tax'];
@@ -763,12 +764,28 @@ const summaryMethod = ({ columns }: any) => {
     } else if (col.label === '底薪') {
       const total = data.reduce((s: number, r: any) => s + baseSalaryOf(r), 0);
       sums[idx] = fmt(total);
+    } else if (col.label === '工资合计' || col.label === '实发工资') {
+      const total = data.reduce((s: number, r: any) => s + grossMinusDeduct(r), 0);
+      sums[idx] = fmt(total);
     } else {
       sums[idx] = '';
     }
   });
   return sums;
 };
+
+/** 新签/结佣业绩 tab 合计行：末行汇总全部行的「85后」金额（全量口径，与导出对账一致） */
+const perfSummary = (list: () => CommissionTraceItem[]) => ({ columns }: any) => {
+  const sums: string[] = [];
+  const total = list().reduce((s, it) => s + (Number(it.convertedAmount ?? it.amount) || 0), 0);
+  columns.forEach((col: any, idx: number) => {
+    if (idx === 0) { sums[idx] = '合计'; return; }
+    sums[idx] = col.label === '85后' ? fmt(total) : '';
+  });
+  return sums;
+};
+const newSignSummary = perfSummary(() => newSignItems.value);
+const commissionSummary = perfSummary(() => commissionItems.value);
 
 const managerSummary = ({ columns }: any) => {
   const sums: string[] = [];

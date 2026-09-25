@@ -44,7 +44,11 @@
         <div class="compose-block result">
           <div class="compose-head">结果</div>
           <div class="compose-item">
-            <span class="compose-name">实发工资</span>
+            <span class="compose-name">实发工资<i class="compose-src">应发 - 扣款，未减个税</i></span>
+            <span class="compose-val">¥{{ fmt(grossMinusDeduct(row)) }}</span>
+          </div>
+          <div class="compose-item">
+            <span class="compose-name">最终发放<i class="compose-src">实发工资 - 个税</i></span>
             <span class="compose-val net-val">¥{{ fmt(row.net) }}</span>
           </div>
           <div class="compose-item">
@@ -71,7 +75,7 @@
     <div class="trace-section-title">个人结佣明细</div>
     <el-table :data="traceItems" size="small" border max-height="300" show-summary :summary-method="traceSummary">
       <el-table-column label="签约/认购时间" width="170" align="center">
-        <template #default="{ row: it }">{{ formatDate(it.signDate) || it.businessDate || '—' }}</template>
+        <template #default="{ row: it }">{{ formatDate(it.businessDate) || '—' }}</template>
       </el-table-column>
       <el-table-column label="合同号/订单号" min-width="180" show-overflow-tooltip>
         <template #default="{ row: it }">
@@ -108,7 +112,7 @@
       <div class="trace-section-title" style="margin-top: 16px">门店新签明细</div>
       <el-table :data="teamNewSignItems" size="small" border max-height="300" show-summary :summary-method="teamSummary">
         <el-table-column label="签约/认购时间" width="170" align="center">
-          <template #default="{ row: it }">{{ formatDate(it.signDate) || it.businessDate || '—' }}</template>
+          <template #default="{ row: it }">{{ formatDate(it.businessDate) || '—' }}</template>
         </el-table-column>
         <el-table-column label="合同号/订单号" min-width="180" show-overflow-tooltip>
           <template #default="{ row: it }">
@@ -148,6 +152,7 @@ import { ref, computed, toRefs } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Tickets } from '@element-plus/icons-vue';
 import { mySalaryApi, orgCommissionTraceApi, type CommissionTraceItem, type PayrollDetail } from '@/api/panjia/payroll';
+import { grossMinusDeduct } from './payroll-export';
 import { useDict } from '@/utils/dict';
 import { resolveBizNo } from '@/utils/panjiaBiz';
 
