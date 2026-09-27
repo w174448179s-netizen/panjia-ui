@@ -26,6 +26,7 @@ export default defineConfig(({ mode, command }) => {
     },
     server: {
       host: '0.0.0.0',
+      allowedHosts: ['panjia.icu'], // 放行 frp 转发带来的 Host 头（新版 vite 默认拦截陌生 Host）
       port: Number(env.VITE_APP_PORT),
       open: true,
       proxy: {
