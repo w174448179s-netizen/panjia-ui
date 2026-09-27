@@ -151,8 +151,9 @@
             style="width: 100%"
             placeholder="请输入调整后的目标金额"
           />
-          <div class="form-tip">
-            当前：¥{{ formatAmount(adjustDialog.amount) }} → 调整后：¥{{ formatAmount(adjustForm.targetAmount ?? 0) }}
+          <div class="form-tip adjust-preview">
+            <span>当前：<span class="amount">¥{{ formatAmount(adjustDialog.amount) }}</span></span>
+            <span>→ 调整后：<span class="amount">¥{{ formatAmount(adjustForm.targetAmount ?? 0) }}</span></span>
           </div>
         </el-form-item>
         <el-form-item v-if="adjustForm.adjustType === 'TRANSFER'" label="目标部门">
@@ -620,5 +621,23 @@ onMounted(async () => {
   font-size: 12px;
   color: #909399;
   margin-top: 4px;
+}
+/* 调整弹窗「当前 → 调整后」预览：金额放大加粗 + 浅底色块 */
+.form-tip.adjust-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  font-size: 13px;
+  color: #606266;
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 6px;
+}
+.form-tip.adjust-preview .amount {
+  font-size: 17px;
+  font-weight: 700;
+  color: #303133;
 }
 </style>

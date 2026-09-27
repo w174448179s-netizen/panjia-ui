@@ -274,11 +274,11 @@
             style="width: 100%"
             placeholder="正数增加，负数减少"
           />
-          <div class="form-tip">
+          <div class="form-tip adjust-preview">
             <span :class="adjustDeltaClass(adjustForm.adjustAmount)">
               {{ (adjustForm.adjustAmount ?? 0) >= 0 ? '+' : '' }}{{ formatAmount(adjustForm.adjustAmount ?? 0) }}
             </span>
-            → 调整后：¥{{ formatAmount(adjustTargetAmount) }}
+            <span>→ 调整后：<span class="amount">¥{{ formatAmount(adjustTargetAmount) }}</span></span>
           </div>
         </el-form-item>
         <el-form-item v-if="adjustForm.adjustType === 'TRANSFER'" label="目标门店" prop="targetDeptId">
@@ -668,6 +668,34 @@ onMounted(async () => {
   font-size: 12px;
   color: #909399;
   margin-top: 4px;
+}
+/* 结佣调整「差额 → 调整后」预览：金额放大加粗 + 浅底色块，差额红绿着色放大 */
+.form-tip.adjust-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  font-size: 13px;
+  color: #606266;
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 6px;
+}
+.form-tip.adjust-preview .amount {
+  font-size: 17px;
+  font-weight: 700;
+  color: #303133;
+}
+.form-tip.adjust-preview .delta-up {
+  font-size: 15px;
+  font-weight: 700;
+  color: #67c23a;
+}
+.form-tip.adjust-preview .delta-down {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f56c6c;
 }
 .detail-table-wrap {
   margin-top: 16px;

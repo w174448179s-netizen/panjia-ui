@@ -240,12 +240,12 @@
             style="width: 100%"
             placeholder="正数增加业绩，负数减少业绩"
           />
-          <div class="form-tip">
-            当前：¥{{ formatAmount(adjustDialog.amount) }}
+          <div class="form-tip adjust-preview">
+            <span>当前：<span class="amount">¥{{ formatAmount(adjustDialog.amount) }}</span></span>
             <span :class="adjustDeltaClass(adjustForm.adjustAmount)">
               {{ (adjustForm.adjustAmount ?? 0) >= 0 ? '+' : '' }}{{ formatAmount(adjustForm.adjustAmount ?? 0) }}
             </span>
-            → 调整后：¥{{ formatAmount(adjustTargetAmount) }}
+            <span>→ 调整后：<span class="amount">¥{{ formatAmount(adjustTargetAmount) }}</span></span>
           </div>
         </el-form-item>
         <el-form-item v-if="adjustForm.adjustType === 'TRANSFER'" label="目标部门">
@@ -431,12 +431,12 @@
             style="width: 100%"
             placeholder="正数增加业绩，负数减少业绩"
           />
-          <div class="form-tip">
-            当前：¥{{ formatAmount(detailAdjustDialog.amount) }}
+          <div class="form-tip adjust-preview">
+            <span>当前：<span class="amount">¥{{ formatAmount(detailAdjustDialog.amount) }}</span></span>
             <span :class="adjustDeltaClass(detailAdjustForm.adjustAmount)">
               {{ (detailAdjustForm.adjustAmount ?? 0) >= 0 ? '+' : '' }}{{ formatAmount(detailAdjustForm.adjustAmount ?? 0) }}
             </span>
-            → 调整后：¥{{ formatAmount(detailAdjustTargetAmount) }}
+            <span>→ 调整后：<span class="amount">¥{{ formatAmount(detailAdjustTargetAmount) }}</span></span>
           </div>
         </el-form-item>
         <el-form-item v-if="detailAdjustForm.adjustType === 'TRANSFER'" label="目标部门">
@@ -1043,13 +1043,33 @@ onMounted(async () => {
   color: #909399;
   margin-top: 4px;
 }
-.form-tip .delta-up {
-  color: #67c23a;
-  font-weight: 600;
+/* 调整弹窗「当前 → 调整后」预览：金额放大加粗 + 浅底色块，差额红绿着色放大 */
+.form-tip.adjust-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  font-size: 13px;
+  color: #606266;
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 6px;
 }
-.form-tip .delta-down {
+.form-tip.adjust-preview .amount {
+  font-size: 17px;
+  font-weight: 700;
+  color: #303133;
+}
+.form-tip.adjust-preview .delta-up {
+  font-size: 15px;
+  font-weight: 700;
+  color: #67c23a;
+}
+.form-tip.adjust-preview .delta-down {
+  font-size: 15px;
+  font-weight: 700;
   color: #f56c6c;
-  font-weight: 600;
 }
 
 .filter-form {
