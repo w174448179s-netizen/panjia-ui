@@ -305,8 +305,12 @@
               <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
             </template>
             <template v-else-if="scope.row.adjustPending">
-              <span>{{ formatAmount(scope.row.amount) }}</span>
-              <template v-if="scope.row.adjustPendingType === 'AMOUNT' && scope.row.adjustPendingAmount != null">
+              <!-- 增加角色人在途单：新角色人虚拟行当前业绩为空，按 0 展示（0 → X） -->
+              <span>{{ scope.row.amount == null ? '0.00' : formatAmount(scope.row.amount) }}</span>
+              <template
+                v-if="['AMOUNT', 'ADD_MEMBER'].includes(scope.row.adjustPendingType)
+                  && scope.row.adjustPendingAmount != null"
+              >
                 <span class="amount-arrow">→</span>
                 <span class="amount">{{ formatAmount(scope.row.adjustPendingAmount) }}</span>
                 <span

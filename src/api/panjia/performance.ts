@@ -55,6 +55,8 @@ export interface PerformanceAdjust {
   targetAmount?: number;      // 调整后目标金额（用户录入的最终金额）
   convertedOriginalAmount?: number; // 折算后原始金额（originalAmount × factor）
   convertedTargetAmount?: number;    // 折算后目标金额（targetAmount × factor）
+  /** ADD_MEMBER 调整后合同业绩合计（与 originalAmount 不等=同时调整了合同总额；旧单为空视为不变） */
+  afterTotalAmount?: number;
   targetDeptId?: string;
   targetDeptName?: string;
   reason: string;
@@ -128,6 +130,7 @@ export interface AdjustCreateForm {
   newEmployeeId?: string;    // 新角色人员工 ID
   newRoleType?: string;      // 新角色人角色类型
   newAmount?: number;        // 新角色人业绩金额
+  newShareRatio?: number;    // 新角色人业绩比例（小数，如 0.5；空=不设置）
   newDeptId?: string;        // 新角色人业绩归属部门（默认员工档案部门，可改）
   deductions?: { factId: string; amount: number }[]; // 指定扣除行（剩余由未指定行等比分摊）
   // ---- 明细指定值（可编辑表格，2026-09-28）----
@@ -165,7 +168,7 @@ export interface ManualFactForm {
 
 /** 业绩管理明细行（人→合同→明细 树表的明细层，后端 /perf/fact/manage 返回） */
 export interface PerformanceManageRow {
-  id: string;
+  id?: string | null;
   factStatus?: string;       // ACTIVE 有效 / VOIDED 已作废
   factType: string;          // PERF_REAL / PERF_EXPECT
   period: string;
@@ -181,8 +184,8 @@ export interface PerformanceManageRow {
   roleType?: string;         // 所属角色
   roleName?: string;         // 角色名
   shareRatio?: number;       // 角色占比
-  amount: number;            // 业绩金额（调整后，PERF_EXPECT=应收 / PERF_REAL=实收）
-  originalAmount: number;    // 原始金额（调整前，未调整时 = amount）
+  amount: number | null;     // 业绩金额（调整后，PERF_EXPECT=应收 / PERF_REAL=实收）；ADD_MEMBER 在途新人虚拟行为 null
+  originalAmount: number | null; // 原始金额（调整前，未调整时 = amount）；在途新人虚拟行为 null
   convertedAmount?: number;  // 折算后金额（amount × conversionFactor）
   originalConvertedAmount?: number; // 折算后原始金额（originalAmount × conversionFactor）
   adjustPending?: boolean;   // 存在审批中的调整单（SUBMITTED/APPROVED，执行前金额未变）
@@ -348,6 +351,7 @@ export interface PerformanceSearchDetailRow {
   realConvertedAmount?: number;
   settled?: boolean;           // 是否已结算
   settleDate?: string;        // 结算日期
+  manualAdjust?: boolean;     // 增加角色人（ADD_MEMBER）调整产生的新签行，展示「新签调整」标记
 }
 
 // ========== API ==========

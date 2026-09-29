@@ -159,6 +159,7 @@
           <el-table-column label="新签业绩" align="right" prop="originalAmount" width="130">
             <template #default="scope">
               <span class="origin-amount">{{ formatOrigin(scope.row.originalAmount) }}</span>
+              <div v-if="scope.row.adjustType === 'ADD_MEMBER'" class="cell-sub">合同总额</div>
             </template>
           </el-table-column>
           <el-table-column label="折算后" align="right" width="130">
@@ -168,7 +169,20 @@
           </el-table-column>
           <el-table-column label="调整后业绩" align="right" width="140">
             <template #default="scope">
-              <span class="amount-red">
+              <!-- 增加角色人：targetAmount 即新角色人业绩（新增 +X）；afterTotalAmount≠原总额时为混合金额调整 -->
+              <template v-if="scope.row.adjustType === 'ADD_MEMBER'">
+                <span class="amount-positive amount-strong">+{{ formatOrigin(scope.row.targetAmount) }}</span>
+                <div class="cell-sub">
+                  <template v-if="addMemberTotalChanged(scope.row)">
+                    新增角色人 · 总额 {{ formatOrigin(scope.row.originalAmount) }} →
+                    <span :class="Number(scope.row.afterTotalAmount) > Number(scope.row.originalAmount) ? 'amount-positive' : 'amount-negative'">
+                      {{ formatOrigin(scope.row.afterTotalAmount) }}
+                    </span>
+                  </template>
+                  <template v-else>新增角色人 · 总额不变</template>
+                </div>
+              </template>
+              <span v-else class="amount-red">
                 {{ formatOrigin(scope.row.targetAmount) }}
               </span>
             </template>
@@ -386,7 +400,8 @@ const onBizApprove = (businessId: string | number) =>
 const adjustTypeMap: Record<string, string> = {
   AMOUNT: '金额调整',
   VOID: '业绩冲销',
-  TRANSFER: '部门划转'
+  TRANSFER: '部门划转',
+  ADD_MEMBER: '增加角色人'
 };
 const adjustTypeOptions = Object.entries(adjustTypeMap).map(([value, label]) => ({ value, label }));
 
@@ -543,6 +558,20 @@ const formatOrigin = (val: number | string | undefined | null): string => {
   const n = Number(val);
   if (Number.isNaN(n)) return String(val);
   return `¥${n.toFixed(2)}`;
+};
+
+/** ADD_MEMBER 单是否同时调整了合同总额（afterTotalAmount 为空视为旧单=总额不变） */
+const addMemberTotalChanged = (row: {
+  adjustType?: string;
+  originalAmount?: number | string | null;
+  afterTotalAmount?: number | string | null;
+}): boolean => {
+  if (row.adjustType !== 'ADD_MEMBER' || row.afterTotalAmount === undefined || row.afterTotalAmount === null) {
+    return false;
+  }
+  const after = Number(row.afterTotalAmount);
+  const origin = row.originalAmount === undefined || row.originalAmount === null ? 0 : Number(row.originalAmount);
+  return !Number.isNaN(after) && !Number.isNaN(origin) && Math.abs(after - origin) > 0.004;
 };
 
 // ==================== 新增 / 详情弹窗 ====================
@@ -720,6 +749,18 @@ onMounted(() => {
     color: var(--el-color-success);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
+  }
+
+  .amount-strong {
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .cell-sub {
+    margin-top: 2px;
+    font-size: 11px;
+    line-height: 1.2;
+    color: var(--el-text-color-secondary);
   }
 
   .amount-negative {

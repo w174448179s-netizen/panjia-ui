@@ -331,7 +331,7 @@
         <el-table-column label="签约/认购时间" align="center" width="160">
           <template #default="{ row }">{{ formatDate(row.businessDate) }}</template>
         </el-table-column>
-        <!-- 新签业绩：已调整时在该行展示「原值 → 调整后业绩」，折算后同形式 -->
+        <!-- 新签业绩：已调整时在该行展示「原值 → 调整后业绩」，折算后同形式；加人调整的新人行带「新签调整」标记 -->
         <el-table-column label="新签业绩" align="right" width="200">
           <template #default="{ row }">
             <template v-if="isRowAdjusted(row)">
@@ -340,6 +340,7 @@
               <span class="amount-red">{{ formatMoney(row.expectAmount) }}</span>
             </template>
             <span v-else class="amount-red">{{ formatMoney(row.expectAmount) }}</span>
+            <el-tag v-if="row.manualAdjust" type="warning" size="small" effect="plain" class="adjust-tag">新签调整</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="180">
