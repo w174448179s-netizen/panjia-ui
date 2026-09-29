@@ -215,9 +215,10 @@ import type { ImportBatch, ImportIssue } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
 import { Warning, Download, Refresh, Loading, Box, CircleClose, MoreFilled } from '@element-plus/icons-vue';
 
-// 单据类型映射（跨所有单据类型；业绩来源唯一：贝壳业绩明细表）
+// 单据类型映射（跨所有单据类型；业绩双来源：贝壳新签明细 + 贝壳实收明细）
 const sourceTypeMap: Record<string, string> = {
-  KE_SIGNED: '贝壳业绩明细',
+  KE_SIGNED: '贝壳新签明细',
+  KE_RECEIVED: '贝壳实收明细',
   ATTENDANCE: '考勤',
   POINTS: '积分',
   OTHERS: '手工费用',

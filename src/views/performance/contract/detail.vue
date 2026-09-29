@@ -18,6 +18,8 @@
           <span class="info-item">房源地址：<b>{{ contractInfo.propertyAddress || '—' }}</b></span>
           <!-- 合同级作废/恢复：整张合同业绩一次性操作（不区分人员/角色） -->
           <el-button v-if="canVoid && detailList.length > 0" type="danger" link size="small" @click="handleVoidContract">作废合同业绩</el-button>
+          <!-- 合同级调整（含增加角色人）：打开类详情可编辑弹窗，统一提交审批 -->
+          <el-button v-if="!isBroker && detailList.length > 0" type="primary" link size="small" @click="openContractAdjust">调整</el-button>
         </div>
       </div>
 
@@ -75,14 +77,34 @@
         <el-table-column label="角色占比" align="center" width="90">
           <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
         </el-table-column>
-        <!-- 新签业绩：已调整时在原值后追加「→ 调整后业绩」，未调整不展示调整后值 -->
-        <el-table-column label="新签业绩" align="right" width="200">
+        <!-- 新签业绩：已调整时在原值后追加「→ 调整后业绩」；有审批中调整单显示「当前 → 目标金额 + 审批中标记」 -->
+        <el-table-column label="新签业绩" align="right" width="230">
           <template #default="scope">
             <template v-if="isAdjusted(scope.row)">
               <span class="amount-strike">{{ formatAmount(scope.row.originalAmount) }}</span>
               <span class="amount-arrow">→</span>
               <span class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
+              <span
+                v-if="scope.row.adjustDelta != null && Number(scope.row.adjustDelta) !== 0"
+                class="amount"
+                :class="Number(scope.row.adjustDelta) > 0 ? 'amount-positive' : 'amount-negative'"
+                style="font-size: 12px; margin-left: 2px"
+              >{{ Number(scope.row.adjustDelta) > 0 ? '+' : '' }}{{ Number(scope.row.adjustDelta).toFixed(2) }}</span>
               <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
+            </template>
+            <template v-else-if="scope.row.adjustPending">
+              <span>{{ formatAmount(scope.row.amount) }}</span>
+              <template v-if="scope.row.adjustPendingType === 'AMOUNT' && scope.row.adjustPendingAmount != null">
+                <span class="amount-arrow">→</span>
+                <span class="amount">{{ formatAmount(scope.row.adjustPendingAmount) }}</span>
+                <span
+                  v-if="scope.row.adjustPendingDelta != null && Number(scope.row.adjustPendingDelta) !== 0"
+                  class="amount"
+                  :class="Number(scope.row.adjustPendingDelta) > 0 ? 'amount-positive' : 'amount-negative'"
+                  style="font-size: 12px; margin-left: 2px"
+                >{{ Number(scope.row.adjustPendingDelta) > 0 ? '+' : '' }}{{ Number(scope.row.adjustPendingDelta).toFixed(2) }}</span>
+              </template>
+              <el-tag type="warning" size="small" effect="plain" style="margin-left: 6px">调整审批中</el-tag>
             </template>
             <span v-else class="amount-original">{{ formatAmount(scope.row.amount) }}</span>
           </template>
@@ -184,6 +206,9 @@
         <el-button type="primary" :loading="adjustSubmitting" @click="submitAdjust">提交审批</el-button>
       </template>
     </el-dialog>
+
+    <!-- 增加角色人/合同调整统一走「合同业绩调整」可编辑弹窗（类详情表格，统一提交审批） -->
+    <ContractAdjustDialog ref="adjustDialogRef" @submitted="loadDetails" />
   </div>
 </template>
 
@@ -192,6 +217,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceManageRow } from '@/api/panjia/performance';
+import ContractAdjustDialog from './components/ContractAdjustDialog.vue';
 import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
 import { useUserStore } from '@/store/modules/user';
@@ -423,6 +449,18 @@ const submitAdjust = async () => {
   } finally {
     adjustSubmitting.value = false;
   }
+};
+
+// ==================== 合同级调整（类详情可编辑弹窗，统一提交审批） ====================
+const adjustDialogRef = ref<InstanceType<typeof ContractAdjustDialog>>();
+const openContractAdjust = () => {
+  adjustDialogRef.value?.open({
+    contractNo: contractNo.value,
+    bizType: contractInfo.value.bizType,
+    propertyAddress: contractInfo.value.propertyAddress,
+    businessDate: contractInfo.value.businessDate,
+    period: period.value,
+  });
 };
 
 onMounted(async () => {

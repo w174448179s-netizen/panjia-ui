@@ -2,10 +2,9 @@
  * 盘家智管 业务键（合同号/订单号）统一口径。
  *
  * 规则（与后端 PerformanceFactMapper 中业务键 CASE 表达式一致，改动须两侧同步）：
- * - 一手房、房产金融、家装荐客 这三种业务类型：以「订单号」为准，订单号为空时回退合同号；
- * - 其它业务类型：以「合同号」为准，合同号为空时回退订单号。
- *
- * 出处：《盘家智管_业绩域详细设计_V1.3》§1.2 聚合键规则（订单号：一手房（新盘）、房产金融、家装荐客；合同号：其余）。
+ * - 全部业务类型统一以「订单号」为准，订单号为空时回退合同号。
+ * - 合同号存在为空的情况，故不再按业务类型分派（原一手房/房产金融/家装荐客与其余分流规则已废弃）。
+ * - UI 列标题仍叫「合同号」（习惯性称呼），仅逻辑锚点改为订单号优先。
  */
 
 import type { DeptNode } from '@/api/panjia/types';
@@ -23,7 +22,7 @@ import type { DeptNode } from '@/api/panjia/types';
 export const findDeptSubtree = (tree: DeptNode[], deptId?: string | number | null): DeptNode[] => {
   if (deptId === undefined || deptId === null || deptId === '') return tree;
   const target = String(deptId);
-  const dfs = (nodes: DeptNode[]): DeptNode | undefined => {
+  const dfs = (nodes: DeptNode[]): DeptNode[] | undefined => {
     for (const node of nodes) {
       if (String(node.deptId) === target) return node;
       if (node.children?.length) {
@@ -37,27 +36,18 @@ export const findDeptSubtree = (tree: DeptNode[], deptId?: string | number | nul
   return hit ? [hit] : tree;
 };
 
-/** 以订单号为聚合键的业务类型（其余类型以合同号为聚合键） */
-export const ORDER_KEYED_BIZ_TYPES: readonly string[] = ['一手房', '房产金融', '家装荐客'];
-
-const isOrderKeyed = (bizType?: string | null): boolean =>
-  !!bizType && ORDER_KEYED_BIZ_TYPES.includes(bizType);
-
 /**
- * 解析业务键：判断展示/钻取时以合同号还是订单号为准。
+ * 解析业务键：统一以订单号为准，合同号兜底。
  *
- * @param bizType    业务类型（如 二手买卖 / 一手房 / 房产金融 / 家装荐客）
+ * @param bizType    业务类型（不再影响锚点选择，保留签名兼容调用方）
  * @param contractNo 合同号（可空）
  * @param orderNo    订单号（可空）
- * @returns 业务键（合同号或订单号）；两者均空时返回 undefined
+ * @returns 业务键（订单号优先，合同号兜底）；两者均空时返回 undefined
  */
 export const resolveBizNo = (
   bizType?: string | null,
   contractNo?: string | null,
   orderNo?: string | null
 ): string | undefined => {
-  if (isOrderKeyed(bizType)) {
-    return orderNo || contractNo || undefined;
-  }
-  return contractNo || orderNo || undefined;
+  return orderNo || contractNo || undefined;
 };

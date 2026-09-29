@@ -3,7 +3,7 @@
     <el-card class="page-card">
       <template #header>
         <div class="card-header">
-          <span class="page-title">贝壳业绩导入</span>
+          <span class="page-title">{{ pageTitle }}</span>
           <div class="toolbar">
             <el-form-item label="归属月" class="period-item">
               <el-date-picker
@@ -29,7 +29,7 @@
                 上传文件
               </el-button>
             </el-upload>
-            <el-tooltip content="请直接上传贝壳·经纪人业绩明细表原始文件（.xlsx），无需下载模板" placement="bottom">
+            <el-tooltip :content="uploadTip" placement="bottom">
               <el-icon class="upload-hint-icon"><InfoFilled /></el-icon>
             </el-tooltip>
           </div>
@@ -222,8 +222,18 @@ import type { ImportBatch, ImportIssue } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
 import { InfoFilled, Warning, Download, Refresh, Loading, Box, CircleClose, MoreFilled } from '@element-plus/icons-vue';
 
-/** 业绩单据唯一来源：贝壳·经纪人业绩明细表（一张表同时携当月应收+当月实收） */
-const SOURCE_TYPE = 'KE_SIGNED';
+/**
+ * 业绩导入双来源复用本组件，按菜单路由区分：
+ * - /import/received → KE_RECEIVED 贝壳实收导入（理房通到账贡献明细，单发实收，分流自动/人工建单）
+ * - /import/shell    → KE_SIGNED  贝壳新签导入（经纪人业绩结算明细，单发应收）
+ */
+const route = useRoute();
+const IS_RECEIVED = route.path.includes('received');
+const SOURCE_TYPE = IS_RECEIVED ? 'KE_RECEIVED' : 'KE_SIGNED';
+const pageTitle = IS_RECEIVED ? '贝壳实收导入' : '贝壳新签导入';
+const uploadTip = IS_RECEIVED
+  ? '请直接上传理房通·经纪人到账贡献明细表原始文件（.xlsx），无需下载模板'
+  : '请直接上传贝壳·经纪人业绩结算明细表原始文件（.xlsx），无需下载模板';
 
 // ==================== 工具栏 / 上传 ====================
 const period = ref<string>('');

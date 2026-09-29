@@ -114,9 +114,9 @@ export interface AdjustQuery extends PageQuery {
 export interface AdjustCreateForm {
   factId?: string;
   period: string;
-  employeeId: string;
-  deptId: string;
-  adjustType: string;        // AMOUNT / VOID / TRANSFER
+  employeeId?: string;       // 明细级调整时必填（被调整事实所属员工）；合同级/ADD_MEMBER 不传
+  deptId?: string;           // 同上，明细级必填
+  adjustType: string;        // AMOUNT / VOID / TRANSFER / ADD_MEMBER
   adjustScope?: string;      // CONTRACT / DETAIL
   contractNo?: string;       // 合同级调整时填
   factType?: string;         // PERF_REAL / PERF_EXPECT
@@ -124,6 +124,16 @@ export interface AdjustCreateForm {
   targetDeptId?: string;
   reason: string;
   payloadJson?: string;
+  // ---- 增加角色人（ADD_MEMBER，合同级）专用 ----
+  newEmployeeId?: string;    // 新角色人员工 ID
+  newRoleType?: string;      // 新角色人角色类型
+  newAmount?: number;        // 新角色人业绩金额
+  newDeptId?: string;        // 新角色人业绩归属部门（默认员工档案部门，可改）
+  deductions?: { factId: string; amount: number }[]; // 指定扣除行（剩余由未指定行等比分摊）
+  // ---- 明细指定值（可编辑表格，2026-09-28）----
+  // 按行提交「调整后金额/角色占比」，审批通过后按指定值精确落库（不再等比分摊）；
+  // 合同级 AMOUNT 与 ADD_MEMBER 均支持，为空时保持旧交互
+  detailTargets?: { factId: string; targetAmount: number; shareRatio?: number }[];
 }
 
 export interface PeriodClose {
@@ -175,7 +185,13 @@ export interface PerformanceManageRow {
   originalAmount: number;    // 原始金额（调整前，未调整时 = amount）
   convertedAmount?: number;  // 折算后金额（amount × conversionFactor）
   originalConvertedAmount?: number; // 折算后原始金额（originalAmount × conversionFactor）
-  settled: boolean;          // 是否已结算
+  adjustPending?: boolean;   // 存在审批中的调整单（SUBMITTED/APPROVED，执行前金额未变）
+  adjustPendingType?: string;      // 审批中调整单类型 AMOUNT/VOID/TRANSFER/ADD_MEMBER
+  adjustPendingAmount?: number;    // 审批中调整单目标金额（仅 AMOUNT 类型）
+  adjustPendingDelta?: number;     // 分摊到本明细的调整金额（= adjustPendingAmount − amount）
+  adjustDelta?: number;            // 已执行调整累计的调整金额（= amount − originalAmount）
+  conversionFactor?: number;       // 本行折算系数（调整弹窗录入业绩后自动算折算金额用）
+  settled: boolean;                // 是否已结算
   settleDate?: string;       // 结算日期
   sourceKey: string;
 }
@@ -240,6 +256,10 @@ export interface PerformanceManageContract {
   originalAmount: number | null;    // 原始金额合计（调整前，未调整时为 null）
   convertedAmount?: number;  // 折算后金额合计（amount × conversionFactor）
   originalConvertedAmount?: number; // 折算后原始金额合计（originalAmount × conversionFactor）
+  adjustPending?: boolean;   // 存在审批中的调整单（SUBMITTED/APPROVED，执行前金额未变）
+  adjustPendingType?: string;      // 审批中调整单类型 AMOUNT/VOID/TRANSFER/ADD_MEMBER
+  adjustPendingAmount?: number;    // 审批中调整单目标金额（仅 AMOUNT 类型，调整后合同业绩合计）
+  conversionFactor?: number;       // 本行折算系数（调整弹窗录入业绩后自动算折算金额用）
   employeeCount: number;     // 涉及签约人数
   detailCount: number;       // 明细条数
   unsettledCount: number;    // 未结算条数
