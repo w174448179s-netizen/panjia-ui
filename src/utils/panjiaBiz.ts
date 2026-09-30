@@ -1,13 +1,16 @@
 /**
  * 盘家智管 业务键（合同号/订单号）统一口径。
  *
- * 规则（与后端 PerformanceFactMapper 中业务键 CASE 表达式一致，改动须两侧同步）：
- * - 全部业务类型统一以「订单号」为准，订单号为空时回退合同号。
- * - 合同号存在为空的情况，故不再按业务类型分派（原一手房/房产金融/家装荐客与其余分流规则已废弃）。
- * - UI 列标题仍叫「合同号」（习惯性称呼），仅逻辑锚点改为订单号优先。
+ * 规则（界面显示与详情/调整等传参共用，传参侧后端均按 contract_no/order_no 双匹配兜底）：
+ * - 一手房、房产金融：以「订单号」为准，订单号为空时回退合同号；
+ * - 其它业务类型：以「合同号」为准，合同号为空时回退订单号。
+ * - UI 列标题仍叫「合同号/订单号」，按上述口径取其一展示。
  */
 
 import type { DeptNode } from '@/api/panjia/types';
+
+/** 以订单号为业务键的业务类型；其余类型以合同号为准 */
+const ORDER_FIRST_BIZ_TYPES = new Set(['一手房', '房产金融']);
 
 /**
  * 截取部门树中以指定部门为根的子树（部门数据权限前端裁剪用）。
@@ -37,17 +40,20 @@ export const findDeptSubtree = (tree: DeptNode[], deptId?: string | number | nul
 };
 
 /**
- * 解析业务键：统一以订单号为准，合同号兜底。
+ * 解析业务键：一手房/房产金融以订单号为准，其余类型以合同号为准。
  *
- * @param bizType    业务类型（不再影响锚点选择，保留签名兼容调用方）
+ * @param bizType    业务类型（一手房/房产金融时订单号优先，其它合同号优先）
  * @param contractNo 合同号（可空）
  * @param orderNo    订单号（可空）
- * @returns 业务键（订单号优先，合同号兜底）；两者均空时返回 undefined
+ * @returns 业务键；两者均空时返回 undefined
  */
 export const resolveBizNo = (
   bizType?: string | null,
   contractNo?: string | null,
   orderNo?: string | null
 ): string | undefined => {
-  return orderNo || contractNo || undefined;
+  if (bizType && ORDER_FIRST_BIZ_TYPES.has(bizType)) {
+    return orderNo || contractNo || undefined;
+  }
+  return contractNo || orderNo || undefined;
 };

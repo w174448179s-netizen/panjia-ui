@@ -197,6 +197,7 @@ export interface PerformanceManageRow {
   settled: boolean;                // 是否已结算
   settleDate?: string;       // 结算日期
   sourceKey: string;
+  manualAdjust?: boolean;    // 「新增角色人」调整产生的新人事实行，展示「新签调整」标记
 }
 
 /** 业绩管理查询参数（以签约人为维度后端分页） */
@@ -267,6 +268,7 @@ export interface PerformanceManageContract {
   detailCount: number;       // 明细条数
   unsettledCount: number;    // 未结算条数
   factStatus?: string;       // 聚合状态（ACTIVE 有任一有效 / VOIDED 全部作废）
+  hasAddMember?: boolean;    // 是否存在已生效的「新增角色人」调整
 }
 
 /** 合同明细懒加载查询参数（展开合同时按合同号查） */
@@ -306,7 +308,8 @@ export interface PerformanceFactSearch {
   commissionConvertedAmount?: number;
   adjustStatus?: string;     // 调整单状态
   adjustNo?: string;         // 调整单号
-  adjustType?: string;       // 调整类型
+  adjustType?: string;       // 调整类型（最近一条）
+  hasAddMember?: boolean;    // 是否存在「增加角色人」调整（任意一条，含在途/已执行）
   receivedStatus?: string;   // 实收审批状态
   receivedApplyNo?: string;  // 实收审批单号
   receivedExpectedAmount?: number; // 实收审批单应收

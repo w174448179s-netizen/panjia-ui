@@ -120,7 +120,7 @@
             </el-button>
           </template>
         </el-table-column>
-        <!-- 新签业绩：未调整只显示本值；已调整显示「原值 → 调整后业绩」；有审批中调整单显示「当前 → 目标金额 + 审批中标记」 -->
+        <!-- 新签业绩：未调整只显示本值；已调整显示「原值 → 调整后业绩」；有审批中调整单显示「当前 → 目标金额 + 审批中标记」；已生效加人调整显示「新增角色人」 -->
         <el-table-column label="新签业绩" align="right" width="230" fixed="left">
           <template #default="scope">
             <template v-if="isAdjusted(scope.row)">
@@ -137,6 +137,9 @@
               <el-tag type="warning" size="small" effect="plain" style="margin-left: 6px">调整审批中</el-tag>
             </template>
             <span v-else class="amount-original">{{ formatAmount(scope.row.amount) }}</span>
+            <div v-if="scope.row.hasAddMember" class="cell-sub">
+              <el-tag type="warning" size="small" effect="plain">新增角色人</el-tag>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="170" fixed="left">
@@ -298,11 +301,11 @@
               <span class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
               <span
                 v-if="scope.row.adjustDelta != null && Number(scope.row.adjustDelta) !== 0"
-                class="amount"
+                class="amount-delta"
                 :class="Number(scope.row.adjustDelta) > 0 ? 'amount-positive' : 'amount-negative'"
-                style="font-size: 12px; margin-left: 2px"
-              >{{ Number(scope.row.adjustDelta) > 0 ? '+' : '' }}{{ Number(scope.row.adjustDelta).toFixed(2) }}</span>
+              >({{ Number(scope.row.adjustDelta) > 0 ? '+' : '' }}{{ Number(scope.row.adjustDelta).toFixed(2) }})</span>
               <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
+              <el-tag v-if="scope.row.manualAdjust" type="warning" size="small" effect="plain" class="redink-tag">新签调整</el-tag>
             </template>
             <template v-else-if="scope.row.adjustPending">
               <!-- 增加角色人在途单：新角色人虚拟行当前业绩为空，按 0 展示（0 → X） -->
@@ -315,10 +318,9 @@
                 <span class="amount">{{ formatAmount(scope.row.adjustPendingAmount) }}</span>
                 <span
                   v-if="scope.row.adjustPendingDelta != null && Number(scope.row.adjustPendingDelta) !== 0"
-                  class="amount"
+                  class="amount-delta"
                   :class="Number(scope.row.adjustPendingDelta) > 0 ? 'amount-positive' : 'amount-negative'"
-                  style="font-size: 12px; margin-left: 2px"
-                >{{ Number(scope.row.adjustPendingDelta) > 0 ? '+' : '' }}{{ Number(scope.row.adjustPendingDelta).toFixed(2) }}</span>
+                >({{ Number(scope.row.adjustPendingDelta) > 0 ? '+' : '' }}{{ Number(scope.row.adjustPendingDelta).toFixed(2) }})</span>
               </template>
               <el-tag type="warning" size="small" effect="plain" style="margin-left: 6px">调整审批中</el-tag>
             </template>
@@ -534,6 +536,7 @@ const detailDialog = reactive({
   visible: false,
   contractNo: '',
   orderNo: '',
+  bizKey: '',   // 明细查询业务键（订单号优先），与展示用的合同号分离
   bizType: '',
   propertyAddress: '',
   businessDate: '',
@@ -555,8 +558,10 @@ const detailSummary = computed(() => {
 });
 
 const goDetail = async (row: PerformanceManageContract) => {
-  detailDialog.contractNo = resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '';
+  // 展示口径：合同号/订单号分列显示真实值；查询键用业务键（后端 contract_no/order_no 双匹配）
+  detailDialog.contractNo = row.contractNo || '';
   detailDialog.orderNo = row.orderNo || '';
+  detailDialog.bizKey = resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '';
   detailDialog.bizType = row.bizType || '';
   detailDialog.propertyAddress = row.propertyAddress || '';
   detailDialog.businessDate = row.businessDate ? String(row.businessDate) : '';
@@ -568,13 +573,13 @@ const goDetail = async (row: PerformanceManageContract) => {
 };
 
 const loadDetailList = async () => {
-  if (!detailDialog.contractNo || !detailDialog.period) return;
+  if (!detailDialog.bizKey || !detailDialog.period) return;
   detailLoading.value = true;
   try {
     const res = await performanceApi.listManageContractDetails({
       period: detailDialog.period,
       factType: detailDialog.factType,
-      contractNos: detailDialog.contractNo,
+      contractNos: detailDialog.bizKey,
     });
     detailList.value = res.data ?? [];
   } catch (e) {
@@ -1047,6 +1052,12 @@ onMounted(async () => {
     color: #c0c4cc;
     font-size: 13px;
   }
+  /* 金额下方的次级说明行（「新增角色人」标记等） */
+  .cell-sub {
+    margin-top: 2px;
+    font-size: 11px;
+    line-height: 1.2;
+  }
   /* 「原值 → 调整后」：被调整掉的原值置灰加删除线（同实收详情「应收合计」） */
   .amount-strike {
     font-variant-numeric: tabular-nums;
@@ -1150,6 +1161,19 @@ onMounted(async () => {
 }
 .amount-redink {
   color: #f56c6c;
+}
+/* 调整差额小字：括号包裹、与主金额拉开间距；正差=红（业绩增加）、负差=绿（业绩减少） */
+.amount-delta {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: 6px;
+}
+.amount-positive {
+  color: #f56c6c;
+}
+.amount-negative {
+  color: #67c23a;
 }
 .redink-tag {
   margin-left: 4px;
