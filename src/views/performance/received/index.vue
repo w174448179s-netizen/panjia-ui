@@ -113,16 +113,6 @@
                     <span v-else class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="折算后" align="right" width="190">
-                  <template #default="{ row }">
-                    <template v-if="isReceivedAdjusted(row)">
-                      <span class="amount-strike">¥{{ formatAmount(row.originalReceivedConvertedAmount) }}</span>
-                      <span class="amount-arrow">→</span>
-                      <span class="amount amount-ink">¥{{ formatAmount(row.receivedConvertedAmount) }}</span>
-                    </template>
-                    <span v-else class="amount amount-ink">¥{{ formatAmount(row.receivedConvertedAmount) }}</span>
-                  </template>
-                </el-table-column>
         <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值 -->
         <el-table-column label="新签业绩" align="right" width="200">
           <template #default="{ row }">
@@ -134,16 +124,7 @@
             <span v-else class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="折算后" align="right" width="190">
-          <template #default="{ row }">
-            <template v-if="isAdjusted(row)">
-              <span class="amount-strike">¥{{ formatAmount(row.originalExpectedConvertedAmount) }}</span>
-              <span class="amount-arrow">→</span>
-              <span class="amount amount-ink">¥{{ formatAmount(row.expectedConvertedAmount) }}</span>
-            </template>
-            <span v-else class="amount amount-ink">¥{{ formatAmount(row.expectedConvertedAmount) }}</span>
-          </template>
-        </el-table-column>
+
 
         <el-table-column label="类型" align="center" width="100">
           <template #default="{ row }">{{ row.bizType || '—' }}</template>
@@ -219,7 +200,7 @@
           {{ detailApp.approverName || '—' }}
         </el-descriptions-item>
         <el-descriptions-item label="审批时间">{{ formatDateTime(detailApp.approveTime) }}</el-descriptions-item>
-        <!-- 实收合计：结佣调整生效时展示「原值 → 调整后值」，折算后同形式（口径同每人明细） -->
+        <!-- 实收合计：结佣调整生效时展示「原值 → 调整后值」（实收不做折算） -->
         <el-descriptions-item label="实收合计">
           <template v-if="detailReceivedAdjusted">
             <span class="amount-strike">¥{{ formatAmount(detailApp.originalReceivedAmount) }}</span>
@@ -227,14 +208,6 @@
             <span class="amount amount-red">¥{{ formatAmount(detailApp.receivedAmount) }}</span>
           </template>
           <span v-else class="amount amount-red">¥{{ formatAmount(detailApp.receivedAmount) }}</span>
-          <span class="converted-inline">
-            折算后
-            <template v-if="detailReceivedAdjusted">
-              <span class="amount-strike">¥{{ formatAmount(detailApp.originalReceivedConvertedAmount) }}</span>
-              <span class="amount-arrow">→</span>
-            </template>
-            <span class="amount amount-ink">¥{{ formatAmount(detailApp.receivedConvertedAmount) }}</span>
-          </span>
         </el-descriptions-item>
         <!-- 新签业绩（应收合计）：有调整时展示「原值 → 调整后值」，折算后同形式 -->
         <el-descriptions-item label="应收合计" :span="2">
@@ -294,16 +267,6 @@
               <span v-else class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="折算后" align="right" width="190">
-            <template #default="scope">
-              <template v-if="isFactReceivedAdjusted(scope.row)">
-                <span class="amount-strike">¥{{ formatAmount(scope.row.originalReceivedConvertedAmount) }}</span>
-                <span class="amount-arrow">→</span>
-                <span class="amount amount-ink">¥{{ formatAmount(scope.row.convertedAmount) }}</span>
-              </template>
-              <span v-else class="amount amount-ink">¥{{ formatAmount(scope.row.convertedAmount) }}</span>
-            </template>
-          </el-table-column>
           <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值 -->
           <el-table-column label="新签业绩" align="right" width="200">
             <template #default="scope">
@@ -315,16 +278,7 @@
               <span v-else class="amount amount-expected">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="折算后" align="right" width="190">
-            <template #default="scope">
-              <template v-if="isAdjusted(scope.row)">
-                <span class="amount-strike">¥{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
-                <span class="amount-arrow">→</span>
-                <span class="amount amount-ink">¥{{ formatAmount(scope.row.expectedConvertedAmount) }}</span>
-              </template>
-              <span v-else class="amount amount-ink">¥{{ formatAmount(scope.row.expectedConvertedAmount) }}</span>
-            </template>
-          </el-table-column>
+
           <template #empty>
             <el-empty description="该合同暂无实收明细" />
           </template>
