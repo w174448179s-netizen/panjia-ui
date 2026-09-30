@@ -428,6 +428,8 @@ function addMemberRow() {
   lastLetout = [];
   const rest = round2(originalTotal.value
     - existingRows.value.reduce((s, r) => s + num(r.targetAmount), 0));
+  // 折算因子沿用同合同既有行（同业务类型折算口径一致），保证新人行也能实时展示折算后金额
+  const factor = existingRows.value.find(r => r.factor != null)?.factor;
   editRows.value.push({
     key: `new-${++keySeq}`,
     isNew: true,
@@ -436,6 +438,7 @@ function addMemberRow() {
     roleType: '合作人',
     amount: 0,
     convertedOriginal: 0,
+    factor,
     targetAmount: rest > 0 ? rest : null,
     ratioPct: null,
     originalRatioPct: null,
@@ -478,6 +481,8 @@ function onEmployeePick(row: EditRow, employeeId: string) {
     row.employeeId = emp.employeeId;
     row.employeeName = emp.employeeName;
     row.employeeCode = emp.employeeCode || '';
+    // 选中员工后带出所属门店/组别（部门全路径名）
+    row.deptPath = emp.deptName || '';
   }
 }
 

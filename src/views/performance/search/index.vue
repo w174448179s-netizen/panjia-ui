@@ -133,6 +133,9 @@
                 <span class="amount-red">{{ formatMoney(row.expectAmount) }}</span>
               </template>
               <span v-else :class="{ 'amount-gray': num(row.expectAmount) === 0 }">{{ formatMoney(row.expectAmount) }}</span>
+              <div v-if="row.hasAddMember" class="cell-sub">
+                <el-tag type="warning" size="small" effect="plain" class="adjust-tag">新增角色人</el-tag>
+              </div>
             </template>
           </el-table-column>
           <el-table-column label="折算后" align="right" width="190">
@@ -1006,6 +1009,18 @@ onBeforeUnmount(() => {
 
 .adjust-tag {
   margin-left: 4px;
+}
+
+/* 金额下方的次级说明行（调整标记等） */
+.cell-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+/* 金额下方独占一行的标记不需要左间距 */
+.cell-sub .adjust-tag {
+  margin-left: 0;
 }
 
 .detail-desc {
