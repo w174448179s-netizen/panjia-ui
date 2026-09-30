@@ -160,13 +160,6 @@
             <span v-else class="amount amount-ink">¥{{ formatAmount(row.expectedConvertedAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="差异" align="center" width="90">
-          <template #default="{ row }">
-            <el-tag v-if="row.aligned" type="success" size="small">已对齐</el-tag>
-            <el-tag v-else-if="hasDiff(row)" type="danger" size="small">有差异</el-tag>
-            <span v-else>—</span>
-          </template>
-        </el-table-column>
         <el-table-column label="当前节点" align="center" width="100">
           <template #default="{ row }">
             <el-tag v-if="row.currentNode" type="warning" size="small">{{ nodeLabel(row.currentNode) }}</el-tag>
@@ -599,11 +592,6 @@ const submittingMap = reactive<Record<string, boolean>>({});
 
 // 审批节点中文名
 const nodeLabel = (node?: string) => node === 'DIRECTOR' ? '总监审批' : node === 'FINANCE' ? '财务审批' : (node || '—');
-
-// 是否有差异（实收 vs 应收，均有值时比较；差异 1 元以内视为无差异）
-const hasDiff = (row: CommissionContractVO) =>
-  row.expectedAmount !== undefined && row.expectedAmount !== null
-  && Math.abs(num(row.amount) - num(row.expectedAmount)) > 1;
 
 // 批量发起（按合同号）
 const showBatchApply = ref(false);

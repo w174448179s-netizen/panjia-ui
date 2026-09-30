@@ -69,7 +69,6 @@ export interface CommissionApplication {
   expectedAdjusted?: boolean; // 应收已被调整（当前值与快照不一致）
   /** 调整前应收合计（提交快照；仅 expectedAdjusted=true 时有值，供展示「原值 → 调整后值」） */
   originalExpectedAmount?: number;
-  aligned?: boolean;         // 是否已实收对齐应收
   currentNode?: string;      // DIRECTOR / FINANCE / null（T-04 后实收==应收时财务节点跳过，流程直接结束）
   status: string;        // DRAFT / SUBMITTED / APPROVED / LOCKED / REJECTED / CANCELLED
   approvedMonth?: string;
@@ -184,7 +183,6 @@ export interface CommissionContractVO {
   /** 调整前应收的折算后金额（originalExpectedAmount × 当前生效折算因子） */
   originalExpectedConvertedAmount?: number;
   expectedAdjusted?: boolean; // 应收已被调整
-  aligned?: boolean;
   currentNode?: string;      // DIRECTOR / FINANCE / null（T-04 后实收==应收时财务节点跳过，流程直接结束）
   employeeCount: number;
   detailCount: number;
@@ -225,9 +223,6 @@ export const commissionApi = {
     panjiaRequest.post<number>('/commission/apply', data),
   cancelApplication: (id: number | string) =>
     panjiaRequest.post<void>(`/commission/apply/${id}/cancel`),
-  /** 手工对齐确认：财务审批人核对差异后人工执行「实收对齐应收」（系统不再自动对齐） */
-  alignApplication: (id: number | string) =>
-    panjiaRequest.post<void>(`/commission/apply/${id}/align`),
   /** 作废未发起的合同结佣（本期不再发起，创建 CANCELLED 占位单，后续仍可重新发起） */
   cancelUnapplied: (period: string, contractNo: string) =>
     panjiaRequest.post<void>('/commission/apply/cancel-unapplied', null, {
