@@ -111,8 +111,13 @@
           <el-table-column label="操作" width="170" align="center" fixed="right">
             <template #default="scope">
               <div class="action-row">
-                <!-- 终态（ARCHIVED）：撤销导入 + 下载留档 -->
+                <!-- 终态（ARCHIVED）：归档消费可能产生批次级错误，有则显示"问题"入口；另保留撤销导入 + 下载留档 -->
                 <template v-if="scope.row.status === 'ARCHIVED'">
+                  <el-tooltip v-if="hasIssues(scope.row as ImportBatch)" content="查看问题清单" placement="top">
+                    <a class="action-btn" @click="openIssues(scope.row.id, scope.row.batchNo)">
+                      <el-icon><Warning /></el-icon>
+                    </a>
+                  </el-tooltip>
                   <el-tooltip content="撤销导入（硬删除该期间导入的工资/考勤/积分/算薪/业绩/审批单数据，不可逆）" placement="top">
                     <a
                       class="action-btn action-btn-danger"
@@ -340,10 +345,12 @@ const statusTagType = (status: string): ElTagType => {
 };
 
 /**
- * 批次是否存在需要展示的问题（failedRows > 0）。
+ * 批次是否存在需要展示的问题（行级失败 failedRows > 0 或批次级错误 batchErrorCount > 0）。
  * - 中间态/终态都用此判定是否显示"问题"按钮。
+ * - 批次级失败：batchErrorCount > 0（归一化/归档阶段整批失败，如红冲超额，此时 failedRows 保持 0）。
  */
-const hasIssues = (row: ImportBatch): boolean => Number(row.failedRows ?? 0) > 0;
+const hasIssues = (row: ImportBatch): boolean =>
+  Number(row.failedRows ?? 0) > 0 || Number(row.batchErrorCount ?? 0) > 0;
 
 // ==================== 问题清单 ====================
 const issueLoading = ref(false);
@@ -375,7 +382,8 @@ const issueTypeLabel = (t: string): string =>
     REQUIRED_MISSING: '必填缺失',
     EMPLOYEE_NOT_MATCH: '员工未匹配',
     DUPLICATE_KEY: '重复键',
-    COLUMN_TYPE_ERR: '格式错误'
+    COLUMN_TYPE_ERR: '格式错误',
+    BATCH_ERROR: '批次级错误'
   }) as Record<string, string>)[t] ?? t;
 
 const issueStatusType = (status: string): ElTagType => {

@@ -114,9 +114,14 @@
           <el-table-column label="操作" width="190" align="center" fixed="right">
             <template #default="scope">
               <div class="action-row">
-                <!-- 终态（ARCHIVED）：仅保留"下载"做合规留档 -->
+                <!-- 终态（ARCHIVED）：归档消费可能产生批次级错误，有则显示"问题"入口；另保留"下载"做合规留档 -->
                 <template v-if="scope.row.status === 'ARCHIVED'">
-<el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
+                  <el-tooltip v-if="hasIssues(scope.row as ImportBatch)" content="查看问题清单" placement="top">
+                    <a class="action-btn" @click="openIssues(scope.row.id, scope.row.batchNo)">
+                      <el-icon><Warning /></el-icon>
+                    </a>
+                  </el-tooltip>
+                  <el-tooltip content="下载上传时的原文件（Excel/WPS 可直接打开）" placement="top">
                     <a
                       class="action-btn"
                       :class="{ 'is-loading': rowDownloadingId === scope.row.id }"
@@ -345,10 +350,12 @@ const canRenormalize = (status: string): boolean => status === 'PENDING_CONFIRM'
 const canArchive = (status: string): boolean => status === 'PENDING_CONFIRM';
 
 /**
- * 批次是否存在需要展示的问题（failedRows > 0）。
+ * 批次是否存在需要展示的问题（行级失败 failedRows > 0 或批次级错误 batchErrorCount > 0）。
  * - 中间态/终态都用此判定是否显示"问题"按钮。
+ * - 批次级失败：batchErrorCount > 0（归一化/归档阶段整批失败，如红冲超额，此时 failedRows 保持 0）。
  */
-const hasIssues = (row: ImportBatch): boolean => Number(row.failedRows ?? 0) > 0;
+const hasIssues = (row: ImportBatch): boolean =>
+  Number(row.failedRows ?? 0) > 0 || Number(row.batchErrorCount ?? 0) > 0;
 
 // ==================== 问题清单 ====================
 const issueLoading = ref(false);

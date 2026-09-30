@@ -441,7 +441,7 @@ const handleCancelImport = async (row: ImportBatch) => {
   }
   rowCancellingId.value = row.id;
   try {
-    const res = await importApi.cancelImport(row.id);
+    await importApi.cancelImport(row.id);
     modal.msgSuccess('撤销成功');
     await loadBatches();
   } catch (e: any) {
