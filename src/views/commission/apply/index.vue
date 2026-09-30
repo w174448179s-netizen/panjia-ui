@@ -119,6 +119,13 @@
               <span class="amount-arrow">→</span>
               <span class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
             </template>
+            <el-tooltip
+              v-else-if="num(row.amount) === 0 && row.status === 'NONE'"
+              content="新签业绩缺失，请先导入或补录该合同新签"
+              placement="top"
+            >
+              <span class="amount amount-zero">¥0.00</span>
+            </el-tooltip>
             <span v-else class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
           </template>
         </el-table-column>
@@ -541,10 +548,11 @@ const statusTagType = (s: string) => {
   return (map as any)[s] || 'info';
 };
 
-// 可发起：未发起 / 已作废（作废时明细已冲销，事实释放可重新发起）/ 草稿（实收审批通过后
-// 系统自动生成 DRAFT 单，由人工点提交进入审批流）；净额为 0 的合同无可入账事实
+// 可发起：未发起/已作废（需有金额，新签缺失时 amount=0 不允许）；草稿（始终可提交，
+// 明细可能因新签调整被冲销，提交时后端自动从当前新签事实重建）
 const canOriginate = (row: CommissionContractVO) =>
-  (row.status === 'NONE' || row.status === 'CANCELLED' || row.status === 'DRAFT') && num(row.amount) !== 0;
+  row.status === 'DRAFT'
+  || ((row.status === 'NONE' || row.status === 'CANCELLED') && num(row.amount) !== 0);
 
 // 列表
 const getList = async () => {
@@ -915,6 +923,11 @@ onMounted(() => {
   }
   .amount-red {
     color: #f56c6c;
+  }
+  .amount-zero {
+    color: #c0c4cc;
+    cursor: help;
+    border-bottom: 1px dashed #c0c4cc;
   }
   .amount-expected {
     color: #909399;
