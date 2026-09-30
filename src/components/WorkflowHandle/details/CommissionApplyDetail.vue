@@ -106,12 +106,15 @@
           <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值 -->
           <el-table-column label="新签业绩" align="right" width="190">
             <template #default="scope">
-              <template v-if="isAdjusted(scope.row)">
-                <span class="amount-strike">¥{{ formatAmount(scope.row.originalExpectedAmount) }}</span>
-                <span class="amount-arrow">→</span>
-                <span class="amount">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
-              </template>
-              <span v-else class="amount">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
+              <div>
+                <template v-if="isAdjusted(scope.row)">
+                  <span class="amount-strike">¥{{ formatAmount(scope.row.originalExpectedAmount) }}</span>
+                  <span class="amount-arrow">→</span>
+                  <span class="amount">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
+                </template>
+                <span v-else class="amount">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
+              </div>
+              <div v-if="scope.row.expectPeriod" class="text-muted text-xs">{{ scope.row.expectPeriod }}</div>
             </template>
           </el-table-column>
           <el-table-column label="折算后" align="right" width="180">
@@ -193,12 +196,15 @@
           </el-table-column>
           <el-table-column label="新签业绩" align="right" width="190">
             <template #default="scope">
-              <template v-if="isPerfAdjusted(scope.row)">
-                <span class="amount-strike">¥{{ formatAmount(scope.row.originalAmount) }}</span>
-                <span class="amount-arrow">→</span>
-                <span class="amount">¥{{ formatAmount(scope.row.amount) }}</span>
-              </template>
-              <span v-else class="amount">¥{{ formatAmount(scope.row.amount) }}</span>
+              <div>
+                <template v-if="isPerfAdjusted(scope.row)">
+                  <span class="amount-strike">¥{{ formatAmount(scope.row.originalAmount) }}</span>
+                  <span class="amount-arrow">→</span>
+                  <span class="amount">¥{{ formatAmount(scope.row.amount) }}</span>
+                </template>
+                <span v-else class="amount">¥{{ formatAmount(scope.row.amount) }}</span>
+              </div>
+              <div v-if="scope.row.expectPeriod" class="text-muted text-xs">{{ scope.row.expectPeriod }}</div>
             </template>
           </el-table-column>
           <el-table-column label="折算后" align="right" width="180">

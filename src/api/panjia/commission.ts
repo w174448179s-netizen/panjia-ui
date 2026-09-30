@@ -118,6 +118,8 @@ export interface CommissionItemDetail {
   bizType?: string;
   /** 新签业绩（同 sourceKey 的 PERF_EXPECT 事实金额） */
   expectedAmount?: number;
+  /** 新签月份（应收对应的新签事实归属月，如 2026-06；跨月汇总时逗号分隔） */
+  expectPeriod?: string;
   /** 该行应收已被调整（同 sourceKey 存在 REVERSED 的 PERF_EXPECT 事实） */
   expectedAdjusted?: boolean;
   /** 调整前新签业绩（同 sourceKey 最早一条 REVERSED 的 PERF_EXPECT；无调整时 = expectedAmount） */
