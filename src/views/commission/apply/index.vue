@@ -528,8 +528,9 @@ const STATUS_MAP: Record<string, string> = {
 };
 const statusLabel = (row: CommissionContractVO) => STATUS_MAP[row.status] || row.status || '—';
 // 筛选下拉只列实际会出现在列表中的状态：
-// DRAFT（发起即提交，无保存草稿入口）、APPROVED（审批通过直接落 LOCKED，不经过 APPROVED）不会出现
-const HIDDEN_FILTER_STATUS = ['DRAFT', 'APPROVED'];
+// APPROVED（审批通过直接落 LOCKED，不经过 APPROVED）不会出现；
+// DRAFT 会出现——实收审批通过后系统自动生成草稿单，等人工提交
+const HIDDEN_FILTER_STATUS = ['APPROVED'];
 const statusOptions = Object.entries(STATUS_MAP)
   .filter(([value]) => !HIDDEN_FILTER_STATUS.includes(value))
   .map(([value, label]) => ({ value, label }));
@@ -540,9 +541,10 @@ const statusTagType = (s: string) => {
   return (map as any)[s] || 'info';
 };
 
-// 可发起：未发起 / 已作废（作废时明细已冲销，事实释放可重新发起）；净额为 0 的合同无可入账事实
+// 可发起：未发起 / 已作废（作废时明细已冲销，事实释放可重新发起）/ 草稿（实收审批通过后
+// 系统自动生成 DRAFT 单，由人工点提交进入审批流）；净额为 0 的合同无可入账事实
 const canOriginate = (row: CommissionContractVO) =>
-  (row.status === 'NONE' || row.status === 'CANCELLED') && num(row.amount) !== 0;
+  (row.status === 'NONE' || row.status === 'CANCELLED' || row.status === 'DRAFT') && num(row.amount) !== 0;
 
 // 列表
 const getList = async () => {
@@ -775,13 +777,16 @@ const onSubmit = async (row: CommissionContractVO) => {
   // 提交中拦截：防止连点重复弹出确认框/重复提交
   if (submittingMap[no]) return;
   const isResubmit = row.status === 'REJECTED';
-  const action = isResubmit ? '重新提交' : '发起并提交';
+  const isDraft = row.status === 'DRAFT';
+  const action = isResubmit ? '重新提交' : isDraft ? '提交' : '发起并提交';
   try {
     await ElMessageBox.confirm(
       `确认为合同「${no}」${row.period} 月${action}？${
         isResubmit
           ? '该驳回单将重新进入审批流。'
-          : '将按该合同当月实收业绩生成明细并直接进入审批流。'
+          : isDraft
+            ? '该结佣单已由实收审批通过自动生成，提交后直接进入审批流。'
+            : '将按该合同当月实收业绩生成明细并直接进入审批流。'
       }`,
       action, { type: 'info' },
     );
