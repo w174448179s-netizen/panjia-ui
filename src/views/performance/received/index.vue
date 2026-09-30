@@ -157,7 +157,7 @@
             <div class="table-actions">
               <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
               <el-button v-if="row.status === 'SUBMITTED' && checkPermi(['perf:received:approve'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.id)">审批</el-button>
-              <el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重提</el-button>
+              <el-button v-if="row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重提</el-button>
               <el-button v-if="(row.status === 'DRAFT' || row.status === 'SUBMITTED') && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
             </div>
           </template>
@@ -475,12 +475,10 @@ const formatRatio = (val: number | string | undefined | null): string => {
 const summaryAmount = computed(() => applyList.value.reduce((s, r) => s + num(r.receivedAmount), 0));
 
 const STATUS_MAP: Record<string, string> = {
-  DRAFT: '待提交', SUBMITTED: '审批中', APPROVED: '已通过', REJECTED: '已驳回', CANCELLED: '已作废',
+  DRAFT: '待补新签', SUBMITTED: '审批中', APPROVED: '已通过', REJECTED: '已驳回', CANCELLED: '已作废',
 };
-// 筛选下拉只列实际会出现在列表中的状态：实收单导入即提交，无「保存草稿」入口，DRAFT（待提交）不会落库展示
-const HIDDEN_FILTER_STATUS = ['DRAFT'];
+// DRAFT（待补新签）：实收导入时无对应新签，系统建 DRAFT 不启动工作流，等新签导入触发自动审批
 const statusOptions = Object.entries(STATUS_MAP)
-  .filter(([value]) => !HIDDEN_FILTER_STATUS.includes(value))
   .map(([value, label]) => ({ value, label }));
 const statusLabel = (s: string) => STATUS_MAP[s] || s || '—';
 const statusTagType = (s: string) => {

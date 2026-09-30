@@ -437,7 +437,7 @@ const handleCancelImport = async (row: ImportBatch) => {
     modal.msgSuccess('撤销成功');
     await loadBatches();
   } catch (e: any) {
-    modal.msgError(e?.message || '撤销失败');
+    // 响应拦截器已统一弹错（request.ts），此处不重复提示，仅吞异常避免未处理拒绝
   } finally {
     rowCancellingId.value = '';
   }

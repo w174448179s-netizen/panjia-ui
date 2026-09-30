@@ -409,7 +409,7 @@ const handleRevoke = async (row: ImportBatch) => {
     modal.msgSuccess('已撤销');
     await getList();
   } catch (e: any) {
-    modal.msgError(e?.message || '撤销失败');
+    // 响应拦截器已统一弹错（request.ts），此处不重复提示，仅吞异常避免未处理拒绝
   } finally {
     rowCancellingId.value = '';
   }
