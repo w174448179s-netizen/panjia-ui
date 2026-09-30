@@ -210,6 +210,8 @@
                 node-key="deptId"
                 placeholder="请选择门店/组别"
                 check-strictly
+                :expand-on-click-node="false"
+                :render-after-expand="false"
                 style="width: 100%"
               />
             </el-form-item>
