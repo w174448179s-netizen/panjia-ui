@@ -82,8 +82,13 @@
           <el-table-column label="操作" align="center" width="190" class-name="small-padding fixed-width">
             <template #default="scope">
               <div class="action-row">
-                <!-- 终态（ARCHIVED）：仅保留"下载"做合规留档入口，"问题/重归一化/归档"全部收起 -->
+                <!-- 终态（ARCHIVED）：归档消费可能产生批次级错误（如红冲超额），有则显示"问题"入口 -->
                 <template v-if="scope.row.status === 'ARCHIVED'">
+                  <el-tooltip v-if="hasIssues(scope.row as ImportBatch)" content="查看问题清单" placement="top">
+                    <a class="action-btn" @click="handleIssues(scope.row as ImportBatch)">
+                      <el-icon><Warning /></el-icon>
+                    </a>
+                  </el-tooltip>
                   <el-tooltip content="撤销导入（冲销该批次业绩数据）" placement="top">
                     <a
                       class="action-btn action-btn-danger"
@@ -250,10 +255,12 @@ const canRenormalize = (status: string): boolean => status === 'PENDING_CONFIRM'
 const canArchive = (status: string): boolean => status === 'PENDING_CONFIRM';
 
 /**
- * 批次是否存在需要展示的问题（failedRows > 0）。
+ * 批次是否存在需要展示的问题（行级失败 failedRows > 0 或批次级错误 batchErrorCount > 0）。
  * - 中间态/终态都用此判定是否显示"问题"按钮，避免无 issue 时多一个无效入口。
+ * - 批次级失败：batchErrorCount > 0（归一化/归档阶段整批失败，如红冲超额，此时 failedRows 保持 0）。
  */
-const hasIssues = (row: ImportBatch): boolean => Number(row.failedRows ?? 0) > 0;
+const hasIssues = (row: ImportBatch): boolean =>
+  Number(row.failedRows ?? 0) > 0 || Number(row.batchErrorCount ?? 0) > 0;
 
 const statusTagType = (status: string): TagType => {
   const map: Record<string, TagType> = {
