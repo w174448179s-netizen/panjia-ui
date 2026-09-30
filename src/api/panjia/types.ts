@@ -166,6 +166,8 @@ export interface ImportBatch {
   status: string;
   operatorId?: string;
   deptId?: string;
+  /** 批次级错误数量（归一化/归档阶段整批失败，非行级校验错误），用于判定是否展示"问题清单"按钮 */
+  batchErrorCount?: number;
   createTime: string;
   updateTime: string;
 }
