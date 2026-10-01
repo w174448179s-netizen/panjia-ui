@@ -148,7 +148,7 @@
             <span v-else class="amount amount-ink">¥{{ formatAmount(row.convertedAmount) }}</span>
           </template>
         </el-table-column>
-        <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值（同实收明细） -->
+        <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值（同实收明细）；含增加角色人时打标 -->
         <el-table-column label="新签业绩" align="right" width="200">
           <template #default="{ row }">
             <template v-if="isAdjusted(row)">
@@ -157,6 +157,9 @@
               <span class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
             </template>
             <span v-else class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
+            <div v-if="row.hasAddMember" class="cell-sub">
+              <el-tag type="warning" size="small" effect="plain">新增角色人</el-tag>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="190">
@@ -1017,5 +1020,10 @@ onMounted(() => {
 .amount-arrow {
   margin: 0 4px;
   color: #c0c4cc;
+}
+/* 金额单元格下方的副标记（如「新增角色人」标签） */
+.cell-sub {
+  margin-top: 2px;
+  line-height: 1.2;
 }
 </style>

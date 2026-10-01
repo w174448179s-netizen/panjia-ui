@@ -162,6 +162,8 @@ export interface CommissionItemDetail {
   expectPeriod?: string;
   /** 该行应收已被调整（同 sourceKey 存在 REVERSED 的 PERF_EXPECT 事实） */
   expectedAdjusted?: boolean;
+  /** 「增加角色人」产生的新人明细行（事实 sourceKey 带 MANUAL-ADJ/MANUAL-CADJ），新签业绩按 0→X 展示并打新人标记 */
+  manualAdjust?: boolean;
   /** 调整前新签业绩（同 sourceKey 最早一条 REVERSED 的 PERF_EXPECT；无调整时 = expectedAmount） */
   originalExpectedAmount?: number;
   /** 结佣业绩（结佣调整后为新事实金额） */
@@ -245,6 +247,8 @@ export interface CommissionContractVO {
   /** 调整前应收的折算后金额（originalExpectedAmount × 当前生效折算因子） */
   originalExpectedConvertedAmount?: number;
   expectedAdjusted?: boolean; // 应收已被调整
+  /** 存在已生效的「增加角色人」（有 MANUAL-ADJ/MANUAL-CADJ 新人事实行），列表展示「新增角色人」标签 */
+  hasAddMember?: boolean;
   currentNode?: string;      // DIRECTOR / FINANCE / null（T-04 后实收==应收时财务节点跳过，流程直接结束）
   employeeCount: number;
   detailCount: number;

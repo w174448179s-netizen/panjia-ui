@@ -57,7 +57,7 @@
           <span>每人结佣明细（{{ items.length }} 条）</span>
           <el-button v-if="detail && detail.status === 'LOCKED' && !props.periodClosed" type="danger" size="small" @click="onCancel">作废</el-button>
         </div>
-        <el-table :data="items" border max-height="420" class="detail-facts-table">
+        <el-table :data="items" border max-height="420" class="detail-facts-table" :row-class-name="itemRowClassName">
           <el-table-column label="序号" type="index" width="55" align="center" />
           <el-table-column label="门店/组别" align="left" min-width="150">
             <template #default="scope">
@@ -71,10 +71,11 @@
           <el-table-column label="工号" align="center" width="100">
             <template #default="scope">{{ scope.row.employeeCode || '—' }}</template>
           </el-table-column>
-          <el-table-column label="姓名" align="center" min-width="110">
+          <el-table-column label="姓名" align="center" min-width="120">
             <template #default="scope">
               <span class="person-name">{{ scope.row.employeeName || employeeName(scope.row.employeeId) }}</span>
-              <el-tag v-if="scope.row.newMemberPending" type="success" size="small" effect="dark" style="margin-left: 4px">新增角色人</el-tag>
+              <el-tag v-if="scope.row.manualAdjust" type="success" size="small" effect="dark" style="margin-left: 4px">新增角色人</el-tag>
+              <el-tag v-else-if="scope.row.newMemberPending" type="success" size="small" effect="plain" style="margin-left: 4px">新增角色人</el-tag>
               <el-tag v-else-if="scope.row.adjustPending" type="warning" size="small" effect="plain" style="margin-left: 4px">调整审批中</el-tag>
             </template>
           </el-table-column>
@@ -104,7 +105,8 @@
                 <span class="amount-arrow">→</span>
                 <span class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
               </template>
-              <span v-else class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
+              <span v-else class="amount" :class="scope.row.manualAdjust ? 'amount-positive' : 'amount-red'">¥{{ formatAmount(scope.row.amount) }}</span>
+              <span v-if="scope.row.manualAdjust" class="new-member-delta">（新增）</span>
             </template>
           </el-table-column>
           <el-table-column label="折算后" align="right" width="190">
@@ -117,14 +119,19 @@
               <span v-else class="amount amount-ink">¥{{ formatAmount(scope.row.convertedAmount) }}</span>
             </template>
           </el-table-column>
-          <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值 -->
+          <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值；新增角色人行原值 0、金额绿色 -->
           <el-table-column label="新签业绩" align="right" width="190">
             <template #default="scope">
               <div>
                 <template v-if="isAdjusted(scope.row)">
                   <span class="amount-strike">¥{{ formatAmount(scope.row.originalExpectedAmount) }}</span>
                   <span class="amount-arrow">→</span>
-                  <span class="amount">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
+                  <span class="amount" :class="scope.row.manualAdjust ? 'amount-positive' : ''">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
+                  <span
+                    v-if="scope.row.manualAdjust"
+                    class="amount-positive"
+                    style="font-size:12px; margin-left:2px"
+                  >(+{{ formatAmount(scope.row.expectedAmount) }})</span>
                 </template>
                 <span v-else class="amount">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
               </div>
@@ -168,7 +175,7 @@
       </el-descriptions>
       <div class="detail-table-wrap">
         <div class="detail-table-title">每人业绩明细（{{ perfRows.length }} 条）</div>
-        <el-table :data="perfRows" border max-height="420" class="detail-facts-table">
+        <el-table :data="perfRows" border max-height="420" class="detail-facts-table" :row-class-name="perfRowClassName">
           <el-table-column label="序号" type="index" width="55" align="center" />
           <el-table-column label="门店/组别" align="left" min-width="150">
             <template #default="scope">
@@ -182,8 +189,11 @@
           <el-table-column label="工号" align="center" width="100">
             <template #default="scope">{{ scope.row.employeeCode || '—' }}</template>
           </el-table-column>
-          <el-table-column label="姓名" align="center" min-width="110">
-            <template #default="scope"><span class="person-name">{{ scope.row.employeeName || '—' }}</span></template>
+          <el-table-column label="姓名" align="center" min-width="120">
+            <template #default="scope">
+              <span class="person-name">{{ scope.row.employeeName || '—' }}</span>
+              <el-tag v-if="scope.row.manualAdjust" type="success" size="small" effect="dark" style="margin-left: 4px">新增角色人</el-tag>
+            </template>
           </el-table-column>
           <el-table-column label="所属角色" align="center" min-width="100">
             <template #default="scope">{{ scope.row.roleType || scope.row.roleName || '—' }}</template>
@@ -426,6 +436,12 @@ const applicantName = (name?: string | null, userId?: number | string | null) =>
 /** 未发起模式业绩行：金额与调整前不一致即视为已调整（与合同业绩明细页同口径） */
 const isPerfAdjusted = (row: { amount?: number | string | null; originalAmount?: number | string | null }): boolean =>
   num(row.amount) !== num(row.originalAmount);
+
+/** 新增角色人行高亮（已生效 MANUAL-ADJ/CADJ 或审批中新增）：浅绿底，一眼可辨 */
+const itemRowClassName = ({ row }: { row: any }): string =>
+  row.manualAdjust || row.newMemberPending ? 'new-member-row' : '';
+const perfRowClassName = ({ row }: { row: any }): string =>
+  row.manualAdjust ? 'new-member-row' : '';
 
 /** 业绩行合并 key：员工 + 所属角色（实收口径与应收口径的行按此对应） */
 const perfKey = (row: { employeeId?: string | null; roleType?: string | null; roleName?: string | null }): string =>
@@ -741,5 +757,18 @@ onMounted(async () => {
   margin-left: 10px;
   font-size: 13px;
   color: #909399;
+}
+/* 新增角色人行：浅绿底高亮（与调整详情「新增角色人」标签同色系） */
+:deep(.new-member-row) {
+  background-color: #f0f9eb !important;
+}
+:deep(.new-member-row:hover > td) {
+  background-color: #e1f3d8 !important;
+}
+.new-member-delta {
+  margin-left: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #67c23a;
 }
 </style>

@@ -333,6 +333,8 @@ async function open(payload: AdjustInfo) {
   adjustType.value = 'AMOUNT';
   reason.value = '';
   totalInput.value = null;
+  // 必须重置「调整金额」差额框：否则上一单录入的差额会残留到后续打开的每个合同
+  deltaInput.value = null;
   editRows.value = [];
   empOptions.value = [];
   pendingBlocked.value = false;

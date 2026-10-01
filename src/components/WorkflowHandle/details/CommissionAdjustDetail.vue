@@ -278,7 +278,11 @@ const formatRatio = (val: number | string | undefined | null): string => {
   return `${(n * 100).toFixed(2)}%`;
 };
 
-const rowClassName = ({ row }: { row: any }) => (row.target ? 'target-row' : '');
+const rowClassName = ({ row }: { row: any }) => {
+  // 新增角色人虚拟行（调整前 0 → 调整后 X）绿色高亮；其余调整目标行红色
+  if (isNewMemberRow(row)) return 'new-member-row';
+  return row.target ? 'target-row' : '';
+};
 
 onMounted(async () => {
   loading.value = true;
@@ -362,6 +366,12 @@ onMounted(async () => {
 }
 :deep(.target-row:hover > td) {
   background-color: #fde2e2 !important;
+}
+:deep(.new-member-row) {
+  background-color: #f0f9eb !important;
+}
+:deep(.new-member-row:hover > td) {
+  background-color: #e1f3d8 !important;
 }
 :deep(.el-descriptions__body .el-descriptions__table .el-descriptions-item__label) {
   width: 130px;
