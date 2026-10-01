@@ -224,15 +224,13 @@ const queryParams = reactive({
 });
 
 const TYPE_MAP: Record<string, string> = {
-  AMOUNT: '金额调整', VOID: '业绩冲销', TRANSFER: '部门划转',
-  DISCOUNT: '折扣', DIFF: '差额补发',
+  AMOUNT: '金额调整', ADD_MEMBER: '增加角色人',
 };
 const typeOptions = Object.entries(TYPE_MAP).map(([value, label]) => ({ value, label }));
 const typeLabel = (t: string) => TYPE_MAP[t] || t || '—';
 const typeTagType = (t: string) => {
   const map: Record<string, string> = {
-    AMOUNT: 'primary', VOID: 'danger', TRANSFER: 'warning',
-    DISCOUNT: 'warning', DIFF: 'primary',
+    AMOUNT: 'primary', ADD_MEMBER: 'success',
   };
   return (map as any)[t] || 'info';
 };

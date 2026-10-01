@@ -21,9 +21,6 @@
         </el-descriptions-item>
         <el-descriptions-item label="门店/组别">
           <span>{{ detail.deptName || '—' }}</span>
-          <span v-if="detail.adjustType === 'TRANSFER' && detail.targetDeptName" class="transfer-arrow">
-            → {{ detail.targetDeptName }}
-          </span>
         </el-descriptions-item>
         <el-descriptions-item :label="isAddMember ? '合同业绩总额(调整前)' : '新签业绩'">
           {{ formatYuan(detail.originalAmount) }}
@@ -211,8 +208,6 @@ const { load: loadEmployees, name: employeeName } = useEmployeeMap();
 
 const ADJUST_TYPE_MAP: Record<string, string> = {
   AMOUNT: '金额调整',
-  VOID: '业绩冲销',
-  TRANSFER: '部门划转',
   ADD_MEMBER: '增加角色人'
 };
 const adjustTypeLabel = (t: string) => ADJUST_TYPE_MAP[t] ?? t ?? '—';

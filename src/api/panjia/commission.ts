@@ -7,7 +7,7 @@ export interface CommissionAdjust {
   applicationId: number;
   itemId?: number;
   period?: string;
-  adjustType: string;    // AMOUNT / VOID / TRANSFER（旧 DISCOUNT/DIFF 兼容历史）
+  adjustType: string;    // AMOUNT / ADD_MEMBER
   adjustScope?: string;  // CONTRACT / DETAIL
   /** 调整对象合同号 */
   contractNo?: string;
@@ -21,8 +21,6 @@ export interface CommissionAdjust {
   newAmount?: number;
   /** 调整差额（= newAmount - originalAmount） */
   diffAmount?: number;
-  /** 部门划转目标部门（TRANSFER 用） */
-  targetDeptId?: number;
   // —— 旧字段，历史数据兼容 ——
   convertedNewAmount?: number;
   convertedDiffAmount?: number;
@@ -46,8 +44,6 @@ export interface CommissionAdjust {
   employeeName?: string;
   /** 明细级调整目标员工工号 */
   employeeCode?: string;
-  /** 部门划转目标部门名（TRANSFER） */
-  targetDeptName?: string;
   /** 折算后调整前金额（originalAmount × 折算因子） */
   convertedOriginalAmount?: number;
   /** 受影响明细行（含调整前/变动/调整后预演） */
@@ -69,9 +65,8 @@ export interface CommissionAdjustCreateDTO {
   applicationId: number | string;    // 雪花 ID 以字符串透传，禁止 Number() 丢精度
   itemId?: number | string;          // 明细级必填，合同级为空
   adjustScope: string;               // CONTRACT / DETAIL
-  adjustType: string;                // AMOUNT / VOID / TRANSFER / ADD_MEMBER
+  adjustType: string;                // AMOUNT / ADD_MEMBER
   targetAmount?: number;             // 调整后金额（AMOUNT 用，前端 = 当前 + 差额）
-  targetDeptId?: number;             // 部门划转目标部门（TRANSFER 用）
   reason: string;
   /** 合同级逐行指定目标（可编辑表格模式，镜像新签调整） */
   detailTargets?: CommissionAdjustDetailTarget[];

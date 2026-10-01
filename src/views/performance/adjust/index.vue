@@ -147,8 +147,6 @@
           <el-table-column label="门店/组别" align="center" min-width="150" show-overflow-tooltip>
             <template #default="scope">
               <span>{{ scope.row.deptName || '—' }}</span>
-              <span v-if="scope.row.adjustType === 'TRANSFER' && scope.row.targetDeptName"
-                class="transfer-arrow"> → {{ scope.row.targetDeptName }}</span>
             </template>
           </el-table-column>
           <el-table-column label="调整类型" align="center" width="100">
@@ -331,18 +329,6 @@
           />
           <div class="form-hint">也可直接输入调整后的目标总金额，调整金额自动算出</div>
         </el-form-item>
-        <el-form-item v-if="formData.adjustType === 'TRANSFER'" label="目标门店" prop="targetDeptId">
-          <el-tree-select
-            v-model="formData.targetDeptId"
-            :data="deptTreeRaw"
-            :props="{ label: 'deptName', children: 'children' }"
-            value-key="deptId"
-            node-key="deptId"
-            placeholder="请选择目标门店/组别"
-            check-strictly
-            style="width: 100%"
-          />
-        </el-form-item>
         <el-form-item label="调整原因" prop="reason">
           <el-input
             v-model="formData.reason"
@@ -413,8 +399,6 @@ const onBizApprove = (businessId: string | number) =>
 // ==================== 枚举 ====================
 const adjustTypeMap: Record<string, string> = {
   AMOUNT: '金额调整',
-  VOID: '业绩冲销',
-  TRANSFER: '部门划转',
   ADD_MEMBER: '增加角色人'
 };
 const adjustTypeOptions = Object.entries(adjustTypeMap).map(([value, label]) => ({ value, label }));
@@ -440,8 +424,8 @@ const statusTagType = (status: string): TagType => {
   return map[status] ?? 'info';
 };
 
-// ==================== 部门树（全系统统一口径：所有用户查本部门及以下；划转目标门店保持全量） ====================
-const { deptLocked, defaultDeptId, deptTreeData: deptFilterTree, deptTreeRaw, loadDeptTree } = useDeptScope();
+// ==================== 部门树（全系统统一口径：所有用户查本部门及以下） ====================
+const { deptLocked, defaultDeptId, deptTreeData: deptFilterTree, loadDeptTree } = useDeptScope();
 
 // ==================== 员工远程搜索（筛选条用） ====================
 const employeeOptions = ref<Employee[]>([]);
@@ -622,7 +606,6 @@ const defaultFormData = (): AdjustCreateForm & { factId: string; deltaAmount?: n
   adjustType: '',
   targetAmount: undefined as number | undefined,
   deltaAmount: undefined as number | undefined,
-  targetDeptId: '',
   reason: ''
 });
 
@@ -660,7 +643,6 @@ const formRules = {
   deptId: [{ required: true, message: '请选择门店/组别', trigger: 'change' }],
   factId: [{ required: true, message: '请选择关联业绩事实', trigger: 'change' }],
   reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
-  targetDeptId: [{ required: true, message: '请选择目标门店', trigger: 'change' }],
   targetAmount: [{ required: true, message: '请输入调整金额或调整后业绩', trigger: 'blur' }]
 };
 
@@ -726,7 +708,6 @@ const handleSubmit = async () => {
       deptId: formData.deptId,
       adjustType: formData.adjustType,
       targetAmount: formData.adjustType === 'AMOUNT' ? formData.targetAmount : undefined,
-      targetDeptId: formData.adjustType === 'TRANSFER' ? formData.targetDeptId : undefined,
       reason: formData.reason
     };
     await performanceApi.createAdjust(data);

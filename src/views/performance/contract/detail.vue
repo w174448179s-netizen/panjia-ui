@@ -160,8 +160,6 @@
         <el-form-item label="调整类型">
           <el-select v-model="adjustForm.adjustType" style="width: 100%">
             <el-option label="金额调整" value="AMOUNT" />
-            <el-option label="业绩冲销" value="VOID" />
-            <el-option label="部门划转" value="TRANSFER" />
           </el-select>
         </el-form-item>
         <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整后业绩" prop="targetAmount">
@@ -177,18 +175,6 @@
             <span>当前：<span class="amount">¥{{ formatAmount(adjustDialog.amount) }}</span></span>
             <span>→ 调整后：<span class="amount">¥{{ formatAmount(adjustForm.targetAmount ?? 0) }}</span></span>
           </div>
-        </el-form-item>
-        <el-form-item v-if="adjustForm.adjustType === 'TRANSFER'" label="目标部门">
-          <el-tree-select
-            v-model="adjustForm.targetDeptId"
-            :data="deptTreeData"
-            :props="{ label: 'deptName', children: 'children' } as any"
-            value-key="deptId"
-            node-key="deptId"
-            placeholder="选择目标部门"
-            check-strictly
-            style="width: 100%"
-          />
         </el-form-item>
         <el-form-item label="调整原因" prop="reason">
           <el-input
@@ -218,8 +204,6 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceManageRow } from '@/api/panjia/performance';
 import ContractAdjustDialog from './components/ContractAdjustDialog.vue';
-import { employeeApi } from '@/api/panjia/employee';
-import type { DeptNode } from '@/api/panjia/types';
 import { useUserStore } from '@/store/modules/user';
 import { checkPermi } from '@/utils/permission';
 
@@ -244,7 +228,6 @@ const period = ref(String(props.period || route.query.period || ''));
 // ==================== 数据 ====================
 const loading = ref(false);
 const detailList = ref<PerformanceManageRow[]>([]);
-const deptTreeData = ref<DeptNode[]>([]);
 
 // 合同汇总信息（从明细首行提取）
 const contractInfo = computed(() => {
@@ -361,15 +344,6 @@ const handleVoidContract = async () => {
   }
 };
 
-const loadDeptTree = async () => {
-  try {
-    const res = await employeeApi.deptTree();
-    deptTreeData.value = res.data ?? [];
-  } catch (e) {
-    console.error('[contract-detail] 部门树加载失败', e);
-  }
-};
-
 // ==================== 业绩调整弹窗 ====================
 const adjustFormRef = ref();
 const adjustSubmitting = ref(false);
@@ -383,7 +357,6 @@ const adjustDialog = reactive({
 const adjustForm = reactive({
   adjustType: 'AMOUNT',
   targetAmount: undefined as number | undefined,
-  targetDeptId: undefined as string | undefined,
   reason: '',
 });
 const adjustRules = {
@@ -400,18 +373,6 @@ const adjustRules = {
       trigger: 'blur',
     },
   ],
-  targetDeptId: [
-    {
-      validator: (_rule: unknown, value: string | undefined, callback: (err?: Error) => void) => {
-        if (adjustForm.adjustType === 'TRANSFER' && !value) {
-          callback(new Error('请选择目标部门'));
-        } else {
-          callback();
-        }
-      },
-      trigger: 'change',
-    },
-  ],
 };
 
 const openAdjustDialog = (row: PerformanceManageRow) => {
@@ -421,7 +382,6 @@ const openAdjustDialog = (row: PerformanceManageRow) => {
   adjustDialog.amount = row.amount ?? 0;
   adjustForm.adjustType = 'AMOUNT';
   adjustForm.targetAmount = undefined;
-  adjustForm.targetDeptId = undefined;
   adjustForm.reason = '';
   adjustDialog.visible = true;
 };
@@ -438,7 +398,6 @@ const submitAdjust = async () => {
       adjustScope: 'DETAIL',
       factType: 'PERF_EXPECT',
       targetAmount: adjustForm.targetAmount,
-      targetDeptId: adjustForm.targetDeptId,
       reason: adjustForm.reason.trim(),
     } as any);
     ElMessage.success('调整单已提交审批');
@@ -464,7 +423,7 @@ const openContractAdjust = () => {
 };
 
 onMounted(async () => {
-  await Promise.all([loadDeptTree(), loadDetails()]);
+  await loadDetails();
 });
 </script>
 

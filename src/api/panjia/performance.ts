@@ -47,7 +47,7 @@ export interface PerformanceAdjust {
   employeeName?: string;
   deptId: string;
   deptName?: string;
-  adjustType: string;         // AMOUNT / VOID / TRANSFER
+  adjustType: string;         // AMOUNT / ADD_MEMBER
   adjustTypeName?: string;
   adjustScope?: string;      // CONTRACT / DETAIL
   contractNo?: string;
@@ -57,8 +57,6 @@ export interface PerformanceAdjust {
   convertedTargetAmount?: number;    // 折算后目标金额（targetAmount × factor）
   /** ADD_MEMBER 调整后合同业绩合计（与 originalAmount 不等=同时调整了合同总额；旧单为空视为不变） */
   afterTotalAmount?: number;
-  targetDeptId?: string;
-  targetDeptName?: string;
   reason: string;
   status: string;             // SUBMITTED/APPROVED/REJECTED/CANCELLED/EXECUTED
   statusName?: string;
@@ -118,12 +116,11 @@ export interface AdjustCreateForm {
   period: string;
   employeeId?: string;       // 明细级调整时必填（被调整事实所属员工）；合同级/ADD_MEMBER 不传
   deptId?: string;           // 同上，明细级必填
-  adjustType: string;        // AMOUNT / VOID / TRANSFER / ADD_MEMBER
+  adjustType: string;        // AMOUNT / ADD_MEMBER
   adjustScope?: string;      // CONTRACT / DETAIL
   contractNo?: string;       // 合同级调整时填
   factType?: string;         // PERF_REAL / PERF_EXPECT
   targetAmount?: number;     // 调整后目标金额
-  targetDeptId?: string;
   reason: string;
   payloadJson?: string;
   // ---- 增加角色人（ADD_MEMBER，合同级）专用 ----
@@ -189,7 +186,7 @@ export interface PerformanceManageRow {
   convertedAmount?: number;  // 折算后金额（amount × conversionFactor）
   originalConvertedAmount?: number; // 折算后原始金额（originalAmount × conversionFactor）
   adjustPending?: boolean;   // 存在审批中的调整单（SUBMITTED/APPROVED，执行前金额未变）
-  adjustPendingType?: string;      // 审批中调整单类型 AMOUNT/VOID/TRANSFER/ADD_MEMBER
+  adjustPendingType?: string;      // 审批中调整单类型 AMOUNT/ADD_MEMBER
   adjustPendingAmount?: number;    // 审批中调整单目标金额（仅 AMOUNT 类型）
   adjustPendingDelta?: number;     // 分摊到本明细的调整金额（= adjustPendingAmount − amount）
   adjustDelta?: number;            // 已执行调整累计的调整金额（= amount − originalAmount）
@@ -261,7 +258,7 @@ export interface PerformanceManageContract {
   convertedAmount?: number;  // 折算后金额合计（amount × conversionFactor）
   originalConvertedAmount?: number; // 折算后原始金额合计（originalAmount × conversionFactor）
   adjustPending?: boolean;   // 存在审批中的调整单（SUBMITTED/APPROVED，执行前金额未变）
-  adjustPendingType?: string;      // 审批中调整单类型 AMOUNT/VOID/TRANSFER/ADD_MEMBER
+  adjustPendingType?: string;      // 审批中调整单类型 AMOUNT/ADD_MEMBER
   adjustPendingAmount?: number;    // 审批中调整单目标金额（仅 AMOUNT 类型，调整后合同业绩合计）
   conversionFactor?: number;       // 本行折算系数（调整弹窗录入业绩后自动算折算金额用）
   employeeCount: number;     // 涉及签约人数

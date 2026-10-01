@@ -23,9 +23,6 @@
         <el-descriptions-item v-if="detail.adjustScope === 'DETAIL'" label="员工">
           {{ detail.employeeName ? `${detail.employeeName}（${detail.employeeCode || '—'}）` : '—' }}
         </el-descriptions-item>
-        <el-descriptions-item v-if="detail.adjustType === 'TRANSFER'" label="目标部门">
-          {{ detail.targetDeptName || '—' }}
-        </el-descriptions-item>
         <el-descriptions-item label="结佣业绩（调整前）">
           <span class="amount">{{ formatYuan(detail.originalAmount) }}</span>
         </el-descriptions-item>
@@ -44,15 +41,6 @@
           </el-descriptions-item>
           <el-descriptions-item label="折算后（调整后）">
             <span class="amount amount-ink">{{ formatYuan(detail.convertedNewAmount) }}</span>
-          </el-descriptions-item>
-        </template>
-        <template v-else-if="detail.adjustType === 'VOID'">
-          <el-descriptions-item label="调整金额">
-            <span class="amount-negative">{{ deltaYuan(detail.originalAmount == null ? null : -Number(detail.originalAmount)) }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="结佣业绩（调整后）">
-            <span class="amount amount-red">¥0.00</span>
-            <el-tag type="danger" size="small" effect="plain" style="margin-left: 6px">业绩冲销</el-tag>
           </el-descriptions-item>
         </template>
         <el-descriptions-item label="申请人">{{ detail.applicantName || '—' }}</el-descriptions-item>
@@ -140,8 +128,7 @@ const detail = ref<CommissionAdjust | null>(null);
 
 const TYPE_MAP: Record<string, string> = {
   AMOUNT: '金额调整',
-  VOID: '业绩冲销',
-  TRANSFER: '部门划转',
+  ADD_MEMBER: '增加角色人',
   DISCOUNT: '折扣（旧）',
   DIFF: '差额补发（旧）',
 };

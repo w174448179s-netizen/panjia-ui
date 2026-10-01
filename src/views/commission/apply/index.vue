@@ -475,7 +475,7 @@ const isAdjusted = (
 
 /**
  * 结佣业绩（PERF_REAL）是否按「原值 → 调整后值」展示：需后端 receivedAdjusted 标记与
- * 调整前合计同时成立（结佣调整 AMOUNT 生效；部门划转金额不变不展示）。
+ * 调整前合计同时成立（结佣调整 AMOUNT 生效）。
  */
 const isReceivedAdjusted = (
   row: { receivedAdjusted?: boolean | null; originalAmount?: number | string | null } | null | undefined,

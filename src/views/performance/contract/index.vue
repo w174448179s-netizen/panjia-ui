@@ -375,8 +375,6 @@
         <el-form-item label="调整类型">
           <el-select v-model="detailAdjustForm.adjustType" style="width: 100%">
             <el-option label="金额调整" value="AMOUNT" />
-            <el-option label="业绩冲销" value="VOID" />
-            <el-option label="部门划转" value="TRANSFER" />
           </el-select>
         </el-form-item>
         <el-form-item v-if="detailAdjustForm.adjustType === 'AMOUNT'" label="调整金额" prop="adjustAmount">
@@ -395,18 +393,6 @@
             </span>
             <span>→ 调整后：<span class="amount">¥{{ formatAmount(detailAdjustTargetAmount) }}</span></span>
           </div>
-        </el-form-item>
-        <el-form-item v-if="detailAdjustForm.adjustType === 'TRANSFER'" label="目标部门">
-          <el-tree-select
-            v-model="detailAdjustForm.targetDeptId"
-            :data="deptTreeData"
-            :props="{ label: 'deptName', children: 'children' } as any"
-            value-key="deptId"
-            node-key="deptId"
-            placeholder="选择目标部门"
-            check-strictly
-            style="width: 100%"
-          />
         </el-form-item>
         <el-form-item label="调整原因" prop="reason">
           <el-input
@@ -720,7 +706,6 @@ const detailAdjustDialog = reactive({
 const detailAdjustForm = reactive({
   adjustType: 'AMOUNT',
   adjustAmount: undefined as number | undefined,  // 录入的是调整金额（正增负减），提交时折算为调整后金额
-  targetDeptId: undefined as string | undefined,
   reason: '',
 });
 // 调整后金额 = 当前新签业绩 + 调整金额（仅用于界面提示；提交给后台的仍是调整后金额）
@@ -740,18 +725,6 @@ const detailAdjustRules = {
       trigger: 'blur',
     },
   ],
-  targetDeptId: [
-    {
-      validator: (_rule: unknown, value: string | undefined, callback: (err?: Error) => void) => {
-        if (detailAdjustForm.adjustType === 'TRANSFER' && !value) {
-          callback(new Error('请选择目标部门'));
-        } else {
-          callback();
-        }
-      },
-      trigger: 'change',
-    },
-  ],
 };
 
 const openDetailAdjustDialog = (row: PerformanceManageRow) => {
@@ -761,7 +734,6 @@ const openDetailAdjustDialog = (row: PerformanceManageRow) => {
   detailAdjustDialog.amount = row.amount ?? 0;
   detailAdjustForm.adjustType = 'AMOUNT';
   detailAdjustForm.adjustAmount = undefined;
-  detailAdjustForm.targetDeptId = undefined;
   detailAdjustForm.reason = '';
   detailAdjustDialog.visible = true;
 };
@@ -779,7 +751,6 @@ const submitDetailAdjust = async () => {
       factType: detailDialog.factType,
       // 界面录入调整金额（正增负减），后台口径不变：提交当前业绩 + 调整金额 = 调整后金额
       targetAmount: round2(num(detailAdjustDialog.amount) + num(detailAdjustForm.adjustAmount)),
-      targetDeptId: detailAdjustForm.targetDeptId,
       reason: detailAdjustForm.reason.trim(),
     } as any);
     ElMessage.success('调整单已提交审批');

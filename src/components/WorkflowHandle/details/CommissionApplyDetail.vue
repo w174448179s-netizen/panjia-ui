@@ -251,8 +251,6 @@
         <el-form-item label="调整类型" prop="adjustType">
           <el-radio-group v-model="adjustForm.adjustType">
             <el-radio-button value="AMOUNT">金额调整</el-radio-button>
-            <el-radio-button value="VOID">业绩冲销</el-radio-button>
-            <el-radio-button value="TRANSFER">部门划转</el-radio-button>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="当前金额">
@@ -289,18 +287,6 @@
             <span>→ 调整后：<span class="amount">¥{{ formatAmount(adjustTargetAmount) }}</span></span>
           </div>
         </el-form-item>
-        <el-form-item v-if="adjustForm.adjustType === 'TRANSFER'" label="目标门店" prop="targetDeptId">
-          <el-tree-select
-            v-model="adjustForm.targetDeptId"
-            :data="deptTreeRaw"
-            :props="{ label: 'deptName', children: 'children' }"
-            value-key="deptId"
-            node-key="deptId"
-            check-strictly
-            placeholder="请选择目标门店/组别"
-            style="width: 100%"
-          />
-        </el-form-item>
         <el-form-item label="调整原因" prop="reason">
           <el-input v-model="adjustForm.reason" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请输入调整原因" />
         </el-form-item>
@@ -327,7 +313,6 @@ import type { FormInstance } from 'element-plus';
 import { commissionApi, type CommissionApplication, type CommissionItemDetail, type CommissionContractVO } from '@/api/panjia/commission';
 import { performanceApi, type PerformanceManageRow } from '@/api/panjia/performance';
 import { useEmployeeMap } from '../useEmployeeMap';
-import { useDeptScope } from '@/hooks/useDeptScope';
 import CommissionContractAdjustDialog from './CommissionContractAdjustDialog.vue';
 
 const props = defineProps<{
@@ -385,7 +370,7 @@ const detailAdjusted = computed(() => isAdjusted(detail.value));
 
 /**
  * 结佣业绩（PERF_REAL）是否按「原值 → 调整后值」展示：需后端 receivedAdjusted 标记与
- * 调整前值同时成立（结佣调整 AMOUNT 生效；部门划转金额不变不置标记）。
+ * 调整前值同时成立（结佣调整 AMOUNT 生效）。
  */
 const isReceivedAdjusted = (
   row: { receivedAdjusted?: boolean | null; originalAmount?: number | string | null } | null | undefined,
@@ -447,7 +432,6 @@ const perfKey = (row: { employeeId?: string | null; roleType?: string | null; ro
   `${row.employeeId}|${row.roleType || row.roleName || ''}`;
 
 // ==================== 结佣调整弹窗 ====================
-const { deptTreeRaw, loadDeptTree } = useDeptScope();
 
 const adjustDialog = reactive({
   visible: false,
@@ -460,7 +444,6 @@ const adjustForm = reactive({
   adjustType: 'AMOUNT',
   adjustAmount: undefined as number | undefined,
   targetAmount: undefined as number | undefined,
-  targetDeptId: undefined as number | string | undefined,
   reason: '',
 });
 
@@ -509,15 +492,6 @@ const adjustRules = {
       trigger: 'blur',
     },
   ],
-  targetDeptId: [
-    {
-      validator: (_r: unknown, v: number | string | undefined, cb: (e?: Error) => void) => {
-        if (adjustForm.adjustType === 'TRANSFER' && (v === undefined || v === null || v === '')) cb(new Error('请选择目标门店'));
-        else cb();
-      },
-      trigger: 'change',
-    },
-  ],
 };
 
 const adjustDeltaClass = (v: number | undefined) => {
@@ -544,14 +518,12 @@ const openAdjust = (scope: 'CONTRACT' | 'DETAIL', row?: any) => {
     });
     return;
   }
-  loadDeptTree();
   adjustDialog.scope = scope;
   adjustDialog.itemId = row?.itemId;
   adjustDialog.currentAmount = num(row?.amount);
   adjustForm.adjustType = 'AMOUNT';
   adjustForm.adjustAmount = undefined;
   adjustForm.targetAmount = adjustDialog.currentAmount; // 默认=当前金额，提示「不变」
-  adjustForm.targetDeptId = undefined;
   adjustForm.reason = '';
   adjustDialog.visible = true;
 };
@@ -578,7 +550,6 @@ const submitAdjust = async () => {
     };
     if (adjustDialog.scope === 'DETAIL') payload.itemId = adjustDialog.itemId;
     if (adjustForm.adjustType === 'AMOUNT') payload.targetAmount = adjustTargetAmount.value;
-    if (adjustForm.adjustType === 'TRANSFER') payload.targetDeptId = adjustForm.targetDeptId;
     await commissionApi.createAdjust(payload);
     ElMessage.success('调整单已提交，等待审批');
     adjustDialog.visible = false;
