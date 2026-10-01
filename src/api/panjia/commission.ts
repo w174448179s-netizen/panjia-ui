@@ -33,7 +33,7 @@ export interface CommissionAdjust {
   approverId?: number;
   createTime: string;
   updateTime?: string;
-  // ==================== 详情展示字段（getAdjust 填充，列表查询为空） ====================
+  // ==================== 展示字段（列表批量回填 / 详情填充，不入库） ====================
   /** 订单号（申请单冗余） */
   orderNo?: string;
   /** 房源地址（申请单冗余） */
@@ -44,6 +44,8 @@ export interface CommissionAdjust {
   employeeName?: string;
   /** 明细级调整目标员工工号 */
   employeeCode?: string;
+  /** 归属门店/组别名称（明细级取明细部门，合同级取申请单部门） */
+  deptName?: string;
   /** 折算后调整前金额（originalAmount × 折算因子） */
   convertedOriginalAmount?: number;
   /** 受影响明细行（含调整前/变动/调整后预演） */
@@ -146,6 +148,8 @@ export interface CommissionItemDetail {
   employeeName?: string;
   /** 门店/组别（「集团-门店-组别」） */
   deptPath?: string;
+  /** 归属部门 ID */
+  deptId?: number;
   roleType?: string;
   roleName?: string;
   /** 角色占比 */
@@ -181,6 +185,8 @@ export interface CommissionItemDetail {
   deltaAmount?: number;
   /** 预演调整后金额 */
   afterAmount?: number;
+  /** 预演调整后折算金额（afterAmount × 折算因子） */
+  convertedAfterAmount?: number;
   /** 是否本单调整目标行 */
   target?: boolean;
   // —— 在途调整预演（审批中调整单回填） ——

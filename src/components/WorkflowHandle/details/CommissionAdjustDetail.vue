@@ -23,7 +23,10 @@
         <el-descriptions-item v-if="detail.adjustScope === 'DETAIL'" label="员工">
           {{ detail.employeeName ? `${detail.employeeName}（${detail.employeeCode || '—'}）` : '—' }}
         </el-descriptions-item>
-        <el-descriptions-item label="结佣业绩（调整前）">
+        <el-descriptions-item label="门店/组别">
+          <span>{{ detail.deptName || '—' }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item :label="isAddMember ? '合同业绩总额(调整前)' : '结佣业绩（调整前）'">
           <span class="amount">{{ formatYuan(detail.originalAmount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="折算后（调整前）">
@@ -43,35 +46,75 @@
             <span class="amount amount-ink">{{ formatYuan(detail.convertedNewAmount) }}</span>
           </el-descriptions-item>
         </template>
+        <template v-if="isAddMember">
+          <el-descriptions-item label="新增角色人业绩">
+            <span class="amount-positive">+{{ formatYuan(detail.newAmount) }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="调整后合同总额">
+            <span class="amount amount-ink">{{ formatNumber(afterTotal) }}</span>
+            <el-tag :type="totalChanged ? 'warning' : 'success'" size="small" effect="plain" style="margin-left: 6px">
+              {{ totalChanged ? `总额调整 ${totalChangedText}` : '总额不变' }}
+            </el-tag>
+          </el-descriptions-item>
+        </template>
         <el-descriptions-item label="申请人">{{ detail.applicantName || '—' }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ detail.createTime || '—' }}</el-descriptions-item>
         <el-descriptions-item label="调整原因" :span="2">{{ detail.reason || '—' }}</el-descriptions-item>
       </el-descriptions>
 
       <!-- 合同信息 -->
-      <div class="detail-block">
+      <div v-if="detail.contractNo" class="detail-block">
         <div class="block-title">合同信息</div>
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item label="合同号">
             <span class="contract-no">{{ detail.contractNo || '—' }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="订单号">{{ detail.orderNo || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="房源地址" :span="2">{{ detail.propertyAddress || '—' }}</el-descriptions-item>
           <el-descriptions-item label="明细条数">{{ detail.detailCount ?? 0 }} 条</el-descriptions-item>
           <el-descriptions-item label="申请单 ID">{{ detail.applicationId || '—' }}</el-descriptions-item>
+          <el-descriptions-item :label="isAddMember ? '合同业绩总额(调整前)' : '结佣业绩（调整前）'">
+            <span class="amount">{{ formatYuan(detail.originalAmount) }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="折算后（调整前）">
+            <span class="amount amount-ink">{{ formatYuan(detail.convertedOriginalAmount) }}</span>
+          </el-descriptions-item>
+          <template v-if="detail.adjustType === 'AMOUNT' || detail.adjustType === 'DISCOUNT' || detail.adjustType === 'DIFF'">
+            <el-descriptions-item label="结佣业绩（调整后）">
+              <span class="amount amount-red">{{ formatYuan(detail.newAmount) }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="折算后（调整后）">
+              <span class="amount amount-ink">{{ formatYuan(detail.convertedNewAmount) }}</span>
+            </el-descriptions-item>
+          </template>
+          <template v-if="isAddMember">
+            <el-descriptions-item label="新增角色人业绩">
+              <span class="amount amount-positive">+{{ formatYuan(detail.newAmount) }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="调整后合同总额">
+              <span class="amount amount-ink">{{ formatNumber(afterTotal) }}</span>
+            </el-descriptions-item>
+          </template>
+          <el-descriptions-item label="房源地址" :span="2">{{ detail.propertyAddress || '—' }}</el-descriptions-item>
         </el-descriptions>
       </div>
 
       <!-- 受影响明细 -->
-      <div class="detail-block">
+      <div v-if="detail.details && detail.details.length" class="detail-block">
         <div class="block-title">
           受影响明细
           <span class="block-subtitle">
-            （{{ detail.adjustScope === 'CONTRACT' ? '合同级调整：调整金额按各明细占比分摊' : '明细级调整：仅调整单条明细' }}）
+            <template v-if="isAddMember">
+              （增加角色人：既有角色人按快照扣减/调整后金额预演，新角色人调整前业绩为 0；{{
+                totalChanged ? `合同总额同步调整 ${totalChangedText}` : '合同总额不变，从既有角色人扣减分摊给新角色人'
+              }}）
+            </template>
+            <template v-else>
+              （{{ detail.adjustScope === 'CONTRACT' ? '合同级调整：调整金额按各明细占比分摊' : '明细级调整：仅调整单条明细' }}）
+            </template>
           </span>
         </div>
         <div class="detail-table-wrap">
-          <el-table :data="detail.details || []" size="small" border stripe :row-class-name="rowClassName">
+          <el-table :data="detail.details" size="small" border stripe :row-class-name="rowClassName">
             <el-table-column type="index" label="序号" width="55" align="center" />
             <el-table-column label="门店/组别" prop="deptPath" min-width="150" show-overflow-tooltip />
             <el-table-column label="工号" prop="employeeCode" width="100" show-overflow-tooltip />
@@ -91,6 +134,11 @@
                 <span class="amount amount-expected">{{ formatNumber(scope.row.amount) }}</span>
               </template>
             </el-table-column>
+            <el-table-column label="折算后" width="110" align="right">
+              <template #default="scope">
+                <span class="amount amount-ink">{{ formatNumber(scope.row.convertedAmount) }}</span>
+              </template>
+            </el-table-column>
             <el-table-column label="变动" width="110" align="right">
               <template #default="scope">
                 <span :class="deltaClass(scope.row.deltaAmount)">{{ formatDelta(scope.row.deltaAmount) }}</span>
@@ -103,9 +151,17 @@
                 </span>
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="90" align="center">
+            <el-table-column label="折算后" width="110" align="right">
               <template #default="scope">
-                <el-tag v-if="scope.row.target" type="danger" size="small" effect="dark">调整行</el-tag>
+                <span class="amount amount-ink" :class="deltaClass(scope.row.deltaAmount)">
+                  {{ formatNumber(scope.row.convertedAfterAmount) }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="100" align="center">
+              <template #default="scope">
+                <el-tag v-if="isNewMemberRow(scope.row)" type="success" size="small" effect="dark">新增角色人</el-tag>
+                <el-tag v-else-if="scope.row.target" type="danger" size="small" effect="dark">调整行</el-tag>
                 <el-tag v-else type="info" size="small" effect="plain">参考行</el-tag>
               </template>
             </el-table-column>
@@ -117,7 +173,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { commissionApi, type CommissionAdjust } from '@/api/panjia/commission';
 
 const props = defineProps<{ businessId: string | number }>();
@@ -125,6 +181,36 @@ const props = defineProps<{ businessId: string | number }>();
 const loading = ref(false);
 const loadError = ref('');
 const detail = ref<CommissionAdjust | null>(null);
+
+/** 是否增加角色人单 */
+const isAddMember = computed(() => detail.value?.adjustType === 'ADD_MEMBER');
+
+/** ADD_MEMBER 调整后合同总额 = 明细预演调整后金额之和 */
+const afterTotal = computed(() =>
+  (detail.value?.details ?? []).reduce((sum, r) => sum + Number(r.afterAmount ?? 0), 0));
+
+/** ADD_MEMBER 合同总额是否同时发生变化 */
+const totalChanged = computed(() => {
+  if (!isAddMember.value) return false;
+  const origin = Number(detail.value?.originalAmount ?? 0);
+  return Math.abs(afterTotal.value - origin) > 0.004;
+});
+const totalChangedText = computed(() => {
+  const origin = Number(detail.value?.originalAmount ?? 0);
+  const diff = afterTotal.value - origin;
+  return `${origin.toFixed(2)} → ${afterTotal.value.toFixed(2)}（${diff > 0 ? '+' : ''}${diff.toFixed(2)}）`;
+});
+
+/** 新角色人行：ADD_MEMBER 目标行，且调整前为 0/空、变动为正（与新签调整面板同口径） */
+const isNewMemberRow = (row: {
+  target?: boolean;
+  amount?: number | null;
+  deltaAmount?: number | null;
+}): boolean => {
+  if (!isAddMember.value || !row.target) return false;
+  if (row.amount === null || row.amount === undefined) return true;
+  return Number(row.amount) === 0 && Number(row.deltaAmount ?? 0) > 0;
+};
 
 const TYPE_MAP: Record<string, string> = {
   AMOUNT: '金额调整',
