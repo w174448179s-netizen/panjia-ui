@@ -106,7 +106,7 @@
           <b>{{ formatAmount(targetConvertedTotal) }}</b>
         </div>
         <div class="summary-cell tip-cell" v-if="adjustType === 'ADD_MEMBER'">
-          默认合同总额不变：录入新人业绩后既有角色人按占比等比让出；也可直接修改上方合计或逐行微调，同时调整合同总额（提交时二次确认）
+          增加角色人后请手动调整各角色人金额，提交时若合同总额发生变化需二次确认
         </div>
         <div class="summary-cell tip-cell" v-else>
           录入调整后合计 → 明细按业绩占比等比分摊；可再逐行微调（差额实时校验）；如需增加角色人，请将调整类型切换为「增加角色人」
@@ -296,8 +296,6 @@ const pendingBlocked = ref(false);
 /** 审批中调整预演行（含新增角色人虚拟行） */
 const pendingRows = ref<CommissionItemDetail[]>([]);
 let keySeq = 0;
-/** 新人让出在既有行上的分摊记录（撤销/重放用，保证重复编辑新人金额幂等） */
-let lastLetout: number[] = [];
 
 // ==================== 计算属性 ====================
 const existingRows = computed(() => editRows.value.filter(r => !r.isNew));
@@ -320,7 +318,6 @@ function open(payload: { applicationId: string | number; info: AdjustInfo; rows:
   totalInput.value = null;
   editRows.value = [];
   empOptions.value = [];
-  lastLetout = [];
   visible.value = true;
   const allRows = payload.rows || [];
   // 审批中在途预演：任意行带 adjustPending 即进入只读预演态；新人虚拟行仅进预演表，不进编辑表
@@ -349,10 +346,9 @@ function open(payload: { applicationId: string | number; info: AdjustInfo; rows:
 
 // ==================== 联动逻辑 ====================
 /**
- * 汇总行录入调整后合计 → 既有行按业绩占比等比分摊（镜像后端 MoneyUtil.allocateByAmount）。
- * AMOUNT：分摊基准=原金额，delta=新合计−原合计；
- * ADD_MEMBER：新人金额不参与分摊，新合计 = Σ既有行目标 + 新人金额，
- *   delta=新合计−新人金额−Σ既有行当前目标，在既有行当前目标基础上叠加（可与加人让出叠加）。
+ * 汇总行录入调整后合计。
+ * AMOUNT：既有行按业绩占比等比分摊；
+ * ADD_MEMBER：不自动分摊，仅更新合计数字（各角色人金额全手工调整）。
  */
 function handleTotalInput(v: number | null) {
   const target = v == null ? originalTotal.value : round2(v);
@@ -361,19 +357,17 @@ function handleTotalInput(v: number | null) {
     totalInput.value = target;
     return;
   }
-  const amounts = rows.map(r => num(r.amount));
-  let delta: number;
   if (adjustType.value === 'ADD_MEMBER') {
-    const newAmount = round2(newRows.value.reduce((s, r) => s + num(r.targetAmount), 0));
-    const currentExistingTotal = round2(rows.reduce((s, r) => s + num(r.targetAmount), 0));
-    delta = round2(target - newAmount - currentExistingTotal);
-  } else {
-    delta = round2(target - originalTotal.value);
+    // 加人模式不自动分摊：合计回显为行合计（输入框仅作展示，手动逐行调整为准）
+    totalInput.value = round2(targetTotal.value);
+    deltaInput.value = totalDelta.value;
+    return;
   }
+  const amounts = rows.map(r => num(r.amount));
+  const delta = round2(target - originalTotal.value);
   const parts = allocateByAmount(amounts, delta);
   rows.forEach((r, i) => {
-    const base = adjustType.value === 'ADD_MEMBER' ? num(r.targetAmount) : amounts[i];
-    r.targetAmount = round2(base + parts[i]);
+    r.targetAmount = round2(amounts[i] + parts[i]);
     r.deltaInput = rowDelta(r);
   });
   totalInput.value = round2(targetTotal.value);
@@ -388,20 +382,10 @@ function handleDeltaInput(v: number | null) {
   deltaInput.value = totalDelta.value;
 }
 
-/** 行编辑：合计跟随 = Σ行；加人模式下编辑新人行 → 既有行等比让出（默认总额不变）。
- *  幂等：先撤销上一次新人让出再重放本次，重复输入/修改新人金额不会叠加扣减。 */
+/** 行编辑：合计跟随 = Σ行；全手工调整，不做自动扣减 */
 function handleRowAmount(row: EditRow, v: number | null) {
   row.targetAmount = v == null ? null : round2(v);
   row.deltaInput = rowDelta(row);
-  if (adjustType.value === 'ADD_MEMBER' && row.isNew && v != null) {
-    const existing = existingRows.value;
-    if (existing.length) {
-      const restored = existing.map((r, i) => round2(num(r.targetAmount) - (lastLetout[i] ?? 0)));
-      const parts = allocateByAmount(restored, round2(-num(v)));
-      existing.forEach((r, i) => { r.targetAmount = round2(restored[i] + parts[i]); r.deltaInput = rowDelta(r); });
-      lastLetout = parts;
-    }
-  }
   totalInput.value = round2(targetTotal.value);
   deltaInput.value = totalDelta.value;
 }
@@ -412,10 +396,9 @@ function handleRowDelta(row: EditRow, v: number | null) {
   handleRowAmount(row, round2(row.amount + delta));
 }
 
-/** 类型切换：统一重置既有行为原值（避免金额调整/让出残留叠加），再按类型补新人行或重算合计 */
+/** 类型切换：统一重置既有行为原值（避免金额调整残留叠加），再按类型补新人行或重算合计 */
 function handleTypeChange() {
   existingRows.value.forEach(r => { r.targetAmount = round2(r.amount); r.deltaInput = 0; });
-  lastLetout = [];
   if (adjustType.value === 'ADD_MEMBER') {
     if (!newRows.value.length) {
       addMemberRow();
@@ -428,11 +411,8 @@ function handleTypeChange() {
   deltaInput.value = totalDelta.value;
 }
 
-/** 增加角色人：表格末尾加一行，自动回填「合同总额 − 既有行调整后合计」为新人业绩 */
+/** 增加角色人：表格末尾加一行，金额留空由用户手工录入（不自动扣减既有行） */
 function addMemberRow() {
-  lastLetout = [];
-  const rest = round2(originalTotal.value
-    - existingRows.value.reduce((s, r) => s + num(r.targetAmount), 0));
   // 折算因子沿用同合同既有行（同业务类型折算口径一致），保证新人行也能实时展示折算后金额
   const factor = existingRows.value.find(r => r.factor != null)?.factor;
   editRows.value.push({
@@ -444,22 +424,14 @@ function addMemberRow() {
     amount: 0,
     convertedOriginal: 0,
     factor,
-    targetAmount: rest > 0 ? rest : null,
+    targetAmount: null,
     ratioPct: null,
     originalRatioPct: null,
   });
-  totalInput.value = originalTotal.value;
+  totalInput.value = round2(targetTotal.value);
 }
 
 function removeRow(row: EditRow) {
-  // 删除新人行 = 放弃加人：撤销其在既有行上的让出分摊，既有行恢复到让出前基准
-  if (row.isNew && lastLetout.length) {
-    existingRows.value.forEach((r, i) => {
-      r.targetAmount = round2(num(r.targetAmount) - (lastLetout[i] ?? 0));
-      r.deltaInput = rowDelta(r);
-    });
-    lastLetout = [];
-  }
   editRows.value = editRows.value.filter(r => r.key !== row.key);
   totalInput.value = round2(targetTotal.value);
   deltaInput.value = totalDelta.value;

@@ -141,11 +141,6 @@
               <span v-else class="amount amount-ink">¥{{ formatAmount(scope.row.expectedConvertedAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="detail && detail.status === 'LOCKED' && !props.periodClosed && checkPermi(['commission:adjust:add'])" label="操作" align="center" width="90" fixed="right">
-            <template #default="scope">
-              <el-button v-if="detail && detail.status === 'LOCKED' && !props.periodClosed && checkPermi(['commission:adjust:add']) && scope.row.itemId" link type="warning" @click="openAdjust('DETAIL', scope.row)">调整</el-button>
-            </template>
-          </el-table-column>
           <template #empty>
             <el-empty description="该申请单暂无结佣明细" />
           </template>
@@ -333,7 +328,6 @@ import { commissionApi, type CommissionApplication, type CommissionItemDetail, t
 import { performanceApi, type PerformanceManageRow } from '@/api/panjia/performance';
 import { useEmployeeMap } from '../useEmployeeMap';
 import { useDeptScope } from '@/hooks/useDeptScope';
-import { checkPermi } from '@/utils/permission';
 import CommissionContractAdjustDialog from './CommissionContractAdjustDialog.vue';
 
 const props = defineProps<{
