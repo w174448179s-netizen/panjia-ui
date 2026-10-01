@@ -9,6 +9,12 @@ export interface CommissionAdjust {
   period?: string;
   adjustType: string;    // AMOUNT / VOID / TRANSFER（旧 DISCOUNT/DIFF 兼容历史）
   adjustScope?: string;  // CONTRACT / DETAIL
+  /** 调整对象合同号 */
+  contractNo?: string;
+  /** 事实口径（PERF_REAL / PERF_EXPECT） */
+  factType?: string;
+  /** 明细级调整对应业绩事实 ID（合同级为空） */
+  factId?: number;
   /** 调整前金额（AMOUNT 调整，从业绩事实/明细快照） */
   originalAmount?: number;
   /** 调整后金额（AMOUNT 调整，= originalAmount + deltaAmount） */
@@ -29,6 +35,23 @@ export interface CommissionAdjust {
   approverId?: number;
   createTime: string;
   updateTime?: string;
+  // ==================== 详情展示字段（getAdjust 填充，列表查询为空） ====================
+  /** 订单号（申请单冗余） */
+  orderNo?: string;
+  /** 房源地址（申请单冗余） */
+  propertyAddress?: string;
+  /** 受影响明细条数 */
+  detailCount?: number;
+  /** 明细级调整目标员工姓名 */
+  employeeName?: string;
+  /** 明细级调整目标员工工号 */
+  employeeCode?: string;
+  /** 部门划转目标部门名（TRANSFER） */
+  targetDeptName?: string;
+  /** 折算后调整前金额（originalAmount × 折算因子） */
+  convertedOriginalAmount?: number;
+  /** 受影响明细行（含调整前/变动/调整后预演） */
+  details?: CommissionItemDetail[];
 }
 
 export interface CommissionAdjustQuery extends PageQuery {
@@ -46,10 +69,28 @@ export interface CommissionAdjustCreateDTO {
   applicationId: number | string;    // 雪花 ID 以字符串透传，禁止 Number() 丢精度
   itemId?: number | string;          // 明细级必填，合同级为空
   adjustScope: string;               // CONTRACT / DETAIL
-  adjustType: string;                // AMOUNT / VOID / TRANSFER
+  adjustType: string;                // AMOUNT / VOID / TRANSFER / ADD_MEMBER
   targetAmount?: number;             // 调整后金额（AMOUNT 用，前端 = 当前 + 差额）
   targetDeptId?: number;             // 部门划转目标部门（TRANSFER 用）
   reason: string;
+  /** 合同级逐行指定目标（可编辑表格模式，镜像新签调整） */
+  detailTargets?: CommissionAdjustDetailTarget[];
+  /** 增加角色人（ADD_MEMBER 用） */
+  newMember?: CommissionAdjustNewMember;
+}
+
+export interface CommissionAdjustDetailTarget {
+  itemId: number | string;           // 结佣明细 ID（雪花 ID 字符串透传）
+  targetAmount: number;              // 调整后金额
+  shareRatio?: number;               // 调整后角色占比（空=不变）
+}
+
+export interface CommissionAdjustNewMember {
+  employeeId: number | string;       // 新员工 ID（雪花 ID 字符串透传）
+  deptId?: number;                   // 归属部门（空=员工档案部门）
+  roleType?: string;                 // 角色类型（默认合作人）
+  amount: number;                    // 新角色人业绩金额
+  shareRatio?: number;               // 新角色人角色占比（可选）
 }
 
 // ==================== 结佣明细 ====================
@@ -140,6 +181,24 @@ export interface CommissionItemDetail {
   originalReceivedConvertedAmount?: number;
   feeItem?: string;
   status: string;        // DRAFT / PENDING / APPROVED / REVERSED
+  // —— 结佣调整详情预演字段（普通申请单查询为 null） ——
+  /** 预演变动额（调整后 − 调整前，正增负减） */
+  deltaAmount?: number;
+  /** 预演调整后金额 */
+  afterAmount?: number;
+  /** 是否本单调整目标行 */
+  target?: boolean;
+  // —— 在途调整预演（审批中调整单回填） ——
+  /** 存在审批中的结佣调整单 */
+  adjustPending?: boolean;
+  /** 审批中调整类型 AMOUNT / ADD_MEMBER */
+  adjustPendingType?: string;
+  /** 审批中调整后金额（预演） */
+  adjustPendingAmount?: number;
+  /** 审批中调整变动额（正增负减） */
+  adjustPendingDelta?: number;
+  /** 增加角色人虚拟行标记（审批中新角色人尚无明细行，后端合成） */
+  newMemberPending?: boolean;
 }
 
 export interface CommissionApplyQuery extends PageQuery {

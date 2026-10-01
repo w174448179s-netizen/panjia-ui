@@ -774,7 +774,7 @@ const summaryMethod = ({ columns }: any) => {
   return sums;
 };
 
-/** 新签/结佣业绩 tab 合计行：末行汇总全部行的「85后」金额（全量口径，与导出对账一致） */
+/** 新签/结佣业绩 tab 合计行：末行汇总「85后」金额（按当前筛选口径，随门店/员工筛选联动） */
 const perfSummary = (list: () => CommissionTraceItem[]) => ({ columns }: any) => {
   const sums: string[] = [];
   const total = list().reduce((s, it) => s + (Number(it.convertedAmount ?? it.amount) || 0), 0);
@@ -784,8 +784,8 @@ const perfSummary = (list: () => CommissionTraceItem[]) => ({ columns }: any) =>
   });
   return sums;
 };
-const newSignSummary = perfSummary(() => newSignItems.value);
-const commissionSummary = perfSummary(() => commissionItems.value);
+const newSignSummary = perfSummary(() => nsf.filtered);
+const commissionSummary = perfSummary(() => cf.filtered);
 
 const managerSummary = ({ columns }: any) => {
   const sums: string[] = [];

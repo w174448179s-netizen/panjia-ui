@@ -1,12 +1,13 @@
 <template>
   <el-dialog
     v-model="visible"
-    title="合同业绩调整"
+    title="结佣调整（合同级）"
     width="92%"
     top="4vh"
     append-to-body
     destroy-on-close
     class="contract-adjust-dialog"
+    @close="emit('closed')"
   >
     <div v-loading="loading">
       <!-- 合同信息（类详情界面） -->
@@ -38,19 +39,19 @@
           <el-table-column label="调整后业绩" width="190" align="right">
             <template #default="{ row }">
               <span class="amount-arrow">→</span>
-              <b :class="(row.pendingDelta ?? 0) >= 0 ? 'amount-positive' : 'amount-negative'">
-                {{ formatAmount(row.pendingAmount) }}
+              <b :class="(row.adjustPendingDelta ?? 0) >= 0 ? 'amount-positive' : 'amount-negative'">
+                {{ formatAmount(row.adjustPendingAmount) }}
               </b>
               <span
-                v-if="row.pendingDelta != null && row.pendingDelta !== 0"
-                :class="row.pendingDelta > 0 ? 'amount-positive' : 'amount-negative'"
+                v-if="row.adjustPendingDelta != null && Number(row.adjustPendingDelta) !== 0"
+                :class="Number(row.adjustPendingDelta) > 0 ? 'amount-positive' : 'amount-negative'"
                 style="font-size: 12px; margin-left: 4px"
-              >{{ row.pendingDelta > 0 ? '+' : '' }}{{ row.pendingDelta.toFixed(2) }}</span>
+              >{{ Number(row.adjustPendingDelta) > 0 ? '+' : '' }}{{ Number(row.adjustPendingDelta).toFixed(2) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="标记" width="100" align="center">
             <template #default="{ row }">
-              <el-tag v-if="row.isNewMember" type="success" size="small" effect="dark">新增角色人</el-tag>
+              <el-tag v-if="row.newMemberPending" type="success" size="small" effect="dark">新增角色人</el-tag>
               <el-tag v-else type="warning" size="small" effect="plain">调整审批中</el-tag>
             </template>
           </el-table-column>
@@ -67,7 +68,7 @@
           </el-select>
         </div>
         <div class="summary-cell amount-cell">
-          <span class="summary-label">新签业绩合计</span>
+          <span class="summary-label">结佣业绩合计</span>
           <b class="summary-struck">{{ formatAmount(originalTotal) }}</b>
           <span class="summary-arrow">→</span>
           <el-input-number
@@ -165,7 +166,7 @@
             <div class="cell-sub">{{ ratioText(row as EditRow) }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="新签业绩（调整后）" width="210" align="right">
+        <el-table-column label="结佣业绩（调整后）" width="210" align="right">
           <template #default="{ row }">
             <el-input-number
               v-model="row.targetAmount"
@@ -204,23 +205,17 @@
             {{ row.targetAmount != null && row.factor ? formatAmount(round2(row.targetAmount * row.factor)) : '—' }}
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="86" align="center">
-          <template #default="{ row }">
-            <el-tag v-if="row.adjustPending" type="warning" size="small" effect="plain">审批中</el-tag>
-            <el-tag v-else type="info" size="small" effect="plain">待审批</el-tag>
-          </template>
-        </el-table-column>
         <el-table-column v-if="adjustType === 'ADD_MEMBER'" label="操作" width="70" align="center">
           <template #default="{ row }">
             <el-button v-if="row.isNew" type="danger" link size="small" @click="removeRow(row as EditRow)">删除</el-button>
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty description="该合同暂无有效业绩明细" />
+          <el-empty description="该合同暂无有效结佣明细" />
         </template>
       </el-table>
 
-      <!-- 加人入口仅在「增加角色人」类型下展示：AMOUNT 语义为既有行总额调整，新人行不参与提交 -->
+      <!-- 加人入口仅在「增加角色人」类型下展示 -->
       <div class="add-member-bar" v-if="adjustType === 'ADD_MEMBER'">
         <el-button type="primary" plain size="small" icon="Plus" :disabled="pendingBlocked" @click="addMemberRow()">增加角色人</el-button>
         <span class="add-tip">新增行选择员工并录入业绩，自动回填让出金额；全部修改随下方一次提交审批</span>
@@ -253,31 +248,14 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { performanceApi } from '@/api/panjia/performance';
-import type {
-  AdjustCreateForm,
-  PerformanceEmployeeOption,
-  PerformanceManageRow,
-} from '@/api/panjia/performance';
+import { commissionApi, type CommissionItemDetail, type CommissionAdjustCreateDTO } from '@/api/panjia/commission';
+import { performanceApi, type PerformanceEmployeeOption } from '@/api/panjia/performance';
 
-const emit = defineEmits<{ (e: 'submitted'): void }>();
+const emit = defineEmits<{ (e: 'submitted'): void; (e: 'closed'): void }>();
 
 const visible = ref(false);
 const loading = ref(false);
 const submitting = ref(false);
-/** 合同存在审批中的调整单（后端在途预览会给行打 adjustPending，ADD_MEMBER 还会带 id=null 的新人虚拟行） */
-const pendingBlocked = ref(false);
-/** 在途调整单逐人变化（含 ADD_MEMBER 新人虚拟行），仅展示「原值 → 调整后」不可编辑 */
-interface PendingRow {
-  employeeName: string;
-  roleType?: string;
-  deptPath?: string;
-  amount: number | null;        // 原值；新人虚拟行为 null（展示 0）
-  pendingAmount: number | null; // 调整后
-  pendingDelta: number | null;
-  isNewMember: boolean;
-}
-const pendingRows = ref<PendingRow[]>([]);
 
 interface AdjustInfo {
   contractNo: string;
@@ -287,24 +265,24 @@ interface AdjustInfo {
   period: string;
 }
 const info = ref<AdjustInfo | null>(null);
+const applicationId = ref<string | number>('');
 
 interface EditRow {
   key: string;
-  factId?: string;      // 既有行才有（事实 ID）
+  itemId?: string | number; // 既有行才有（结佣明细 ID）
   isNew: boolean;
   employeeId?: string;
   employeeCode: string;
   employeeName: string;
   deptPath?: string;
   roleType?: string;
-  amount: number;                 // 当前业绩（原值）
+  amount: number;                 // 当前结佣业绩（原值）
   convertedOriginal: number;      // 当前折算后金额（原值）
   factor?: number;                // 折算系数（折算列自动计算用）
   targetAmount: number | null;    // 调整后业绩（可编辑）
   deltaInput?: number | null;     // 调整金额（可编辑，与 targetAmount 双向联动）
   ratioPct: number | null;        // 角色占比编辑值（百分数；null=不修改）
   originalRatioPct: number | null;
-  adjustPending: boolean;         // 该行已有审批中的调整单
 }
 const editRows = ref<EditRow[]>([]);
 const adjustType = ref<'AMOUNT' | 'ADD_MEMBER'>('AMOUNT');
@@ -313,6 +291,10 @@ const deltaInput = ref<number | null>(null);
 const reason = ref('');
 const empOptions = ref<PerformanceEmployeeOption[]>([]);
 const empSearching = ref(false);
+/** 存在审批中的调整单（含增加角色人）：禁止重复发起，仅展示在途预演 */
+const pendingBlocked = ref(false);
+/** 审批中调整预演行（含新增角色人虚拟行） */
+const pendingRows = ref<CommissionItemDetail[]>([]);
 let keySeq = 0;
 /** 新人让出在既有行上的分摊记录（撤销/重放用，保证重复编辑新人金额幂等） */
 let lastLetout: number[] = [];
@@ -329,67 +311,40 @@ const targetConvertedTotal = computed(() => round2(
   editRows.value.reduce((s, r) => s + (r.targetAmount != null ? num(r.targetAmount) * num(r.factor) : 0), 0),
 ));
 
-// ==================== 打开弹窗：拉取明细初始化可编辑表格 ====================
-async function open(payload: AdjustInfo) {
-  info.value = payload;
+// ==================== 打开弹窗：由父组件传入申请单 + 结佣明细行 ====================
+function open(payload: { applicationId: string | number; info: AdjustInfo; rows: CommissionItemDetail[] }) {
+  applicationId.value = payload.applicationId;
+  info.value = payload.info;
   adjustType.value = 'AMOUNT';
   reason.value = '';
   totalInput.value = null;
   editRows.value = [];
   empOptions.value = [];
-  pendingBlocked.value = false;
-  pendingRows.value = [];
   lastLetout = [];
   visible.value = true;
-  loading.value = true;
-  try {
-    const res = await performanceApi.listManageContractDetails({
-      period: payload.period,
-      factType: 'PERF_EXPECT',
-      contractNos: payload.contractNo,
-    });
-    const allRows: PerformanceManageRow[] = (res.data ?? [])
-      .filter((r: PerformanceManageRow) => r.factStatus !== 'VOIDED');
-    // 在途单逐人变化（保留 ADD_MEMBER 新人虚拟行 id=null，用于只读展示 0 → X）
-    pendingRows.value = allRows
-      .filter(r => r.adjustPending)
-      .map(r => ({
-        employeeName: r.employeeName || '',
-        roleType: r.roleType || r.roleName,
-        deptPath: r.deptPath,
-        amount: r.id == null ? null : num(r.amount),
-        pendingAmount: r.adjustPendingAmount != null ? num(r.adjustPendingAmount) : null,
-        pendingDelta: r.adjustPendingDelta != null ? num(r.adjustPendingDelta) : null,
-        isNewMember: r.id == null,
-      }));
-    // 编辑底表：已作废行与新人虚拟行（id=null，非真实事实）不参与
-    const rows: PerformanceManageRow[] = allRows.filter(r => r.id != null);
-    pendingBlocked.value = rows.some(r => r.adjustPending);
-    if (pendingBlocked.value) {
-      ElMessage.warning('该合同已有审批中的调整单，请等待审批结束后再发起调整');
-    }
-    editRows.value = rows.map(r => ({
-      key: `f-${r.id}`,
-      factId: r.id!,
-      isNew: false,
-      employeeId: r.employeeId,
-      employeeCode: r.employeeCode || '',
-      employeeName: r.employeeName || '',
-      deptPath: r.deptPath,
-      roleType: r.roleType || r.roleName,
-      amount: num(r.amount),
-      convertedOriginal: num(r.convertedAmount),
-      factor: num(r.conversionFactor) || undefined,
-      targetAmount: num(r.amount),
-      deltaInput: 0,
-      ratioPct: r.shareRatio != null ? round4(num(r.shareRatio) * 100) : null,
-      originalRatioPct: r.shareRatio != null ? round4(num(r.shareRatio) * 100) : null,
-      adjustPending: !!r.adjustPending,
-    }));
-    totalInput.value = originalTotal.value;
-  } finally {
-    loading.value = false;
-  }
+  const allRows = payload.rows || [];
+  // 审批中在途预演：任意行带 adjustPending 即进入只读预演态；新人虚拟行仅进预演表，不进编辑表
+  pendingBlocked.value = allRows.some(r => r.adjustPending);
+  pendingRows.value = pendingBlocked.value ? allRows.filter(r => r.adjustPending) : [];
+  editRows.value = allRows.filter(r => !r.newMemberPending).map(r => ({
+    key: `i-${r.itemId}`,
+    itemId: r.itemId,
+    isNew: false,
+    employeeId: r.employeeId != null ? String(r.employeeId) : undefined,
+    employeeCode: r.employeeCode || '',
+    employeeName: r.employeeName || '',
+    deptPath: r.deptPath,
+    roleType: r.roleType || r.roleName,
+    amount: num(r.amount),
+    convertedOriginal: num(r.convertedAmount),
+    factor: num(r.amount) !== 0 ? num(r.convertedAmount) / num(r.amount) : undefined,
+    targetAmount: num(r.amount),
+    deltaInput: 0,
+    ratioPct: r.shareRatio != null ? round4(num(r.shareRatio) * 100) : null,
+    originalRatioPct: r.shareRatio != null ? round4(num(r.shareRatio) * 100) : null,
+  }));
+  totalInput.value = originalTotal.value;
+  deltaInput.value = 0;
 }
 
 // ==================== 联动逻辑 ====================
@@ -492,7 +447,6 @@ function addMemberRow() {
     targetAmount: rest > 0 ? rest : null,
     ratioPct: null,
     originalRatioPct: null,
-    adjustPending: false,
   });
   totalInput.value = originalTotal.value;
 }
@@ -558,11 +512,7 @@ function ratioText(row: EditRow): string {
 
 // ==================== 提交审批（一张单统一提交全部修改） ====================
 async function submit() {
-  if (!info.value) return;
-  if (pendingBlocked.value) {
-    ElMessage.warning('该合同已有审批中的调整单，不能重复发起');
-    return;
-  }
+  if (!info.value || pendingBlocked.value) return;
   const why = reason.value.trim();
   if (!why) {
     ElMessage.warning('请填写调整原因');
@@ -581,17 +531,15 @@ async function submit() {
   }
 
   const detailTargets = existing.map(r => ({
-    factId: r.factId!,
+    itemId: r.itemId!,
     targetAmount: round2(num(r.targetAmount)),
     shareRatio: ratioUnchanged(r) ? undefined : round6(num(r.ratioPct) / 100),
   }));
 
-  const form: AdjustCreateForm = {
-    adjustType: 'AMOUNT',
-    period: info.value.period,
-    factType: 'PERF_EXPECT',
+  const form: CommissionAdjustCreateDTO = {
+    applicationId: applicationId.value,
     adjustScope: 'CONTRACT',
-    contractNo: info.value.contractNo,
+    adjustType: 'AMOUNT',
     reason: why,
     detailTargets,
   };
@@ -620,28 +568,26 @@ async function submit() {
         return; // 用户取消
       }
     }
-    Object.assign(form, {
-      adjustType: 'ADD_MEMBER',
-      newEmployeeId: nr.employeeId,
-      newRoleType: nr.roleType?.trim() || '合作人',
-      newAmount: round2(num(nr.targetAmount)),
-      newShareRatio: nr.ratioPct != null && num(nr.ratioPct) > 0
+    form.adjustType = 'ADD_MEMBER';
+    form.newMember = {
+      employeeId: nr.employeeId,
+      roleType: nr.roleType?.trim() || '合作人',
+      amount: round2(num(nr.targetAmount)),
+      shareRatio: nr.ratioPct != null && num(nr.ratioPct) > 0
         ? round6(num(nr.ratioPct) / 100) : undefined,
-    });
+    };
   } else {
     if (totalInput.value == null) {
       ElMessage.warning('请录入调整后业绩合计');
       return;
     }
-    Object.assign(form, {
-      adjustType: 'AMOUNT',
-      targetAmount: round2(num(totalInput.value)),
-    });
+    form.adjustType = 'AMOUNT';
+    form.targetAmount = round2(num(totalInput.value));
   }
 
   submitting.value = true;
   try {
-    await performanceApi.createAdjust(form);
+    await commissionApi.createAdjust(form);
     ElMessage.success('已提交审批，审批通过后自动生效');
     visible.value = false;
     emit('submitted');
@@ -698,18 +644,12 @@ function allocateByAmount(amounts: number[], deltaTotal: number): number[] {
   }
   const parts = amounts.map(v => round2((Math.round((v / total) * 1e8) / 1e8) * d));
   const diff = round2(d - parts.reduce((s, v) => s + v, 0));
-  if (Math.abs(diff) > 0.004) {
-    let maxIdx = 0;
-    let maxAbs = -1;
-    parts.forEach((v, i) => {
-      const a = Math.abs(v);
-      if (a > maxAbs) {
-        maxAbs = a;
-        maxIdx = i;
-      }
-    });
-    parts[maxIdx] = round2(parts[maxIdx] + diff);
-  }
+  let maxIdx = 0;
+  let maxAbs = -1;
+  parts.forEach((p, i) => {
+    if (Math.abs(p) > maxAbs) { maxAbs = Math.abs(p); maxIdx = i; }
+  });
+  parts[maxIdx] = round2(parts[maxIdx] + diff);
   return parts;
 }
 
@@ -721,26 +661,29 @@ defineExpose({ open });
   margin-bottom: 12px;
 }
 
+/* 汇总调整栏：卡片式分区，对齐业绩详情页视觉 */
 .adjust-summary-bar {
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
-  gap: 10px 24px;
+  align-items: center;
+  gap: 12px 24px;
   padding: 10px 14px;
   margin-bottom: 12px;
   background: var(--el-fill-color-light);
-  border-radius: 6px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
 }
 
 .summary-cell {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
 }
 
 .summary-label {
+  font-size: 13px;
   color: var(--el-text-color-secondary);
+  white-space: nowrap;
 }
 
 .summary-struck {
@@ -754,47 +697,47 @@ defineExpose({ open });
 }
 
 .total-input {
-  width: 150px;
+  width: 140px;
 }
 
 .summary-delta {
-  font-size: 13px;
   font-weight: 600;
-  min-width: 72px;
+  min-width: 70px;
+}
+
+.amount-positive {
+  color: var(--el-color-danger);
+}
+
+.amount-negative {
+  color: var(--el-color-success);
 }
 
 .tip-cell {
-  color: var(--el-text-color-secondary);
+  flex: 1 1 100%;
   font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .cell-sub {
   font-size: 12px;
-  line-height: 18px;
-  color: var(--el-text-color-secondary);
+  line-height: 1.4;
   margin-top: 2px;
 }
 
 .cell-sub.muted {
-  color: var(--el-text-color-placeholder);
+  color: var(--el-text-color-secondary);
 }
 
 .amount-strike {
   text-decoration: line-through;
   color: var(--el-text-color-secondary);
+  margin-right: 4px;
 }
 
 .amount-arrow {
   color: var(--el-text-color-secondary);
-  margin: 0 2px;
-}
-
-.amount-positive {
-  color: var(--el-color-success);
-}
-
-.amount-negative {
-  color: var(--el-color-danger);
+  margin-right: 4px;
 }
 
 .form-hint {
@@ -805,19 +748,19 @@ defineExpose({ open });
 .add-member-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   margin-top: 10px;
 }
 
 .add-tip {
-  color: var(--el-text-color-secondary);
   font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .pending-title {
-  margin: 10px 0 6px;
-  font-weight: 600;
   font-size: 13px;
-  color: var(--el-text-color-primary);
+  font-weight: 600;
+  color: var(--el-text-color-regular);
+  margin: 8px 0;
 }
 </style>

@@ -294,6 +294,7 @@
             :loading="factLoading"
             :disabled="!formData.period || !formData.employeeId"
             style="width: 100%"
+            @change="onFactChange"
           >
             <el-option
               v-for="f in factOptions"
@@ -306,6 +307,18 @@
             当前新签业绩：¥{{ formatNumber(selectedFact?.amount) }}
           </div>
         </el-form-item>
+        <el-form-item v-if="formData.adjustType === 'AMOUNT'" label="调整金额" prop="deltaAmount">
+          <el-input-number
+            v-model="formData.deltaAmount"
+            :min="-99999999"
+            :max="99999999"
+            :precision="2"
+            :step="100"
+            style="width: 100%"
+            @change="onDeltaChange"
+          />
+          <div class="form-hint">输入本次调整金额（正=调增，负=调减），调整后业绩自动算出</div>
+        </el-form-item>
         <el-form-item v-if="formData.adjustType === 'AMOUNT'" label="调整后业绩" prop="targetAmount">
           <el-input-number
             v-model="formData.targetAmount"
@@ -314,8 +327,9 @@
             :precision="2"
             :step="100"
             style="width: 100%"
+            @change="onTargetChange"
           />
-          <div class="form-hint">输入调整后的目标总金额</div>
+          <div class="form-hint">也可直接输入调整后的目标总金额，调整金额自动算出</div>
         </el-form-item>
         <el-form-item v-if="formData.adjustType === 'TRANSFER'" label="目标门店" prop="targetDeptId">
           <el-tree-select
@@ -600,18 +614,38 @@ const factOptionLabel = (f: PerformanceFact) => {
   return `${type} · ${f.sourceKey} · ¥${formatNumber(f.amount)}`;
 };
 
-const defaultFormData = (): AdjustCreateForm & { factId: string } => ({
+const defaultFormData = (): AdjustCreateForm & { factId: string; deltaAmount?: number } => ({
   factId: '',
   period: '',
   employeeId: '',
   deptId: '',
   adjustType: '',
   targetAmount: undefined as number | undefined,
+  deltaAmount: undefined as number | undefined,
   targetDeptId: '',
   reason: ''
 });
 
 const formData = reactive(defaultFormData());
+
+/** 所选事实当前业绩（调整金额 ↔ 调整后业绩联动基准） */
+const factBaseAmount = computed(() => Number(selectedFact.value?.amount ?? 0));
+
+/** 录调整金额 → 自动算调整后业绩 */
+const onDeltaChange = () => {
+  if (formData.deltaAmount != null && !Number.isNaN(Number(formData.deltaAmount))) {
+    const next = factBaseAmount.value + Number(formData.deltaAmount);
+    formData.targetAmount = Number(next.toFixed(2));
+  }
+};
+
+/** 录调整后业绩 → 自动算调整金额 */
+const onTargetChange = () => {
+  if (formData.targetAmount != null && !Number.isNaN(Number(formData.targetAmount))) {
+    const next = Number(formData.targetAmount) - factBaseAmount.value;
+    formData.deltaAmount = Number(next.toFixed(2));
+  }
+};
 
 /** 门店/组别只读回显：优先取员工主档，其次取所选业绩明细所在部门 */
 const selectedEmployeeDept = computed(() => {
@@ -626,7 +660,8 @@ const formRules = {
   deptId: [{ required: true, message: '请选择门店/组别', trigger: 'change' }],
   factId: [{ required: true, message: '请选择关联业绩事实', trigger: 'change' }],
   reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
-  targetDeptId: [{ required: true, message: '请选择目标门店', trigger: 'change' }]
+  targetDeptId: [{ required: true, message: '请选择目标门店', trigger: 'change' }],
+  targetAmount: [{ required: true, message: '请输入调整金额或调整后业绩', trigger: 'blur' }]
 };
 
 // 选完员工：自动带出部门，并尝试加载该员工的业绩事实
@@ -637,6 +672,12 @@ const onFormEmployeeChange = async (employeeId: string) => {
   }
   formData.factId = '';
   await loadFactOptions();
+};
+
+// 切换关联业绩：联动基准变了，清空已算的调整金额/调整后业绩
+const onFactChange = () => {
+  formData.deltaAmount = undefined;
+  formData.targetAmount = undefined;
 };
 
 const loadFactOptions = async () => {

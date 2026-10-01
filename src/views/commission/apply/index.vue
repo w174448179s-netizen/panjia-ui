@@ -112,7 +112,7 @@
           </template>
         </el-table-column>
         <!-- 结佣业绩：结佣调整生效时展示「原值 → 调整后值」，未调整只展示一个值 -->
-        <el-table-column label="结佣业绩" align="right" width="200" fixed="left">
+        <el-table-column label="结佣业绩" align="right" width="220" fixed="left">
           <template #default="{ row }">
             <template v-if="isReceivedAdjusted(row)">
               <span class="amount-strike">¥{{ formatAmount(row.originalAmount) }}</span>
@@ -127,6 +127,15 @@
               <span class="amount amount-zero">¥0.00</span>
             </el-tooltip>
             <span v-else class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
+            <!-- 在途合同级 AMOUNT 调整：展示审批中调整后合计 -->
+            <div v-if="row.adjustPending && row.adjustPendingType === 'AMOUNT' && row.adjustPendingAmount != null" class="pending-line">
+              <span class="amount-arrow">→</span>
+              <span class="amount amount-warn">¥{{ formatAmount(row.adjustPendingAmount) }}</span>
+              <el-tag type="warning" size="small" effect="plain" style="margin-left: 4px">审批中</el-tag>
+            </div>
+            <div v-else-if="row.adjustPending && row.adjustPendingType === 'ADD_MEMBER'" class="pending-line">
+              <el-tag type="success" size="small" effect="plain">增加角色人审批中</el-tag>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="190">
@@ -181,9 +190,10 @@
         <el-table-column label="明细条数" align="center" width="80">
           <template #default="{ row }">{{ row.detailCount ?? 0 }}</template>
         </el-table-column>
-        <el-table-column label="状态" align="center" width="100">
+        <el-table-column label="状态" align="center" width="120">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row) }}</el-tag>
+            <el-tag v-if="row.adjustPending" type="warning" size="small" effect="plain" style="margin-left: 4px">调整审批中</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="发起人" align="center" width="100">
@@ -922,6 +932,14 @@ onMounted(() => {
   }
   .amount-ink {
     color: #303133;
+  }
+  .amount-warn {
+    color: #e6a23c;
+  }
+  .pending-line {
+    font-size: 12px;
+    line-height: 1.4;
+    margin-top: 2px;
   }
 }
 
