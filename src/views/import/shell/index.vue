@@ -225,6 +225,7 @@
 import { importApi } from '@/api/panjia/import';
 import type { ImportBatch, ImportIssue } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
+import { ElMessageBox } from 'element-plus';
 import { InfoFilled, Warning, Download, Refresh, Loading, Box, CircleClose, MoreFilled } from '@element-plus/icons-vue';
 
 /**
@@ -249,13 +250,51 @@ const handlePeriodChange = () => {
   loadBatches();
 };
 
-const beforeUpload = (file: File) => {
+const beforeUpload = async (file: File) => {
   const ext = file.name.split('.').pop()?.toLowerCase();
   if (!ext || !['xlsx', 'xls', 'csv'].includes(ext)) {
     modal.msgError('仅支持 .xlsx、.xls、.csv 文件');
     return false;
   }
+  // 文件名月份与所选归属月不一致时二次确认：归属月决定数据计入哪个业绩期间，
+  // 同归属月重复导入会整批替换该月已有批次，选错期间（如 6 月文件导到 7 月）会冲掉正确批次
+  const fileMonth = parseFileMonth(file.name);
+  if (fileMonth && period.value && fileMonth !== period.value) {
+    try {
+      await ElMessageBox.confirm(
+        `文件名「${file.name}」中的月份为 ${fileMonth}，与所选归属月 ${period.value} 不一致。`
+        + `归属月决定数据计入哪个业绩期间，同一归属月重复导入会整批替换该月已有批次。`
+        + `是否确认仍按归属月 ${period.value} 导入？`,
+        '归属月与文件名不一致',
+        {
+          confirmButtonText: `仍按 ${period.value} 导入`,
+          cancelButtonText: '取消',
+          type: 'warning',
+        },
+      );
+    } catch {
+      modal.msgWarning('已取消上传，请核对归属月后重新选择文件');
+      return false;
+    }
+  }
   return true;
+};
+
+/**
+ * 从文件名解析业务月份。
+ * 贝壳导出文件统一以「YYYY-MM-」开头（如 2026-06-经纪人业绩明细表-261233.xlsx），
+ * 兼容 2026年6月 / 2026_06 / 2026.6 等写法；无法可靠识别时返回 null（不拦截上传）。
+ */
+const parseFileMonth = (fileName: string): string | null => {
+  const m = /(20\d{2})\s*[-年./_]\s*(\d{1,2})\s*月?/.exec(fileName);
+  if (!m) {
+    return null;
+  }
+  const month = Number(m[2]);
+  if (month < 1 || month > 12) {
+    return null;
+  }
+  return `${m[1]}-${String(month).padStart(2, '0')}`;
 };
 
 const handleHttpRequest = (options: any) => {
