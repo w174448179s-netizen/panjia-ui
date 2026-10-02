@@ -112,22 +112,7 @@
           <el-date-picker v-model="form.period" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width:100%" />
         </el-form-item>
         <el-form-item label="员工" prop="employeeId">
-          <el-select
-            v-model="form.employeeId"
-            placeholder="搜索员工姓名/工号"
-            filterable
-            remote
-            :remote-method="searchEmployee"
-            :loading="empLoading"
-            style="width:100%"
-          >
-            <el-option
-              v-for="emp in empOptions"
-              :key="emp.employeeId"
-              :label="`${emp.employeeName}（${emp.employeeCode}）`"
-              :value="emp.employeeId"
-            />
-          </el-select>
+          <EmployeeSelect v-model="form.employeeId" @change="onEmployeePicked" />
         </el-form-item>
         <el-form-item label="明细类型" prop="subType">
           <el-select v-model="form.subType" :placeholder="form.itemType === 'OTHER_INCOME' ? '请选择收入类型' : '请选择支出类型'" filterable style="width:100%">
@@ -163,6 +148,8 @@ import { employeeApi } from '@/api/panjia/employee';
 import type { Employee } from '@/api/panjia/types';
 import { useDict } from '@/utils/dict';
 import { useManualItemFreeze } from '@/hooks/payroll/useManualItemFreeze';
+import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
+import type { PerformanceEmployeeOption } from '@/api/panjia/performance';
 
 /** 期间冻结状态（工资批次审批中及以后禁止增删，最终以后端校验为准） */
 const { frozen, freezeTip, refreshFreeze } = useManualItemFreeze();
@@ -190,8 +177,6 @@ const showAdd = ref(false);
 const submitting = ref(false);
 const formRef = ref<FormInstance>();
 
-const empOptions = ref<Employee[]>([]);
-const empLoading = ref(false);
 const empCache = ref<Map<string, Employee>>(new Map());
 
 const form = ref<any>({
@@ -275,7 +260,7 @@ const load = async () => {
 };
 
 const preloadEmployees = async () => {
-  const ids = [...new Set(list.value.map((r) => String(r.employeeId)))];
+  const ids = Array.from(new Set(list.value.map((r) => String(r.employeeId))));
   const missing = ids.filter((id) => !empCache.value.has(id));
   if (!missing.length) return;
   try {
@@ -285,21 +270,17 @@ const preloadEmployees = async () => {
   } catch { /* ignore */ }
 };
 
-const searchEmployee = (keyword: string) => {
-  if (!keyword) {
-    empOptions.value = [];
-    return;
+/** 公共员工选择器选中后：缓存员工信息，供表格列即时展示姓名（工号） */
+const onEmployeePicked = (_id: string | number | undefined, emp: PerformanceEmployeeOption | null) => {
+  if (emp) {
+    empCache.value.set(String(emp.employeeId), {
+      employeeId: emp.employeeId,
+      employeeCode: emp.employeeCode ?? '',
+      employeeName: emp.employeeName,
+      deptId: emp.deptId ?? '',
+      deptName: emp.deptName ?? '',
+    } as Employee);
   }
-  empLoading.value = true;
-  setTimeout(async () => {
-    try {
-      const res = await employeeApi.list({ employeeName: keyword, pageSize: 20 });
-      empOptions.value = (res as any).data?.rows ?? [];
-      empOptions.value.forEach((emp) => empCache.value.set(emp.employeeId, emp));
-    } finally {
-      empLoading.value = false;
-    }
-  }, 300);
 };
 
 const openAdd = () => {
@@ -315,7 +296,6 @@ const openAdd = () => {
     amount: 0,
     reason: '',
   };
-  empOptions.value = [];
   showAdd.value = true;
 };
 

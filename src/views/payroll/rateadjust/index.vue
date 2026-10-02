@@ -37,24 +37,11 @@
           />
         </el-form-item>
         <el-form-item label="员工">
-          <el-select
+          <EmployeeSelect
             v-model="queryParams.employeeId"
-            placeholder="搜索员工姓名/工号"
-            filterable
-            remote
-            clearable
-            :remote-method="searchEmployee"
-            :loading="empLoading"
-            style="width: 220px"
+            width="220px"
             @change="handleQuery"
-          >
-            <el-option
-              v-for="emp in empOptions"
-              :key="emp.employeeId"
-              :label="`${emp.employeeName}（${emp.employeeCode}）`"
-              :value="emp.employeeId"
-            />
-          </el-select>
+          />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
@@ -128,22 +115,7 @@
     <el-dialog v-model="showForm" :title="form.id ? '修改提成点调整' : '登记提成点调整'" width="560px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="员工" prop="employeeId">
-          <el-select
-            v-model="form.employeeId"
-            placeholder="搜索员工姓名/工号"
-            filterable
-            remote
-            :remote-method="searchEmployeeForForm"
-            :loading="empLoading"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="emp in formEmpOptions"
-              :key="emp.employeeId"
-              :label="`${emp.employeeName}（${emp.employeeCode}）`"
-              :value="emp.employeeId"
-            />
-          </el-select>
+          <EmployeeSelect v-model="form.employeeId" :initial-option="editInitialOption" />
         </el-form-item>
         <el-form-item label="调整类型" prop="adjustType">
           <el-select v-model="form.adjustType" placeholder="请选择类型" style="width: 100%">
@@ -190,8 +162,8 @@
 import { computed, reactive, ref, toRefs, onMounted } from 'vue';
 import type { FormInstance } from 'element-plus';
 import { rateAdjustApi, type RateAdjust } from '@/api/panjia/rateadjust';
-import { employeeApi } from '@/api/panjia/employee';
-import type { Employee } from '@/api/panjia/types';
+import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
+import type { PerformanceEmployeeOption } from '@/api/panjia/performance';
 import modal from '@/plugins/modal';
 import { useDict } from '@/utils/dict';
 import RateAdjustApprovalDetail from '@/components/WorkflowHandle/details/RateAdjustApprovalDetail.vue';
@@ -268,35 +240,9 @@ const resetQuery = () => {
   getList();
 };
 
-// ==================== 员工搜索（筛选与表单共用同源接口，分页数据在 res.data.rows） ====================
-const empOptions = ref<Employee[]>([]);
-const formEmpOptions = ref<Employee[]>([]);
-const empLoading = ref(false);
-let empTimer: ReturnType<typeof setTimeout> | null = null;
-
-const doSearch = async (keyword: string, target: 'filter' | 'form') => {
-  empLoading.value = true;
-  try {
-    const res = await employeeApi.list({ employeeName: keyword || undefined, pageSize: 20 });
-    const rows = res.data?.rows ?? [];
-    if (target === 'filter') empOptions.value = rows;
-    else formEmpOptions.value = rows;
-  } finally {
-    empLoading.value = false;
-  }
-};
-
-const searchEmployee = (keyword: string) => {
-  if (empTimer) clearTimeout(empTimer);
-  empTimer = setTimeout(() => doSearch(keyword, 'filter'), 300);
-};
-
-const searchEmployeeForForm = (keyword: string) => {
-  if (empTimer) clearTimeout(empTimer);
-  empTimer = setTimeout(() => doSearch(keyword, 'form'), 300);
-};
-
 // ==================== 登记 / 修改 ====================
+/** 编辑弹窗打开时，用列表行自带的员工信息构造回显选项 */
+const editInitialOption = ref<PerformanceEmployeeOption | null>(null);
 const showForm = ref(false);
 const submitting = ref(false);
 const formRef = ref<FormInstance>();
@@ -343,7 +289,7 @@ const openAdd = () => {
     endMonth: '',
     reason: ''
   });
-  formEmpOptions.value = [];
+  editInitialOption.value = null;
   showForm.value = true;
 };
 
@@ -357,9 +303,14 @@ const openEdit = (row: any) => {
     endMonth: row.endMonth || '',
     reason: row.reason
   });
-  formEmpOptions.value = row.employeeName
-    ? [{ employeeId: String(row.employeeId), employeeName: row.employeeName, employeeCode: '' } as Employee]
-    : [];
+  editInitialOption.value = row.employeeName
+    ? {
+        employeeId: String(row.employeeId),
+        employeeName: row.employeeName,
+        employeeCode: row.employeeCode ?? '',
+        deptName: row.deptName ?? '',
+      }
+    : null;
   showForm.value = true;
 };
 

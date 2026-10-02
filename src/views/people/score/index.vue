@@ -22,16 +22,11 @@
           />
         </el-form-item>
         <el-form-item label="门店/组别" prop="deptId">
-          <el-tree-select
+          <PanjiaDeptSelect
             v-model="queryParams.deptId"
-            :data="deptTreeData"
-            :props="{ label: 'deptName', children: 'children' } as any"
-            value-key="deptId"
-            node-key="deptId"
             :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
             :clearable="!deptLocked"
-            check-strictly
-            style="width: 200px"
+            width="200px"
             @change="handleQuery"
           />
         </el-form-item>
@@ -192,14 +187,7 @@
     <el-dialog v-model="createOpen" title="新增积分" width="460px" append-to-body>
       <el-form label-width="90px">
         <el-form-item label="员工" required>
-          <el-select v-model="createForm.employeeId" placeholder="请选择员工" filterable style="width: 100%">
-            <el-option
-              v-for="emp in employeeOptions"
-              :key="emp.employeeId"
-              :label="`${emp.employeeCode || '无工号'}｜${emp.employeeName}${emp.deptName ? '｜' + emp.deptName : ''}`"
-              :value="emp.employeeId"
-            />
-          </el-select>
+          <EmployeeSelect v-model="createForm.employeeId" placeholder="请选择员工" />
         </el-form-item>
         <el-form-item label="积分期间" required>
           <el-date-picker v-model="createForm.scoreMonth" type="month" value-format="YYYY-MM" placeholder="请选择月份" style="width: 100%" />
@@ -259,8 +247,9 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import type { FormInstance } from 'element-plus';
 import { scoreApi } from '@/api/panjia/score';
-import { employeeApi } from '@/api/panjia/employee';
-import type { Employee, ScoreApproval, ScoreQuery, ScoreRecord } from '@/api/panjia/types';
+import type { ScoreApproval, ScoreQuery, ScoreRecord } from '@/api/panjia/types';
+import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
+import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import modal from '@/plugins/modal';
 import ScoreApprovalDetail from '@/components/WorkflowHandle/details/ScoreApprovalDetail.vue';
 import ImportScorePage from '@/views/import/score/index.vue';
@@ -277,7 +266,7 @@ const total = ref(0);
 const importOpen = ref(false);
 
 // 门店/组别筛选：全系统统一数据权限口径（useDeptScope：默认本部门、树裁剪为子树、不可清空）
-const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
+const { deptLocked, defaultDeptId } = useDeptScope();
 
 /** 积分期间（yyyy-MM，单月必选）：列表查询与审批状态共用同一期间 */
 const currentPeriod = () => {
@@ -383,17 +372,6 @@ const handleSubmitApproval = async () => {
 };
 
 // ==================== 手工新增 / 删除 ====================
-const employeeOptions = ref<Employee[]>([]);
-
-const loadEmployees = async () => {
-  try {
-    const res = await employeeApi.list({ pageNum: 1, pageSize: 1000 });
-    employeeOptions.value = res.data?.rows ?? [];
-  } catch {
-    employeeOptions.value = [];
-  }
-};
-
 const createOpen = ref(false);
 const createSaving = ref(false);
 const createForm = reactive({
@@ -547,9 +525,7 @@ useWorkflowRouteOpen('/people/score', openFromWorkflow);
 
 onMounted(() => {
   getList();
-  loadDeptTree();
   loadApproval();
-  loadEmployees();
 });
 </script>
 

@@ -76,38 +76,14 @@
           </span>
         </div>
         <div class="toolbar-right">
-          <el-tree-select
-            v-model="filterDeptId"
-            :data="deptTreeData"
-            :props="{ label: 'deptName', children: 'children' } as any"
-            node-key="deptId"
-            value-key="deptId"
-            placeholder="全部门店/组别"
-            clearable
-            check-strictly
-            size="small"
-            style="width: 200px"
-          />
-          <el-select
+          <PanjiaDeptSelect v-model="filterDeptId" size="small" width="200px" />
+          <EmployeeSelect
             v-model="filterEmployeeId"
-            filterable
-            remote
-            clearable
-            :remote-method="empSearch.remoteMethod"
-            :loading="empSearch.loading"
-            no-data-text="输入姓名/工号搜索"
-            placeholder="员工姓名/工号搜索"
+            :dept-id="filterDeptId"
             size="small"
-            style="width: 210px"
-            @change="empSearch.onSelect"
-          >
-            <el-option
-              v-for="emp in empSearch.options"
-              :key="emp.employeeId"
-              :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`"
-              :value="emp.employeeId"
-            />
-          </el-select>
+            width="210px"
+            placeholder="员工姓名/工号搜索"
+          />
           <el-button size="small" :icon="RefreshLeft" @click="resetFilters">重置</el-button>
           <el-checkbox v-model="showAllColumns" size="small">显示全部金额列（含全零列）</el-checkbox>
         </div>
@@ -256,7 +232,9 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Lock, Download, InfoFilled, RefreshLeft } from '@element-plus/icons-vue';
 import { payrollApi, orgCommissionTraceApi, type PayrollBatch, type PayrollDetail } from '@/api/panjia/payroll';
-import { useDeptEmpFilter, useEmployeeSearch } from '@/hooks/useDeptEmpFilter';
+import { useDeptEmpFilter } from '@/hooks/useDeptEmpFilter';
+import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
+import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import { exportMultiSheet, grossMinusDeduct, type ExportExtraData } from '../components/payroll-export';
 import PayrollTracePanel from '../components/PayrollTracePanel.vue';
 
@@ -307,11 +285,10 @@ const isZero = (v: number | null | undefined) => !v || Number(v) === 0;
 
 const currentBatch = computed(() => batches.value.find((b) => b.id === selectedBatchId.value) || null);
 
-/* ───────────── 筛选条件（统一门店树/员工搜索组件，含子部门口径） ───────────── */
-const { deptTreeData, loadDeptTree, collectDeptIds } = useDeptEmpFilter();
+/* ───────────── 筛选条件（PanjiaDeptSelect / EmployeeSelect 公共组件，含子部门口径） ───────────── */
+const { collectDeptIds } = useDeptEmpFilter();
 const filterDeptId = ref<number | string>('');
 const filterEmployeeId = ref<number | string>('');
-const empSearch = useEmployeeSearch(() => filterEmployeeId.value, () => filterDeptId.value);
 
 const resetFilters = () => {
   filterDeptId.value = '';
@@ -464,7 +441,6 @@ const exportExcel = async () => {
 
 onMounted(() => {
   loadBatches();
-  loadDeptTree();
 });
 </script>
 

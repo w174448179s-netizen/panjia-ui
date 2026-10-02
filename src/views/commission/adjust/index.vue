@@ -48,38 +48,19 @@
             </el-select>
           </el-form-item>
           <el-form-item v-if="!isAgent" label="员工" prop="employeeId">
-            <el-select
+            <EmployeeSelect
               v-model="queryParams.employeeId"
-              placeholder="搜索员工姓名/工号"
-              filterable
-              remote
-              clearable
-              :remote-method="searchEmployees"
-              :loading="employeeLoading"
-              :no-data-text="employeeNoDataText"
-              style="width: 220px"
-              @change="handleEmployeeChange"
-              @clear="handleEmployeeClear"
-            >
-              <el-option
-                v-for="emp in employeeOptions"
-                :key="emp.employeeId"
-                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`"
-                :value="emp.employeeId"
-              />
-            </el-select>
+              :dept-id="queryParams.deptId"
+              width="220px"
+              @change="onEmployeeChange"
+            />
           </el-form-item>
           <el-form-item v-if="!isAgent" label="门店/组别" prop="deptId">
-            <el-tree-select
+            <PanjiaDeptSelect
               v-model="queryParams.deptId"
-              :data="deptTreeData"
-              :props="{ label: 'deptName', children: 'children' } as any"
-              value-key="deptId"
-              node-key="deptId"
               :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
               :clearable="!deptLocked"
-              check-strictly
-              style="width: 220px"
+              width="220px"
               @change="handleDeptChange"
             />
           </el-form-item>
@@ -244,7 +225,9 @@
 import { ref, computed, reactive, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { commissionApi, type CommissionAdjust } from '@/api/panjia/commission';
-import { performanceApi, type PerformanceEmployeeOption } from '@/api/panjia/performance';
+import { performanceApi } from '@/api/panjia/performance';
+import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
+import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import { useDeptScope } from '@/hooks/useDeptScope';
 import { useUserStore } from '@/store/modules/user';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
@@ -258,7 +241,7 @@ const route = useRoute();
 const userStore = useUserStore();
 /** 经纪人：本人口径（后端强制按本人 employeeId 过滤），不展示门店/组别/员工筛选 */
 const isAgent = computed(() => userStore.roles.includes('agent'));
-const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
+const { deptLocked, defaultDeptId } = useDeptScope();
 
 /** 业务明细直接审批：通过 businessId 查当前用户可办理任务，复用 WorkflowHandle 弹窗 */
 const workflowHandleRef = ref<InstanceType<typeof WorkflowHandle>>();
@@ -312,50 +295,15 @@ const queryParams = reactive({
   status: '' as string,
 });
 
-// ==================== 员工筛选（远程搜索，选项受后端部门数据权限约束） ====================
-const employeeOptions = ref<PerformanceEmployeeOption[]>([]);
-const employeeLoading = ref(false);
-/** 是否已发起过搜索（未搜索时提示输入，搜索无结果时提示无匹配） */
-const employeeSearched = ref(false);
-const employeeNoDataText = computed(() => (employeeSearched.value ? '无匹配员工' : '输入姓名/工号搜索'));
-
-const searchEmployees = async (query: string) => {
-  const kw = (query ?? '').trim();
-  if (!kw) {
-    employeeOptions.value = [];
-    employeeSearched.value = false;
-    return;
-  }
-  employeeLoading.value = true;
-  try {
-    const res = await performanceApi.searchEmployeeOptions({
-      keyword: kw,
-      deptId: isAgent.value ? undefined : queryParams.deptId,
-    });
-    employeeOptions.value = res.data ?? [];
-    employeeSearched.value = true;
-  } catch {
-    employeeOptions.value = [];
-  } finally {
-    employeeLoading.value = false;
-  }
-};
-
-/** 员工变化后类型可见范围随之变化，先刷新类型选项（顺带剔除失效选中）再查询 */
-const handleEmployeeChange = () => {
-  loadBizTypes().then(handleQuery);
-};
-const handleEmployeeClear = () => {
-  employeeOptions.value = [];
-  employeeSearched.value = false;
+// ==================== 员工筛选（EmployeeSelect 公共组件，选项受后端部门数据权限约束） ====================
+/** 选中/清空员工后：类型可见范围随之变化，先刷新类型选项（顺带剔除失效选中）再查询 */
+const onEmployeeChange = () => {
   loadBizTypes().then(handleQuery);
 };
 
 /** 清空员工筛选（部门范围变化/重置时调用：原员工可能已不在新部门范围内） */
 const clearEmployeeFilter = () => {
   queryParams.employeeId = undefined;
-  employeeOptions.value = [];
-  employeeSearched.value = false;
 };
 
 // ==================== 类型下拉选项（随期间/部门数据范围实时变化） ====================
@@ -468,7 +416,6 @@ useWorkflowRouteOpen('/commission/adjust', openFromWorkflow);
 onMounted(() => {
   // 受限角色（店长/总监）默认选中本部门，首屏即按本部门查询
   queryParams.deptId = defaultDeptId();
-  loadDeptTree();
   loadBizTypes();
   getList();
 });

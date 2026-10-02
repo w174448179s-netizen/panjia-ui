@@ -66,15 +66,9 @@
         <!-- ══════════ 工资表 sheet（28 列，含经纪人 + 店长） ══════════ -->
         <el-tab-pane label="工资表" name="AGENT" lazy>
           <div class="tab-toolbar">
-            <el-tree-select v-model="ag.filter.deptId" :data="deptTreeData"
-              :props="{ label: 'deptName', children: 'children' } as any" node-key="deptId" value-key="deptId"
-              placeholder="全部门店/组别" clearable check-strictly style="width: 200px" />
-            <el-select v-model="ag.filter.employeeId" filterable remote clearable :remote-method="agEmp.remoteMethod"
-              :loading="agEmp.loading" no-data-text="输入姓名/工号搜索" placeholder="员工姓名/工号搜索" style="width: 210px"
-              @change="agEmp.onSelect">
-              <el-option v-for="emp in agEmp.options" :key="emp.employeeId"
-                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
-            </el-select>
+            <PanjiaDeptSelect v-model="ag.filter.deptId" width="200px" />
+            <EmployeeSelect v-model="ag.filter.employeeId" :dept-id="ag.filter.deptId"
+              width="210px" placeholder="员工姓名/工号搜索" />
           </div>
           <el-table :data="ag.paged" stripe border max-height="600" :summary-method="summaryMethod" show-summary>
             <el-table-column label="门店" prop="deptName" width="110" fixed="left" />
@@ -161,15 +155,9 @@
         <!-- ══════════ 店长工资 sheet（15 列，底薪计算与补齐依据，对齐天街工资表 店长工资 sheet） ══════════ -->
         <el-tab-pane label="店长" name="MANAGER" lazy>
           <div class="tab-toolbar">
-            <el-tree-select v-model="mf.filter.deptId" :data="deptTreeData"
-              :props="{ label: 'deptName', children: 'children' } as any" node-key="deptId" value-key="deptId"
-              placeholder="全部门店/组别" clearable check-strictly style="width: 200px" />
-            <el-select v-model="mf.filter.employeeId" filterable remote clearable :remote-method="mfEmp.remoteMethod"
-              :loading="mfEmp.loading" no-data-text="输入姓名/工号搜索" placeholder="员工姓名/工号搜索" style="width: 210px"
-              @change="mfEmp.onSelect">
-              <el-option v-for="emp in mfEmp.options" :key="emp.employeeId"
-                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
-            </el-select>
+            <PanjiaDeptSelect v-model="mf.filter.deptId" width="200px" />
+            <EmployeeSelect v-model="mf.filter.employeeId" :dept-id="mf.filter.deptId"
+              width="210px" placeholder="员工姓名/工号搜索" />
           </div>
           <el-table :data="mf.paged" stripe border max-height="600" :summary-method="managerSummary" show-summary>
             <el-table-column label="门店" prop="deptName" width="110" fixed="left" />
@@ -219,15 +207,9 @@
         <!-- ══════════ 总监工资 sheet（19 列，树形可展开：汇总行+门店明细子行，对齐天街工资表 总监工资 sheet） ══════════ -->
         <el-tab-pane label="总监" name="DIRECTOR" lazy>
           <div class="tab-toolbar">
-            <el-tree-select v-model="df.filter.deptId" :data="deptTreeData"
-              :props="{ label: 'deptName', children: 'children' } as any" node-key="deptId" value-key="deptId"
-              placeholder="全部组别" clearable check-strictly style="width: 200px" />
-            <el-select v-model="df.filter.employeeId" filterable remote clearable :remote-method="dfEmp.remoteMethod"
-              :loading="dfEmp.loading" no-data-text="输入姓名/工号搜索" placeholder="姓名/工号搜索" style="width: 210px"
-              @change="dfEmp.onSelect">
-              <el-option v-for="emp in dfEmp.options" :key="emp.employeeId"
-                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
-            </el-select>
+            <PanjiaDeptSelect v-model="df.filter.deptId" width="200px" placeholder="全部组别" />
+            <EmployeeSelect v-model="df.filter.employeeId" :dept-id="df.filter.deptId"
+              width="210px" placeholder="姓名/工号搜索" />
           </div>
           <el-table :data="df.paged" border max-height="600" :summary-method="directorSummary" show-summary
             row-key="_id" :tree-props="{ children: 'children' }" default-expand-all>
@@ -292,15 +274,9 @@
         <!-- ══════════ 新签业绩 sheet（12 列） ══════════ -->
         <el-tab-pane label="新签业绩" name="NEWSIGN" lazy>
           <div class="tab-toolbar">
-            <el-tree-select v-model="nsf.filter.deptId" :data="deptTreeData"
-              :props="{ label: 'deptName', children: 'children' } as any" node-key="deptId" value-key="deptId"
-              placeholder="全部门店/组别" clearable check-strictly style="width: 200px" />
-            <el-select v-model="nsf.filter.employeeId" filterable remote clearable :remote-method="nsfEmp.remoteMethod"
-              :loading="nsfEmp.loading" no-data-text="输入姓名/工号搜索" placeholder="签约人姓名/工号搜索" style="width: 210px"
-              @change="nsfEmp.onSelect">
-              <el-option v-for="emp in nsfEmp.options" :key="emp.employeeId"
-                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
-            </el-select>
+            <PanjiaDeptSelect v-model="nsf.filter.deptId" width="200px" />
+            <EmployeeSelect v-model="nsf.filter.employeeId" :dept-id="nsf.filter.deptId"
+              width="210px" placeholder="签约人姓名/工号搜索" />
           </div>
           <el-table :data="nsf.paged" stripe border max-height="600" size="small" :summary-method="newSignSummary" show-summary>
             <el-table-column label="签约/认购日期" width="170" align="center">
@@ -335,15 +311,9 @@
         <!-- ══════════ 结佣业绩 sheet（12 列） ══════════ -->
         <el-tab-pane label="结佣业绩" name="COMMISSION" lazy>
           <div class="tab-toolbar">
-            <el-tree-select v-model="cf.filter.deptId" :data="deptTreeData"
-              :props="{ label: 'deptName', children: 'children' } as any" node-key="deptId" value-key="deptId"
-              placeholder="全部门店/组别" clearable check-strictly style="width: 200px" />
-            <el-select v-model="cf.filter.employeeId" filterable remote clearable :remote-method="cfEmp.remoteMethod"
-              :loading="cfEmp.loading" no-data-text="输入姓名/工号搜索" placeholder="签约人姓名/工号搜索" style="width: 210px"
-              @change="cfEmp.onSelect">
-              <el-option v-for="emp in cfEmp.options" :key="emp.employeeId"
-                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
-            </el-select>
+            <PanjiaDeptSelect v-model="cf.filter.deptId" width="200px" />
+            <EmployeeSelect v-model="cf.filter.employeeId" :dept-id="cf.filter.deptId"
+              width="210px" placeholder="签约人姓名/工号搜索" />
           </div>
           <el-table :data="cf.paged" stripe border max-height="600" size="small" :summary-method="commissionSummary" show-summary>
             <el-table-column label="签约/认购日期" width="170" align="center">
@@ -378,15 +348,9 @@
         <!-- ══════════ 人事数据 sheet（18 列） ══════════ -->
         <el-tab-pane label="人事数据" name="HR" lazy>
           <div class="tab-toolbar">
-            <el-tree-select v-model="hf.filter.deptId" :data="deptTreeData"
-              :props="{ label: 'deptName', children: 'children' } as any" node-key="deptId" value-key="deptId"
-              placeholder="全部门店/组别" clearable check-strictly style="width: 200px" />
-            <el-select v-model="hf.filter.employeeId" filterable remote clearable :remote-method="hfEmp.remoteMethod"
-              :loading="hfEmp.loading" no-data-text="输入姓名/工号搜索" placeholder="员工姓名/工号搜索" style="width: 210px"
-              @change="hfEmp.onSelect">
-              <el-option v-for="emp in hfEmp.options" :key="emp.employeeId"
-                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
-            </el-select>
+            <PanjiaDeptSelect v-model="hf.filter.deptId" width="200px" />
+            <EmployeeSelect v-model="hf.filter.employeeId" :dept-id="hf.filter.deptId"
+              width="210px" placeholder="员工姓名/工号搜索" />
           </div>
           <el-table :data="hf.paged" stripe border max-height="600" size="small">
             <el-table-column label="门店名称" prop="deptName" width="120" fixed="left" />
@@ -433,15 +397,9 @@
         <!-- ══════════ 绩效和扣款 sheet（19 列） ══════════ -->
         <el-tab-pane label="绩效和扣款" name="PERF" lazy>
           <div class="tab-toolbar">
-            <el-tree-select v-model="pf.filter.deptId" :data="deptTreeData"
-              :props="{ label: 'deptName', children: 'children' } as any" node-key="deptId" value-key="deptId"
-              placeholder="全部门店/组别" clearable check-strictly style="width: 200px" />
-            <el-select v-model="pf.filter.employeeId" filterable remote clearable :remote-method="pfEmp.remoteMethod"
-              :loading="pfEmp.loading" no-data-text="输入姓名/工号搜索" placeholder="员工姓名/工号搜索" style="width: 210px"
-              @change="pfEmp.onSelect">
-              <el-option v-for="emp in pfEmp.options" :key="emp.employeeId"
-                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`" :value="emp.employeeId" />
-            </el-select>
+            <PanjiaDeptSelect v-model="pf.filter.deptId" width="200px" />
+            <EmployeeSelect v-model="pf.filter.employeeId" :dept-id="pf.filter.deptId"
+              width="210px" placeholder="员工姓名/工号搜索" />
           </div>
           <el-table :data="pf.paged" stripe border max-height="600" size="small">
             <el-table-column label="门店" prop="deptName" width="120" fixed="left" />
@@ -490,7 +448,9 @@ import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Download } from '@element-plus/icons-vue';
 import { payrollApi, orgCommissionTraceApi, type PayrollBatch, type PayrollDetail, type CommissionTraceItem } from '@/api/panjia/payroll';
-import { useDeptEmpFilter, useEmployeeSearch } from '@/hooks/useDeptEmpFilter';
+import { useDeptEmpFilter } from '@/hooks/useDeptEmpFilter';
+import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
+import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import { attendanceApi } from '@/api/panjia/attendance';
 import { scoreApi } from '@/api/panjia/score';
 import { exportMultiSheet, parseStoreItems, grossMinusDeduct, type ExportExtraData } from '../components/payroll-export';
@@ -600,11 +560,12 @@ const loadBatches = async () => {
   batches.value = (res as any).data ?? [];
 };
 
-/* ───────────── tab 通用：统一门店/员工组件过滤 + 前端分页 ─────────────
- * 门店：统一 el-tree-select + 部门树（含子部门）；员工：统一 el-select 远程搜索；
+/* ───────────── tab 通用：统一门店/员工公共组件过滤 + 前端分页 ─────────────
+ * 门店/组别用 PanjiaDeptSelect，员工用 EmployeeSelect（组件内部各自加载数据）；
+ * collectDeptIds 用于「选中门店时含其下子组别」的过滤匹配；
  * 数据已全量在内存，过滤分页纯前端，避免全量渲染卡顿。
  */
-const { deptTreeData, loadDeptTree, collectDeptIds } = useDeptEmpFilter();
+const { collectDeptIds } = useDeptEmpFilter();
 
 /** 统一过滤匹配：门店（含子部门）+ 员工（employeeId 精确），全部 tab 共用 */
 const matchByDeptEmp = (r: any, f: Record<string, any>) => {
@@ -635,19 +596,12 @@ function pagedTable<T extends Record<string, any>>(source: () => T[]) {
 }
 
 const ag = pagedTable(() => salaryDetails.value);
-const agEmp = useEmployeeSearch(() => ag.filter.employeeId, () => ag.filter.deptId);
 const mf = pagedTable(() => managerDetails.value);
-const mfEmp = useEmployeeSearch(() => mf.filter.employeeId, () => mf.filter.deptId);
 const df = pagedTable(() => directorTreeData.value);
-const dfEmp = useEmployeeSearch(() => df.filter.employeeId, () => df.filter.deptId);
 const nsf = pagedTable(() => newSignItems.value);
-const nsfEmp = useEmployeeSearch(() => nsf.filter.employeeId, () => nsf.filter.deptId);
 const cf = pagedTable(() => commissionItems.value);
-const cfEmp = useEmployeeSearch(() => cf.filter.employeeId, () => cf.filter.deptId);
 const hf = pagedTable(() => details.value);
-const hfEmp = useEmployeeSearch(() => hf.filter.employeeId, () => hf.filter.deptId);
 const pf = pagedTable(() => details.value);
-const pfEmp = useEmployeeSearch(() => pf.filter.employeeId, () => pf.filter.deptId);
 
 const createBatch = async () => {
   if (!createForm.value.period) {
@@ -859,7 +813,6 @@ useWorkflowRouteOpen('/payroll/batch', openFromWorkflow);
 
 onMounted(() => {
   loadBatches();
-  loadDeptTree();
 });
 </script>
 

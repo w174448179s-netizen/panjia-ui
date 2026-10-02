@@ -15,40 +15,22 @@
           />
         </el-form-item>
         <el-form-item label="门店/组别">
-          <el-tree-select
+          <PanjiaDeptSelect
             v-model="queryParams.deptId"
-            :data="deptTreeData"
-            :props="{ label: 'deptName', children: 'children' } as any"
-            value-key="deptId"
-            node-key="deptId"
             :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
             :clearable="!deptLocked"
-            check-strictly
-            style="width: 210px"
+            width="210px"
             @change="handleQuery"
           />
         </el-form-item>
         <el-form-item v-if="!isBroker" label="员工" prop="employeeId">
-          <el-select
+          <EmployeeSelect
             v-model="queryParams.employeeId"
-            filterable
-            remote
-            clearable
-            :remote-method="searchEmployees"
-            :loading="employeeLoading"
-            :no-data-text="employeeNoDataText"
+            :dept-id="queryParams.deptId"
+            width="230px"
             placeholder="姓名/工号搜索"
-            style="width: 230px"
             @change="handleQuery"
-            @clear="handleEmployeeClear"
-          >
-            <el-option
-              v-for="emp in employeeOptions"
-              :key="emp.employeeId"
-              :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`"
-              :value="emp.employeeId"
-            />
-          </el-select>
+          />
         </el-form-item>
         <el-form-item label="类型">
           <el-select
@@ -417,7 +399,9 @@
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { ArrowDown } from '@element-plus/icons-vue';
 import { performanceApi } from '@/api/panjia/performance';
-import type { PerformanceEmployeeOption, PerformanceManageContract, PerformanceManageRow } from '@/api/panjia/performance';
+import type { PerformanceManageContract, PerformanceManageRow } from '@/api/panjia/performance';
+import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
+import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import ContractAdjustDialog from './components/ContractAdjustDialog.vue';
 import { useUserStore } from '@/store/modules/user';
 import { resolveBizNo } from '@/utils/panjiaBiz';
@@ -435,7 +419,7 @@ const handleSelectionChange = (rows: PerformanceManageContract[]) => {
 };
 
 // ==================== 门店/组别筛选（全系统统一口径：所有用户查本部门及以下） ====================
-const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
+const { deptLocked, defaultDeptId } = useDeptScope();
 
 // ==================== 筛选 ====================
 const queryParams = reactive<{
@@ -453,40 +437,6 @@ const queryParams = reactive<{
   keyword: undefined,
   factStatus: '',
 });
-
-// ==================== 员工筛选（远程搜索，选项受后端部门数据权限约束） ====================
-const employeeOptions = ref<PerformanceEmployeeOption[]>([]);
-const employeeLoading = ref(false);
-const employeeSearched = ref(false);
-const employeeNoDataText = computed(() => (employeeSearched.value ? '无匹配员工' : '输入姓名/工号搜索'));
-
-const searchEmployees = async (query: string) => {
-  const kw = (query ?? '').trim();
-  if (!kw) {
-    employeeOptions.value = [];
-    employeeSearched.value = false;
-    return;
-  }
-  employeeLoading.value = true;
-  try {
-    const res = await performanceApi.searchEmployeeOptions({
-      keyword: kw,
-      deptId: queryParams.deptId ? String(queryParams.deptId) : undefined,
-    });
-    employeeOptions.value = res.data ?? [];
-    employeeSearched.value = true;
-  } catch {
-    employeeOptions.value = [];
-  } finally {
-    employeeLoading.value = false;
-  }
-};
-
-const handleEmployeeClear = () => {
-  employeeOptions.value = [];
-  employeeSearched.value = false;
-  handleQuery();
-};
 
 // ==================== 数据 ====================
 const loading = ref(false);
@@ -859,8 +809,6 @@ const resetQuery = () => {
   queryParams.bizType = '';
   queryParams.keyword = undefined;
   queryParams.factStatus = '';
-  employeeOptions.value = [];
-  employeeSearched.value = false;
   pageNum.value = 1;
   getList();
 };
@@ -879,7 +827,6 @@ const openAdjustDialog = (row: PerformanceManageContract) => {
 };
 
 onMounted(async () => {
-  await loadDeptTree();
   try {
     const res = await performanceApi.listManagePeriods();
     const periods = res.data ?? [];

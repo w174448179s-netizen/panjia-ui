@@ -22,16 +22,11 @@
           />
         </el-form-item>
         <el-form-item label="门店/组别" prop="deptId">
-          <el-tree-select
+          <PanjiaDeptSelect
             v-model="queryParams.deptId"
-            :data="deptTreeData"
-            :props="{ label: 'deptName', children: 'children' } as any"
-            value-key="deptId"
-            node-key="deptId"
+            :scope="false"
+            width="220px"
             placeholder="请选择门店/组别"
-            clearable
-            check-strictly
-            style="width: 220px"
           />
         </el-form-item>
         <el-form-item label="职位" prop="postName">
@@ -202,17 +197,11 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="门店/组别" prop="deptId">
-              <el-tree-select
+              <PanjiaDeptSelect
                 v-model="form.deptId"
-                :data="deptTreeData"
-                :props="{ label: 'deptName', children: 'children' } as any"
-                value-key="deptId"
-                node-key="deptId"
+                :scope="false"
+                :clearable="false"
                 placeholder="请选择门店/组别"
-                check-strictly
-                :expand-on-click-node="false"
-                :render-after-expand="false"
-                style="width: 100%"
               />
             </el-form-item>
           </el-col>
@@ -608,7 +597,6 @@
 import { onUnmounted } from 'vue';
 import { employeeApi } from '@/api/panjia/employee';
 import type {
-  DeptNode,
   Employee,
   EmployeeChangeLog,
   EmployeeCreateForm,
@@ -620,6 +608,7 @@ import type {
   PostOption,
   ReconcileResult
 } from '@/api/panjia/types';
+import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import modal from '@/plugins/modal';
 import { useDict } from '@/utils/dict';
 import { UploadFilled, Document } from '@element-plus/icons-vue';
@@ -669,7 +658,6 @@ const resetQuery = () => {
 
 // ==================== 选项数据 ====================
 const postOptionsData = ref<PostOption[]>([]);
-const deptTreeData = ref<DeptNode[]>([]);
 
 const loadOptions = async () => {
   try {
@@ -677,12 +665,6 @@ const loadOptions = async () => {
     postOptionsData.value = posts.data ?? [];
   } catch (e) {
     console.error('[people] postOptions 加载失败', e);
-  }
-  try {
-    const tree = await employeeApi.deptTree();
-    deptTreeData.value = tree.data ?? [];
-  } catch (e) {
-    console.error('[people] deptTree 加载失败', e);
   }
 };
 

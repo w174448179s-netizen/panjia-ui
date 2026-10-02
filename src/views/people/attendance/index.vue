@@ -22,16 +22,11 @@
           />
         </el-form-item>
         <el-form-item label="门店/组别" prop="deptId">
-          <el-tree-select
+          <PanjiaDeptSelect
             v-model="queryParams.deptId"
-            :data="deptTreeData"
-            :props="{ label: 'deptName', children: 'children' } as any"
-            value-key="deptId"
-            node-key="deptId"
             :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
             :clearable="!deptLocked"
-            check-strictly
-            style="width: 200px"
+            width="200px"
             @change="handleQuery"
           />
         </el-form-item>
@@ -170,20 +165,12 @@
     <el-dialog v-model="dialog.visible" :title="dialog.isEdit ? '编辑考勤' : '新增考勤'" width="560px" append-to-body>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="92px">
         <el-form-item label="员工" prop="employeeId">
-          <el-select
+          <EmployeeSelect
             v-model="form.employeeId"
-            placeholder="请选择员工"
-            filterable
             :disabled="dialog.isEdit"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="emp in employeeOptions"
-              :key="emp.employeeId"
-              :label="`${emp.employeeCode || '无工号'}｜${emp.employeeName}${emp.deptName ? '｜' + emp.deptName : ''}`"
-              :value="emp.employeeId"
-            />
-          </el-select>
+            :initial-option="editInitialOption"
+            placeholder="请选择员工"
+          />
         </el-form-item>
         <el-form-item label="考勤期间" prop="attendMonth">
           <el-date-picker
@@ -242,14 +229,15 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import type { FormInstance, FormRules } from 'element-plus';
 import { attendanceApi } from '@/api/panjia/attendance';
-import { employeeApi } from '@/api/panjia/employee';
 import type {
   AttendanceApproval,
   AttendanceQuery,
   AttendanceRecord,
   AttendanceSaveForm,
-  Employee
 } from '@/api/panjia/types';
+import type { PerformanceEmployeeOption } from '@/api/panjia/performance';
+import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
+import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import modal from '@/plugins/modal';
 import { Lock } from '@element-plus/icons-vue';
 import AttendanceApprovalDetail from '@/components/WorkflowHandle/details/AttendanceApprovalDetail.vue';
@@ -267,7 +255,7 @@ const total = ref(0);
 const importOpen = ref(false);
 
 // 门店/组别筛选：全系统统一数据权限口径（useDeptScope：默认本部门、树裁剪为子树、不可清空）
-const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
+const { deptLocked, defaultDeptId } = useDeptScope();
 
 /** 考勤期间（yyyy-MM，单月必选）：列表查询与审批状态共用同一期间 */
 const currentPeriod = () => {
@@ -324,19 +312,9 @@ const resetQuery = () => {
   handlePeriodChange();
 };
 
-// ==================== 员工下拉 ====================
-const employeeOptions = ref<Employee[]>([]);
-
-const loadEmployees = async () => {
-  try {
-    const res = await employeeApi.list({ pageNum: 1, pageSize: 1000 });
-    employeeOptions.value = res.data?.rows ?? [];
-  } catch (e: any) {
-    modal.msgError(e?.message || '员工列表加载失败');
-  }
-};
-
 // ==================== 新增/编辑 ====================
+/** 编辑弹窗员工回显选项（列表行自带姓名/工号/部门） */
+const editInitialOption = ref<PerformanceEmployeeOption | null>(null);
 const formRef = ref<FormInstance>();
 const dialog = reactive({ visible: false, isEdit: false, saving: false, editId: '' });
 
@@ -368,6 +346,7 @@ const resetForm = () => {
 
 const handleAdd = () => {
   resetForm();
+  editInitialOption.value = null;
   dialog.editId = '';
   dialog.isEdit = false;
   dialog.visible = true;
@@ -390,6 +369,13 @@ const handleEdit = (row: AttendanceRecord) => {
     remark: row.remark || '',
     version: row.version
   });
+  editInitialOption.value = {
+    employeeId: String(row.employeeId),
+    employeeName: row.employeeName ?? '',
+    employeeCode: row.employeeCode ?? '',
+    deptId: row.deptId ? String(row.deptId) : undefined,
+    deptName: row.deptName ?? '',
+  };
   dialog.visible = true;
 };
 
@@ -495,8 +481,6 @@ useWorkflowRouteOpen('/people/attendance', openFromWorkflow);
 
 onMounted(() => {
   getList();
-  loadDeptTree();
-  loadEmployees();
   loadApproval();
 });
 </script>

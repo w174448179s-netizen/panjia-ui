@@ -48,36 +48,19 @@
             </el-select>
           </el-form-item>
           <el-form-item label="员工" prop="employeeId">
-            <el-select
+            <EmployeeSelect
               v-model="queryParams.employeeId"
-              placeholder="搜索员工姓名/工号"
-              filterable
-              remote
-              clearable
-              :remote-method="searchEmployee"
-              :loading="employeeLoading"
-              style="width: 220px"
+              :dept-id="queryParams.deptId"
+              width="220px"
               @change="handleScopeChange"
-            >
-              <el-option
-                v-for="emp in employeeOptions"
-                :key="emp.employeeId"
-                :label="`${emp.employeeName}（${emp.employeeCode}）`"
-                :value="emp.employeeId"
-              />
-            </el-select>
+            />
           </el-form-item>
           <el-form-item label="门店/组别" prop="deptId">
-            <el-tree-select
+            <PanjiaDeptSelect
               v-model="queryParams.deptId"
-              :data="deptFilterTree"
-              :props="{ label: 'deptName', children: 'children' }"
-              value-key="deptId"
-              node-key="deptId"
               :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
               :clearable="!deptLocked"
-              check-strictly
-              style="width: 220px"
+              width="220px"
               @change="handleScopeChange"
             />
           </el-form-item>
@@ -264,23 +247,11 @@
           />
         </el-form-item>
         <el-form-item label="员工" prop="employeeId">
-          <el-select
+          <EmployeeSelect
             v-model="formData.employeeId"
-            placeholder="搜索员工姓名/工号"
-            filterable
-            remote
-            :remote-method="searchEmployeeForForm"
-            :loading="employeeLoading"
-            style="width: 100%"
+            :clearable="false"
             @change="onFormEmployeeChange"
-          >
-            <el-option
-              v-for="emp in formEmployeeOptions"
-              :key="emp.employeeId"
-              :label="`${emp.employeeName}（${emp.employeeCode}）`"
-              :value="emp.employeeId"
-            />
-          </el-select>
+          />
         </el-form-item>
         <el-form-item v-if="formData.employeeId" label="门店/组别">
           <el-input :model-value="selectedEmployeeDept" disabled placeholder="选择员工后自动带出" />
@@ -378,8 +349,9 @@
 import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceAdjust, AdjustQuery, AdjustCreateForm, PerformanceFact } from '@/api/panjia/performance';
 import AdjustDetailPanel from './components/AdjustDetailPanel.vue';
-import { employeeApi } from '@/api/panjia/employee';
-import type { Employee } from '@/api/panjia/types';
+import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
+import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
+import type { PerformanceEmployeeOption } from '@/api/panjia/performance';
 import modal from '@/plugins/modal';
 import { useRoute } from 'vue-router';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
@@ -424,40 +396,8 @@ const statusTagType = (status: string): TagType => {
   return map[status] ?? 'info';
 };
 
-// ==================== 部门树（全系统统一口径：所有用户查本部门及以下） ====================
-const { deptLocked, defaultDeptId, deptTreeData: deptFilterTree, loadDeptTree } = useDeptScope();
-
-// ==================== 员工远程搜索（筛选条用） ====================
-const employeeOptions = ref<Employee[]>([]);
-const employeeLoading = ref(false);
-let empSearchTimer: ReturnType<typeof setTimeout> | null = null;
-const searchEmployee = (keyword: string) => {
-  if (empSearchTimer) clearTimeout(empSearchTimer);
-  empSearchTimer = setTimeout(async () => {
-    employeeLoading.value = true;
-    try {
-      const res = await employeeApi.list({ employeeName: keyword || undefined, pageSize: 20 });
-      employeeOptions.value = res.data?.rows ?? [];
-    } finally {
-      employeeLoading.value = false;
-    }
-  }, 300);
-};
-
-// 表单内员工搜索（独立选项集，避免与筛选条串数据）
-const formEmployeeOptions = ref<Employee[]>([]);
-const searchEmployeeForForm = (keyword: string) => {
-  if (empSearchTimer) clearTimeout(empSearchTimer);
-  empSearchTimer = setTimeout(async () => {
-    employeeLoading.value = true;
-    try {
-      const res = await employeeApi.list({ employeeName: keyword || undefined, pageSize: 20 });
-      formEmployeeOptions.value = res.data?.rows ?? [];
-    } finally {
-      employeeLoading.value = false;
-    }
-  }, 300);
-};
+// ==================== 部门口径（全系统统一：所有用户查本部门及以下） ====================
+const { deptLocked, defaultDeptId } = useDeptScope();
 
 // ==================== 筛选 & 分页 ====================
 const queryParams = reactive<AdjustQuery & { pageNum: number; pageSize: number }>({
@@ -630,9 +570,14 @@ const onTargetChange = () => {
   }
 };
 
+/** 表单内已选员工（EmployeeSelect 选中后缓存，用于自动带出部门/回显部门名） */
+const selectedFormEmployee = ref<PerformanceEmployeeOption | null>(null);
+
 /** 门店/组别只读回显：优先取员工主档，其次取所选业绩明细所在部门 */
 const selectedEmployeeDept = computed(() => {
-  const emp = formEmployeeOptions.value.find((e) => String(e.employeeId) === String(formData.employeeId));
+  const emp = String(selectedFormEmployee.value?.employeeId ?? '') === String(formData.employeeId)
+    ? selectedFormEmployee.value
+    : null;
   return emp?.deptName || selectedFact.value?.deptName || '';
 });
 
@@ -647,10 +592,13 @@ const formRules = {
 };
 
 // 选完员工：自动带出部门，并尝试加载该员工的业绩事实
-const onFormEmployeeChange = async (employeeId: string) => {
-  const emp = formEmployeeOptions.value.find((e) => e.employeeId === employeeId);
-  if (emp && emp.deptId) {
-    formData.deptId = emp.deptId;
+const onFormEmployeeChange = async (
+  _employeeId: string | number | undefined,
+  emp: PerformanceEmployeeOption | null,
+) => {
+  selectedFormEmployee.value = emp;
+  if (emp?.deptId) {
+    formData.deptId = String(emp.deptId);
   }
   formData.factId = '';
   await loadFactOptions();
@@ -681,6 +629,7 @@ const loadFactOptions = async () => {
 
 const handleCreate = () => {
   Object.assign(formData, defaultFormData());
+  selectedFormEmployee.value = null;
   factOptions.value = [];
   formDialog.mode = 'create';
   formDialog.title = '新增调整单';
@@ -733,7 +682,6 @@ const openFromWorkflow = () => {
 useWorkflowRouteOpen('/performance/adjustment', openFromWorkflow);
 
 onMounted(() => {
-  loadDeptTree();
   loadBizTypes();
   getList();
 });

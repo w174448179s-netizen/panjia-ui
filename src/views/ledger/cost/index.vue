@@ -13,21 +13,13 @@
             @change="load"
             @keydown.enter.prevent="load"
           />
-          <el-select
+          <PanjiaDeptSelect
             v-model="selectedDeptId"
+            :scope="false"
+            width="200px"
             placeholder="全部门店"
-            clearable
-            filterable
-            style="width: 200px"
             @change="load"
-          >
-            <el-option
-              v-for="d in deptList"
-              :key="d.deptId"
-              :label="d.deptName"
-              :value="d.deptId"
-            />
-          </el-select>
+          />
           <el-button type="primary" @click="openAdd">+ 新增成本</el-button>
         </div>
       </div>
@@ -66,15 +58,11 @@
           <el-date-picker v-model="form.period" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width:100%" />
         </el-form-item>
         <el-form-item label="门店/组别" prop="deptId">
-          <el-tree-select
+          <PanjiaDeptSelect
             v-model="form.deptId"
-            :data="deptList"
-            :props="{ label: 'deptName', children: 'children' }"
-            value-key="deptId"
-            node-key="deptId"
+            :scope="false"
+            :clearable="false"
             placeholder="请选择门店/组别"
-            check-strictly
-            style="width:100%"
           />
         </el-form-item>
         <el-form-item label="成本类型" prop="costType">
@@ -101,8 +89,9 @@
 import { ref, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
-import { employeeApi } from '@/api/panjia/employee';
 import type { DeptNode } from '@/api/panjia/types';
+import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
+import { useDeptScope } from '@/hooks/useDeptScope';
 
 interface CostEntry {
   id: number;
@@ -118,7 +107,8 @@ const period = ref(new Date().toISOString().slice(0, 7));
 const selectedDeptId = ref('');
 const loading = ref(false);
 const list = ref<CostEntry[]>([]);
-const deptList = ref<DeptNode[]>([]);
+/** 全量部门树（台账不做数据权限裁剪），供选择器共用与表格部门名翻译 */
+const { deptTreeRaw } = useDeptScope();
 
 const showAdd = ref(false);
 const submitting = ref(false);
@@ -158,7 +148,7 @@ const deptName = (id: string) => {
       }
     }
   };
-  return find(deptList.value)?.deptName || String(id);
+  return find(deptTreeRaw.value)?.deptName || String(id);
 };
 
 const filteredList = computed(() => {
@@ -169,13 +159,6 @@ const filteredList = computed(() => {
 const totalAmount = computed(() =>
   filteredList.value.reduce((s, r) => s + (Number(r.amount) || 0), 0)
 );
-
-const loadDeptTree = async () => {
-  try {
-    const res = await employeeApi.deptTree();
-    deptList.value = (res as any).data ?? [];
-  } catch { /* ignore */ }
-};
 
 const load = async () => {
   // 后端接口待实现，暂用空数据
@@ -220,7 +203,6 @@ const remove = async (row: CostEntry) => {
 };
 
 onMounted(() => {
-  loadDeptTree();
   load();
 });
 </script>

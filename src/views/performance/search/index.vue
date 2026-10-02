@@ -16,52 +16,23 @@
             />
           </el-form-item>
           <el-form-item v-if="!isAgent" label="门店/组别" prop="deptId">
-            <el-tree-select
+            <PanjiaDeptSelect
               v-model="queryParams.deptId"
-              :data="deptTreeData"
-              :props="{ label: 'deptName', children: 'children' } as any"
-              value-key="deptId"
-              node-key="deptId"
               :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
               :clearable="!deptLocked"
-              check-strictly
-              style="width: 200px"
+              width="200px"
               @change="handleDeptChange"
             />
           </el-form-item>
           <!-- 员工筛选：经纪人无此筛选（后端强制本人口径）；选项由后端按部门数据权限过滤 -->
           <el-form-item v-if="!isAgent" label="员工" prop="employeeId">
-            <el-select
+            <EmployeeSelect
               v-model="queryParams.employeeId"
-              filterable
-              remote
-              clearable
-              :remote-method="searchEmployees"
-              :loading="employeeLoading"
-              :no-data-text="employeeNoDataText"
+              :dept-id="queryParams.deptId"
+              width="230px"
               placeholder="姓名/工号搜索"
-              style="width: 230px"
-              @change="handleEmployeeChange"
-              @clear="handleEmployeeClear"
-            >
-              <el-option
-                v-for="emp in employeeOptions"
-                :key="emp.employeeId"
-                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`"
-                :value="emp.employeeId"
-              >
-                <div class="employee-option">
-                  <span class="employee-option-name">
-                    {{ emp.employeeName }}
-                    <span class="employee-option-code">{{ emp.employeeCode }}</span>
-                  </span>
-                  <span class="employee-option-dept">
-                    <el-tag v-if="emp.status === 'LEFT'" type="info" size="small" effect="plain">离职</el-tag>
-                    {{ emp.deptName || '' }}
-                  </span>
-                </div>
-              </el-option>
-            </el-select>
+              @change="onEmployeeChange"
+            />
           </el-form-item>
           <el-form-item label="类型" prop="bizType">
             <el-select
@@ -398,24 +369,7 @@
           <span class="amount-gray" style="margin-left: 8px">当前业绩合计 ¥{{ formatMoney(addMemberDialog.maxAmount) }}</span>
         </el-form-item>
         <el-form-item label="新角色人" prop="newEmployeeId">
-          <el-select
-            v-model="addMemberForm.newEmployeeId"
-            filterable
-            remote
-            :remote-method="searchAddMemberEmployee"
-            :loading="addMemberEmpLoading"
-            :no-data-text="addMemberEmpNoDataText"
-            placeholder="输入姓名/工号搜索"
-            clearable
-            style="width: 100%"
-          >
-            <el-option
-              v-for="emp in addMemberEmpOptions"
-              :key="emp.employeeId"
-              :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`"
-              :value="String(emp.employeeId)"
-            />
-          </el-select>
+          <EmployeeSelect v-model="addMemberForm.newEmployeeId" />
         </el-form-item>
         <el-form-item label="角色类型" prop="newRoleType">
           <el-input v-model="addMemberForm.newRoleType" placeholder="如 合作人 / 推荐人 / 经纪人" maxlength="30" />
@@ -431,16 +385,7 @@
           <div class="footer-tip" style="width: 100%">合同总额不变，将从既有角色人身上扣除 ¥{{ formatMoney(addMemberForm.newAmount ?? 0) }} 分摊给新角色人</div>
         </el-form-item>
         <el-form-item label="归属部门" prop="newDeptId">
-          <el-tree-select
-            v-model="addMemberForm.newDeptId"
-            :data="deptTreeData"
-            :props="{ label: 'deptName', children: 'children' } as any"
-            value-key="deptId"
-            node-key="deptId"
-            placeholder="默认取员工档案部门"
-            check-strictly
-            style="width: 100%"
-          />
+          <PanjiaDeptSelect v-model="addMemberForm.newDeptId" :clearable="false" placeholder="默认取员工档案部门" />
         </el-form-item>
         <el-form-item label="调整原因" prop="reason">
           <el-input v-model="addMemberForm.reason" type="textarea" :rows="2" maxlength="200" show-word-limit placeholder="请输入调整原因" />
@@ -458,7 +403,9 @@
 import { Search, Refresh, UserFilled } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { performanceApi } from '@/api/panjia/performance';
-import type { PerformanceEmployeeOption, PerformanceFactSearch, PerformanceSearchDetailRow } from '@/api/panjia/performance';
+import type { PerformanceFactSearch, PerformanceSearchDetailRow } from '@/api/panjia/performance';
+import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
+import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import { resolveBizNo } from '@/utils/panjiaBiz';
 import { useUserStore } from '@/store/modules/user';
 import { useDeptScope } from '@/hooks/useDeptScope';
@@ -477,8 +424,8 @@ const calcTableHeight = () => {
   });
 };
 
-// ==================== 部门树（全系统统一口径：所有用户查本部门及以下） ====================
-const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
+// ==================== 部门口径（全系统统一：所有用户查本部门及以下） ====================
+const { deptLocked, defaultDeptId } = useDeptScope();
 
 // ==================== 筛选 & 分页 ====================
 const queryParams = reactive({
@@ -491,62 +438,15 @@ const queryParams = reactive({
   keyword: undefined as string | undefined,
 });
 
-// ==================== 员工筛选（远程搜索，选项受后端部门数据权限约束） ====================
-const employeeOptions = ref<PerformanceEmployeeOption[]>([]);
-const employeeLoading = ref(false);
-/** 是否已发起过搜索（未搜索时提示输入，搜索无结果时提示无匹配） */
-const employeeSearched = ref(false);
-/** 当前已选中的员工选项（远程刷新列表后合并保留，避免选中项只显示 ID） */
-const selectedEmployeeOption = ref<PerformanceEmployeeOption | undefined>(undefined);
-const employeeNoDataText = computed(() => (employeeSearched.value ? '无匹配员工' : '输入姓名/工号搜索'));
-
-const searchEmployees = async (query: string) => {
-  const keyword = (query ?? '').trim();
-  if (!keyword) {
-    employeeOptions.value = selectedEmployeeOption.value ? [selectedEmployeeOption.value] : [];
-    employeeSearched.value = false;
-    return;
-  }
-  employeeLoading.value = true;
-  try {
-    const res = await performanceApi.searchEmployeeOptions({
-      keyword,
-      deptId: isAgent.value ? undefined : queryParams.deptId,
-    });
-    const rows = res.data ?? [];
-    // 已选中员工不在新结果中时置顶保留，保证选中态正常回显姓名
-    const selected = selectedEmployeeOption.value;
-    employeeOptions.value = selected && !rows.some((r) => r.employeeId === selected.employeeId)
-      ? [selected, ...rows]
-      : rows;
-    employeeSearched.value = true;
-  } catch (e) {
-    console.error('[search] 员工选项加载失败', e);
-    employeeOptions.value = selectedEmployeeOption.value ? [selectedEmployeeOption.value] : [];
-  } finally {
-    employeeLoading.value = false;
-  }
-};
-
-const handleEmployeeChange = (value: string | undefined) => {
-  selectedEmployeeOption.value = employeeOptions.value.find((o) => o.employeeId === value);
-  // 员工变化后类型可见范围随之变化，先刷新类型选项（顺带剔除失效选中）再查询
-  loadBizTypes().then(handleQuery);
-};
-
-const handleEmployeeClear = () => {
-  selectedEmployeeOption.value = undefined;
-  employeeOptions.value = [];
-  employeeSearched.value = false;
+// ==================== 员工筛选（EmployeeSelect 公共组件，选项受后端部门数据权限约束） ====================
+/** 选中/清空员工后：类型可见范围随之变化，先刷新类型选项（顺带剔除失效选中）再查询 */
+const onEmployeeChange = () => {
   loadBizTypes().then(handleQuery);
 };
 
 /** 清空员工筛选（部门范围变化/重置时调用：原员工可能已不在新部门范围内） */
 const clearEmployeeFilter = () => {
   queryParams.employeeId = undefined;
-  selectedEmployeeOption.value = undefined;
-  employeeOptions.value = [];
-  employeeSearched.value = false;
 };
 
 const loading = ref(false);
@@ -781,29 +681,6 @@ const addMemberForm = reactive({
   newDeptId: undefined as string | undefined,
   reason: '',
 });
-// 独立的员工远程搜索（不与列表筛选共用）
-const addMemberEmpOptions = ref<PerformanceEmployeeOption[]>([]);
-const addMemberEmpLoading = ref(false);
-const addMemberEmpSearched = ref(false);
-const addMemberEmpNoDataText = computed(() => (addMemberEmpSearched.value ? '无匹配员工' : '输入姓名/工号搜索'));
-const searchAddMemberEmployee = async (query: string) => {
-  const kw = (query ?? '').trim();
-  if (!kw) {
-    addMemberEmpOptions.value = [];
-    addMemberEmpSearched.value = false;
-    return;
-  }
-  addMemberEmpLoading.value = true;
-  try {
-    const res = await performanceApi.searchEmployeeOptions({ keyword: kw });
-    addMemberEmpOptions.value = res.data ?? [];
-    addMemberEmpSearched.value = true;
-  } catch {
-    addMemberEmpOptions.value = [];
-  } finally {
-    addMemberEmpLoading.value = false;
-  }
-};
 const addMemberRules = {
   newEmployeeId: [
     { required: true, message: '请选择新角色人', trigger: 'change' },
@@ -837,8 +714,6 @@ const resetAddMemberForm = () => {
   addMemberForm.newAmount = undefined;
   addMemberForm.newDeptId = undefined;
   addMemberForm.reason = '';
-  addMemberEmpOptions.value = [];
-  addMemberEmpSearched.value = false;
 };
 const openAddMemberDialog = () => {
   const row = detailDialog.row;
@@ -881,7 +756,6 @@ onMounted(() => {
   window.addEventListener('resize', calcTableHeight);
   // 受限角色（店长/总监）默认选中本部门，首屏即按本部门查询
   queryParams.deptId = defaultDeptId();
-  loadDeptTree();
   loadBizTypes();
   getList();
 });
@@ -910,38 +784,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 0;
-}
-
-/* 员工下拉选项：左姓名+工号，右部门路径/离职标记 */
-.employee-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-}
-
-.employee-option-name {
-  font-weight: 500;
-}
-
-.employee-option-code {
-  margin-left: 6px;
-  font-size: 12px;
-  color: #909399;
-  font-weight: 400;
-}
-
-.employee-option-dept {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 130px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: #909399;
 }
 
 .empty-wrap {

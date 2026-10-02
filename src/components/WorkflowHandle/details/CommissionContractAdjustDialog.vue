@@ -123,25 +123,11 @@
         </el-table-column>
         <el-table-column label="姓名" min-width="90">
           <template #default="{ row }">
-            <el-select
+            <EmployeeSelect
               v-if="row.isNew"
               v-model="row.employeeId"
-              filterable
-              remote
-              :remote-method="searchEmployee"
-              :loading="empSearching"
-              clearable
-              placeholder="姓名/工号搜索"
-              style="width: 100%"
-              @change="(v: string) => onEmployeePick(row as EditRow, v)"
-            >
-              <el-option
-                v-for="emp in empOptions"
-                :key="emp.employeeId"
-                :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`"
-                :value="emp.employeeId"
-              />
-            </el-select>
+              @change="(_v, opt) => onEmployeePick(row as EditRow, opt)"
+            />
             <span v-else>{{ row.employeeName || '—' }}</span>
           </template>
         </el-table-column>
@@ -249,7 +235,8 @@
 import { ref, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { commissionApi, type CommissionItemDetail, type CommissionAdjustCreateDTO } from '@/api/panjia/commission';
-import { performanceApi, type PerformanceEmployeeOption } from '@/api/panjia/performance';
+import type { PerformanceEmployeeOption } from '@/api/panjia/performance';
+import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 
 const emit = defineEmits<{ (e: 'submitted'): void; (e: 'closed'): void }>();
 
@@ -289,8 +276,6 @@ const adjustType = ref<'AMOUNT' | 'ADD_MEMBER'>('AMOUNT');
 const totalInput = ref<number | null>(null);
 const deltaInput = ref<number | null>(null);
 const reason = ref('');
-const empOptions = ref<PerformanceEmployeeOption[]>([]);
-const empSearching = ref(false);
 /** 存在审批中的调整单（含增加角色人）：禁止重复发起，仅展示在途预演 */
 const pendingBlocked = ref(false);
 /** 审批中调整预演行（含新增角色人虚拟行） */
@@ -317,7 +302,6 @@ function open(payload: { applicationId: string | number; info: AdjustInfo; rows:
   reason.value = '';
   totalInput.value = null;
   editRows.value = [];
-  empOptions.value = [];
   visible.value = true;
   const allRows = payload.rows || [];
   // 审批中在途预演：任意行带 adjustPending 即进入只读预演态；新人虚拟行仅进预演表，不进编辑表
@@ -437,26 +421,10 @@ function removeRow(row: EditRow) {
   deltaInput.value = totalDelta.value;
 }
 
-// ==================== 新人员工远程搜索（自动回填姓名/工号） ====================
-async function searchEmployee(query: string) {
-  const kw = query.trim();
-  if (!kw) {
-    empOptions.value = [];
-    return;
-  }
-  empSearching.value = true;
-  try {
-    const res = await performanceApi.searchEmployeeOptions({ keyword: kw });
-    empOptions.value = res.data ?? [];
-  } finally {
-    empSearching.value = false;
-  }
-}
-
-function onEmployeePick(row: EditRow, employeeId: string) {
-  const emp = empOptions.value.find(e => e.employeeId === employeeId);
+// ==================== 新人选择（EmployeeSelect 公共组件，选中后自动回填姓名/工号/门店） ====================
+function onEmployeePick(row: EditRow, emp: PerformanceEmployeeOption | null) {
   if (emp) {
-    row.employeeId = emp.employeeId;
+    row.employeeId = String(emp.employeeId);
     row.employeeName = emp.employeeName;
     row.employeeCode = emp.employeeCode || '';
     // 选中员工后带出所属门店/组别（部门全路径名）

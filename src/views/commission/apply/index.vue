@@ -15,40 +15,22 @@
           />
         </el-form-item>
         <el-form-item label="门店/组别">
-          <el-tree-select
+          <PanjiaDeptSelect
             v-model="queryParams.deptId"
-            :data="deptTreeData"
-            :props="{ label: 'deptName', children: 'children' } as any"
-            value-key="deptId"
-            node-key="deptId"
             :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
             :clearable="!deptLocked"
-            check-strictly
-            style="width: 210px"
+            width="210px"
             @change="handleDeptChange"
           />
         </el-form-item>
         <el-form-item v-if="!isAgent" label="员工" prop="employeeId">
-          <el-select
+          <EmployeeSelect
             v-model="queryParams.employeeId"
-            filterable
-            remote
-            clearable
-            :remote-method="searchEmployees"
-            :loading="employeeLoading"
-            :no-data-text="employeeNoDataText"
+            :dept-id="queryParams.deptId"
+            width="230px"
             placeholder="姓名/工号搜索"
-            style="width: 230px"
             @change="handleQuery"
-            @clear="handleEmployeeClear"
-          >
-            <el-option
-              v-for="emp in employeeOptions"
-              :key="emp.employeeId"
-              :label="`${emp.employeeName}${emp.employeeCode ? `（${emp.employeeCode}）` : ''}`"
-              :value="emp.employeeId"
-            />
-          </el-select>
+          />
         </el-form-item>
         <el-form-item label="类型" prop="bizType">
           <el-select
@@ -390,7 +372,9 @@ import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Loading } from '@element-plus/icons-vue';
 import { commissionApi, type CommissionContractVO, type BatchResultDTO } from '@/api/panjia/commission';
-import { performanceApi, type PerformanceEmployeeOption } from '@/api/panjia/performance';
+import { performanceApi } from '@/api/panjia/performance';
+import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
+import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { useBizApproval } from '@/hooks/workflow/useBizApproval';
 import { useDeptScope } from '@/hooks/useDeptScope';
@@ -478,27 +462,8 @@ const isReceivedAdjusted = (
 const contractOrOrderNo = (row: CommissionContractVO): string =>
   resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—';
 
-// 部门树（全系统统一口径：所有用户查本部门及以下；详情弹窗的归属门店翻译在 CommissionApplyDetail 内自处理）
-const { deptLocked, defaultDeptId, deptTreeData, loadDeptTree } = useDeptScope();
-
-// 员工筛选（远程搜索，选项受后端部门数据权限约束；经纪人无此筛选，后端按本人口径）
-const employeeOptions = ref<PerformanceEmployeeOption[]>([]);
-const employeeLoading = ref(false);
-const employeeSearched = ref(false);
-const employeeNoDataText = computed(() => (employeeSearched.value ? '无匹配员工' : '输入姓名/工号搜索'));
-
-const searchEmployees = async (query: string) => {
-  const kw = (query ?? '').trim();
-  if (!kw) { employeeOptions.value = []; employeeSearched.value = false; return; }
-  employeeLoading.value = true;
-  try {
-    const res = await performanceApi.searchEmployeeOptions({ keyword: kw, deptId: queryParams.deptId });
-    employeeOptions.value = res.data ?? [];
-    employeeSearched.value = true;
-  } catch { employeeOptions.value = []; }
-  finally { employeeLoading.value = false; }
-};
-const handleEmployeeClear = () => { employeeOptions.value = []; employeeSearched.value = false; handleQuery(); };
+// 部门口径（全系统统一：所有用户查本部门及以下；详情弹窗的归属门店翻译在 CommissionApplyDetail 内自处理）
+const { deptLocked, defaultDeptId } = useDeptScope();
 
 // 类型下拉选项：随期间/部门数据范围实时变化（与列表同权限口径）
 const bizTypeOptions = ref<string[]>([]);
@@ -518,8 +483,6 @@ const handleScopeChange = () => loadBizTypes().then(handleQuery);
 /** 门店/组别变化：原选中员工可能不在新部门范围内，清空员工筛选后再按新范围查询 */
 const handleDeptChange = () => {
   queryParams.employeeId = undefined;
-  employeeOptions.value = [];
-  employeeSearched.value = false;
   handleScopeChange();
 };
 
@@ -592,8 +555,6 @@ const resetQuery = () => {
     // 受限角色重置回本部门默认值，不能清空为"全部"
     period: currentPeriod(), deptId: defaultDeptId(), employeeId: undefined, bizType: undefined, status: '', keyword: '', pageNum: 1,
   });
-  employeeOptions.value = [];
-  employeeSearched.value = false;
   loadBizTypes().then(getList);
 };
 
@@ -850,7 +811,6 @@ useWorkflowRouteOpen('/performance/apply', openFromWorkflow);
 onMounted(async () => {
   // 受限角色（店长/总监）默认选中本部门，首屏即按本部门查询
   queryParams.deptId = defaultDeptId();
-  loadDeptTree();
   loadBizTypes();
   // 默认选中最新有数据期间（当月有单据优先当月），与新签合同页口径一致；
   // 不传期间时后端兜底为当月，无数据会是空表，故前端显式选中最新期间

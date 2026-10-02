@@ -7,12 +7,20 @@
  * - admin/superadmin 的 deptId 通常是组织根节点，「自己及以下」即全量，天然不受影响。
  *
  * 配套后端在各列表接口做同样的强制校验（未传部门强制本部门、越权传他部门直接拒绝）。
+ *
+ * 部门树全量数据在模块级共享缓存：多个页面/组件（含 PanjiaDeptSelect）在同一会话内
+ * 只请求一次 deptTree，各自再按数据权限派生裁剪视图。
  */
 import { computed, ref } from 'vue';
 import type { DeptNode } from '@/api/panjia/types';
 import { employeeApi } from '@/api/panjia/employee';
 import { useUserStore } from '@/store/modules/user';
 import { findDeptSubtree } from '@/utils/panjiaBiz';
+
+/** 模块级共享：部门树全量数据 */
+const deptTreeRaw = ref<DeptNode[]>([]);
+/** 模块级共享：进行中的加载 Promise（去重并发请求） */
+let loadPromise: Promise<void> | null = null;
 
 export function useDeptScope() {
   const userStore = useUserStore();
@@ -24,19 +32,29 @@ export function useDeptScope() {
   const defaultDeptId = (): string | undefined =>
     userStore.deptId !== '' ? String(userStore.deptId) : undefined;
 
-  const deptTreeRaw = ref<DeptNode[]>([]);
   /** 查询筛选用部门树：锁定时裁剪为本部门子树，否则全量 */
   const deptTreeData = computed<DeptNode[]>(() =>
     deptLocked.value ? findDeptSubtree(deptTreeRaw.value, userStore.deptId) : deptTreeRaw.value
   );
 
-  const loadDeptTree = async () => {
-    try {
-      const res: any = await employeeApi.deptTree();
-      deptTreeRaw.value = res.data ?? [];
-    } catch (e) {
-      console.error('[useDeptScope] 部门树加载失败', e);
+  const loadDeptTree = async (force = false) => {
+    if (!force && deptTreeRaw.value.length) return;
+    if (!force && loadPromise) {
+      await loadPromise;
+      return;
     }
+    loadPromise = (async () => {
+      try {
+        const res: any = await employeeApi.deptTree();
+        deptTreeRaw.value = res.data ?? [];
+      } catch (e) {
+        console.error('[useDeptScope] 部门树加载失败', e);
+      } finally {
+        // 允许失败后重试
+        loadPromise = null;
+      }
+    })();
+    await loadPromise;
   };
 
   return { deptLocked, defaultDeptId, deptTreeRaw, deptTreeData, loadDeptTree };

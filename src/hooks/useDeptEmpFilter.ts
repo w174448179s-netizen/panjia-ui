@@ -1,13 +1,11 @@
-import { reactive, ref } from 'vue';
 import type { DeptNode } from '@/api/panjia/types';
-import { performanceApi } from '@/api/panjia/performance';
 import { useDeptScope } from '@/hooks/useDeptScope';
 
 /**
- * 门店树（含子部门收集）+ 员工远程搜索的统一过滤工具。
+ * 门店树（含子部门收集）统一过滤工具。
  * <p>
  * 供算薪批次弹窗 / 工资明细页等「数据全量在内存、前端过滤 + 分页」场景共用，
- * 保证查询组件与业务口径一致（与业绩查询页同款组件）。
+ * 保证门店过滤口径一致；员工录入/筛选统一用 EmployeeSelect 公共组件。
  */
 export function useDeptEmpFilter() {
   const { deptTreeData, loadDeptTree } = useDeptScope();
@@ -39,47 +37,4 @@ export function useDeptEmpFilter() {
   };
 
   return { deptTreeData, loadDeptTree, collectDeptIds };
-}
-
-/**
- * 统一员工远程搜索（业绩查询同款 searchEmployeeOptions 接口，姓名/工号均可搜）。
- * 每个表格独立实例（互不干扰回显），已选中员工不在新结果中时置顶保留。
- */
-export function useEmployeeSearch(getSelectedId: () => any, getDeptId: () => any) {
-  const options = ref<any[]>([]);
-  const loading = ref(false);
-  let lastSelected: any = null;
-  const remoteMethod = async (query: string) => {
-    const keyword = (query ?? '').trim();
-    if (!keyword) {
-      options.value = lastSelected ? [lastSelected] : [];
-      return;
-    }
-    loading.value = true;
-    try {
-      const res: any = await performanceApi.searchEmployeeOptions({
-        keyword,
-        deptId: getDeptId() || undefined,
-      });
-      const rows = res.data ?? [];
-      const selId = getSelectedId();
-      options.value = lastSelected && selId != null && selId !== ''
-        && !rows.some((r: any) => String(r.employeeId) === String(selId))
-        ? [lastSelected, ...rows]
-        : rows;
-    } catch (e) {
-      console.error('[员工搜索] 选项加载失败', e);
-      options.value = lastSelected ? [lastSelected] : [];
-    } finally {
-      loading.value = false;
-    }
-  };
-  const onSelect = (id: any) => {
-    if (id == null || id === '') {
-      lastSelected = null;
-      return;
-    }
-    lastSelected = options.value.find((r: any) => String(r.employeeId) === String(id)) || lastSelected;
-  };
-  return reactive({ options, loading, remoteMethod, onSelect });
 }
