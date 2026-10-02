@@ -4,7 +4,7 @@
     <el-descriptions v-if="detail" :column="2" border size="small">
       <el-descriptions-item label="归属月">{{ detail.period || '—' }}</el-descriptions-item>
       <el-descriptions-item label="员工">{{ detail.employeeName || employeeName(detail.employeeId) }}</el-descriptions-item>
-      <el-descriptions-item label="子类型">{{ detail.subType || '—' }}</el-descriptions-item>
+      <el-descriptions-item label="奖金类型">{{ typeLabel(detail.subType) }}</el-descriptions-item>
       <el-descriptions-item label="金额">¥{{ fmt(detail.amount) }}</el-descriptions-item>
       <el-descriptions-item label="状态">
         <el-tag :type="statusTagType(detail.status)" size="small">{{ statusLabel(detail.status) }}</el-tag>
@@ -16,11 +16,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, toRefs } from 'vue';
 import { payrollApi } from '@/api/panjia/payroll';
 import { useEmployeeMap } from '../useEmployeeMap';
+import { useDict } from '@/utils/dict';
 
 const props = defineProps<{ businessId: string | number }>();
+
+const { panjia_payroll_bonus_type: bonusTypeOptions } = toRefs<any>(useDict('panjia_payroll_bonus_type'));
+const typeLabel = (v?: string) =>
+  bonusTypeOptions.value?.find((d: any) => d.value === v)?.label || v || '—';
 
 const loading = ref(false);
 const loadError = ref('');

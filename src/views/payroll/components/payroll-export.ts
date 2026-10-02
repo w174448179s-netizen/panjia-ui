@@ -6,7 +6,7 @@ import { resolveBizNo } from '@/utils/panjiaBiz';
  * 工资明细多 sheet 导出共享模块。
  * <p>
  * 对齐天街工资表 2026.08.xlsx 七个 sheet 列结构：
- * - 工资表 sheet「工资表」28 列（含经纪人 + 店长）
+ * - 工资表 sheet「工资表」31 列（含经纪人 + 店长；奖金/其他收入/其他支出独立列）
  * - 新签业绩 sheet「新签业绩」12 列（期间全部新签事实明细）
  * - 结佣业绩 sheet「结佣业绩」12 列（期间全部结佣事实明细）
  * - 店长 sheet「店长工资」15 列
@@ -87,15 +87,15 @@ export interface SheetConfig {
 }
 
 export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
-  // ────────────── 工资表 sheet（28 列，含经纪人 + 店长） ──────────────
+  // ────────────── 工资表 sheet（31 列，含经纪人 + 店长） ──────────────
   AGENT: {
     name: '工资表',
     roles: ['AGENT', 'MANAGER'],
     heads: [
       '门店', '员工编号', '姓名', '职级', '职位', '当月新签业绩', '当月新签业绩提成比列',
       '绩效提成扣点', '个人提点奖励', '当月最终提成比列', '结佣业绩', '提成比例', '提成金额',
-      '招聘奖励', '底薪', '绩效', '考勤扣款', '积分扣款', '应发工资',
-      '社保扣款', '公积金扣款', '往月负工资', '商业保险', '宿舍管理费',
+      '招聘奖励', '底薪', '奖金', '其他收入', '考勤扣款', '积分扣款', '应发工资',
+      '社保扣款', '公积金扣款', '往月负工资', '商业保险', '宿舍管理费', '其他支出',
       '工资合计', '实发工资', '个税扣除', '最终发放',
     ],
     row: (r) => {
@@ -116,6 +116,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         num(r.mentorBonus),
         baseSalaryOf(r),
         num(r.bonus),
+        num(r.otherIncome),
         neg(r.attendanceFee),
         neg(r.pointsFee),
         num(r.gross),
@@ -124,6 +125,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         neg(Math.abs(Number(r.negativeCarryover) || 0)),
         neg(r.commercialInsurance),
         neg(r.dormitoryFee),
+        neg(r.otherDeduct),
         num(grossMinusDeduct(r)),           // 工资合计 = 应发 - 扣款（未减个税）
         num(grossMinusDeduct(r)),           // 实发工资 = 工资合计（减个税前）
         neg(r.tax),                         // 个税扣除

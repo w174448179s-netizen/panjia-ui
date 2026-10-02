@@ -25,8 +25,8 @@
             <el-table-column label="员工" min-width="160">
               <template #default="{ row }">{{ empDisplay(row.employeeId) }}</template>
             </el-table-column>
-            <el-table-column label="子类型" prop="subType" width="120">
-              <template #default="{ row }">{{ row.subType || '—' }}</template>
+            <el-table-column label="类型" prop="subType" width="120">
+              <template #default="{ row }">{{ typeLabel(row) }}</template>
             </el-table-column>
             <el-table-column label="金额" prop="amount" width="130" align="right">
               <template #default="{ row }"><b class="text-success">¥{{ fmt(row.amount) }}</b></template>
@@ -59,8 +59,8 @@
             <el-table-column label="员工" min-width="160">
               <template #default="{ row }">{{ empDisplay(row.employeeId) }}</template>
             </el-table-column>
-            <el-table-column label="子类型" prop="subType" width="120">
-              <template #default="{ row }">{{ row.subType || '—' }}</template>
+            <el-table-column label="类型" prop="subType" width="120">
+              <template #default="{ row }">{{ typeLabel(row) }}</template>
             </el-table-column>
             <el-table-column label="金额" prop="amount" width="130" align="right">
               <template #default="{ row }"><b class="text-danger">¥{{ fmt(row.amount) }}</b></template>
@@ -91,7 +91,7 @@
     <!-- 新增弹窗 -->
     <el-dialog v-model="showAdd" :title="`新增${dialogTypeLabel}`" width="500px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
-        <el-form-item label="类型">
+        <el-form-item label="类型" prop="itemType">
           <el-radio-group v-model="form.itemType" @change="onTypeChange">
             <el-radio-button value="OTHER_INCOME">其他收入</el-radio-button>
             <el-radio-button value="OTHER_DEDUCT">其他支出</el-radio-button>
@@ -118,8 +118,15 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="子类型">
-          <el-input v-model="form.subType" placeholder="如：补贴、报销等（选填）" />
+        <el-form-item label="明细类型" prop="subType">
+          <el-select v-model="form.subType" :placeholder="form.itemType === 'OTHER_INCOME' ? '请选择收入类型' : '请选择支出类型'" filterable style="width:100%">
+            <el-option
+              v-for="d in subTypeOptions"
+              :key="d.value"
+              :label="d.label"
+              :value="d.value"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="金额" prop="amount">
           <el-input-number v-model="form.amount" :min="0" :precision="2" :step="100" controls-position="right" style="width:100%" />
@@ -137,12 +144,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, toRefs } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import { payrollApi, type ManualItem } from '@/api/panjia/payroll';
 import { employeeApi } from '@/api/panjia/employee';
 import type { Employee } from '@/api/panjia/types';
+import { useDict } from '@/utils/dict';
+
+/** 收入/支出类型字典（系统管理-字典管理可扩充）；存字典 value，展示翻 label */
+const {
+  panjia_payroll_income_type: incomeTypeOptions,
+  panjia_payroll_deduct_type: deductTypeOptions,
+} = toRefs<any>(useDict('panjia_payroll_income_type', 'panjia_payroll_deduct_type'));
+
+const dictLabel = (options: any[], v?: string) =>
+  options?.find((d) => d.value === v)?.label || v || '—';
+/** 列表行按 itemType 选对应字典；字典外的历史自由文本原样展示 */
+const typeLabel = (row: { itemType?: string; subType?: string }) =>
+  row.itemType === 'OTHER_DEDUCT'
+    ? dictLabel(deductTypeOptions.value, row.subType)
+    : dictLabel(incomeTypeOptions.value, row.subType);
 
 const period = ref(new Date().toISOString().slice(0, 7));
 const list = ref<ManualItem[]>([]);
@@ -167,8 +189,10 @@ const form = ref<any>({
 });
 
 const rules = {
+  itemType: [{ required: true, message: '请选择类型', trigger: 'change' }],
   period: [{ required: true, message: '请选择归属月', trigger: 'change' }],
   employeeId: [{ required: true, message: '请选择员工', trigger: 'change' }],
+  subType: [{ required: true, message: '请选择明细类型', trigger: 'change' }],
   amount: [{ required: true, message: '请输入金额', trigger: 'blur' }],
   reason: [{ required: true, message: '请输入事由', trigger: 'blur' }],
 };
@@ -196,6 +220,11 @@ const dialogTypeLabel = computed(() =>
   form.value.itemType === 'OTHER_INCOME' ? '其他收入' : '其他支出'
 );
 
+/** 表单当前类型对应的字典选项 */
+const subTypeOptions = computed(() =>
+  form.value.itemType === 'OTHER_DEDUCT' ? deductTypeOptions.value : incomeTypeOptions.value
+);
+
 const empDisplay = (id: number) => {
   const emp = empCache.value.get(String(id));
   return emp ? `${emp.employeeName}（${emp.employeeCode}）` : String(id);
@@ -205,7 +234,10 @@ const onTabChange = (name: string) => {
   activeTab.value = name;
 };
 
-const onTypeChange = () => { /* form.itemType updated by v-model */ };
+const onTypeChange = () => {
+  // 切换收入/支出后明细类型字典不同，清空已选避免错选
+  form.value.subType = '';
+};
 
 const load = async () => {
   if (!period.value) {

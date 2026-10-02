@@ -24,8 +24,8 @@
             {{ empDisplay(row.employeeId) }}
           </template>
         </el-table-column>
-        <el-table-column label="子类型" prop="subType" width="120">
-          <template #default="{ row }">{{ row.subType || '—' }}</template>
+        <el-table-column label="类型" prop="subType" width="120">
+          <template #default="{ row }">{{ typeLabel(row.subType) }}</template>
         </el-table-column>
         <el-table-column label="金额" prop="amount" width="130" align="right">
           <template #default="{ row }"><b>¥{{ fmt(row.amount) }}</b></template>
@@ -80,8 +80,15 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="子类型">
-          <el-input v-model="form.subType" placeholder="如：季度奖金、年终奖等（选填）" />
+        <el-form-item label="类型" prop="subType">
+          <el-select v-model="form.subType" placeholder="请选择奖金类型" filterable style="width:100%">
+            <el-option
+              v-for="d in bonusTypeOptions"
+              :key="d.value"
+              :label="d.label"
+              :value="d.value"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="金额" prop="amount">
           <el-input-number v-model="form.amount" :min="0" :precision="2" :step="100" controls-position="right" style="width:100%" />
@@ -101,7 +108,7 @@
       <el-descriptions v-if="detailData" :column="2" border size="small">
         <el-descriptions-item label="归属月">{{ detailData.period }}</el-descriptions-item>
         <el-descriptions-item label="员工">{{ empDisplay(detailData.employeeId) }}</el-descriptions-item>
-        <el-descriptions-item label="子类型">{{ detailData.subType || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="类型">{{ typeLabel(detailData.subType) }}</el-descriptions-item>
         <el-descriptions-item label="金额">¥{{ fmt(detailData.amount) }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="statusTagType(detailData.status)" size="small">{{ statusLabel(detailData.status) }}</el-tag>
@@ -118,16 +125,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, toRefs } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import { payrollApi, type ManualItem } from '@/api/panjia/payroll';
 import { employeeApi } from '@/api/panjia/employee';
 import type { Employee } from '@/api/panjia/types';
+import { useDict } from '@/utils/dict';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
 const route = useRoute();
+
+/** 奖金类型字典（系统管理-字典管理可扩充）；存字典 value，展示翻 label */
+const { panjia_payroll_bonus_type: bonusTypeOptions } = toRefs<any>(useDict('panjia_payroll_bonus_type'));
+const typeLabel = (v?: string) =>
+  bonusTypeOptions.value?.find((d: any) => d.value === v)?.label || v || '—';
 
 const period = ref(new Date().toISOString().slice(0, 7));
 const list = ref<ManualItem[]>([]);
@@ -152,6 +165,7 @@ const form = ref<any>({
 const rules = {
   period: [{ required: true, message: '请选择归属月', trigger: 'change' }],
   employeeId: [{ required: true, message: '请选择员工', trigger: 'change' }],
+  subType: [{ required: true, message: '请选择奖金类型', trigger: 'change' }],
   amount: [{ required: true, message: '请输入金额', trigger: 'blur' }],
   reason: [{ required: true, message: '请输入事由', trigger: 'blur' }],
 };
