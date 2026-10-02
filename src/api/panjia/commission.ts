@@ -223,7 +223,7 @@ export interface CommissionApplyCreateDTO {
 
 // 结佣明细「合同」维度行
 export interface CommissionContractVO {
-  applicationId?: number;   // 未发起（NONE）时为空
+  applicationId?: number;   // 结佣申请单 ID
   applyNo?: string;
   contractNo?: string;
   orderNo?: string;
@@ -256,7 +256,7 @@ export interface CommissionContractVO {
   /** 该期间是否已封账（封账后不可作废/调整） */
   periodClosed?: boolean;
   deptId?: number;
-  status: string;           // NONE / DRAFT / SUBMITTED / LOCKED / REJECTED / CANCELLED
+  status: string;           // DRAFT / SUBMITTED / LOCKED / REJECTED / CANCELLED
   receivedStatus?: string;   // 实收审批状态 APPROVED / SUBMITTED / DRAFT / null
   applicantId?: number;
   createTime?: string;
@@ -287,13 +287,9 @@ export const commissionApi = {
     panjiaRequest.get<{ instanceId: string | number }>(`/commission/apply/${id}/instance`),
   createApplication: (data: CommissionApplyCreateDTO) =>
     panjiaRequest.post<number>('/commission/apply', data),
+  /** 作废结佣申请单 */
   cancelApplication: (id: number | string) =>
     panjiaRequest.post<void>(`/commission/apply/${id}/cancel`),
-  /** 作废未发起的合同结佣（本期不再发起，创建 CANCELLED 占位单，后续仍可重新发起） */
-  cancelUnapplied: (period: string, contractNo: string) =>
-    panjiaRequest.post<void>('/commission/apply/cancel-unapplied', null, {
-      params: { period, contractNo },
-    }),
   /** 按合同号批量发起（CompletableFuture 挂起等待，返回每张单处理结果） */
   batchApplyByContract: (period: string, contractNos: string[]) =>
     panjiaRequest.post<BatchResultDTO>('/commission/apply/batch-apply-by-contract', {

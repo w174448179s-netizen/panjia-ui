@@ -154,106 +154,6 @@
         </el-table>
       </div>
     </template>
-    <!-- 未发起模式：无审批单，界面骨架与审批详情一致，明细为该合同新签业绩构成 -->
-    <template v-else-if="summary && !adjustOnly">
-      <el-descriptions :column="3" border size="small" class="detail-desc">
-        <el-descriptions-item label="期间">{{ summary.period || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="状态"><el-tag type="info" size="small">未发起</el-tag></el-descriptions-item>
-        <el-descriptions-item label="合同号">{{ summary.contractNo || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="订单号">{{ summary.orderNo || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="发起人">—</el-descriptions-item>
-        <el-descriptions-item label="实收合计">
-          <span class="amount amount-red">¥{{ formatAmount(summary.amount) }}</span>
-          <span class="converted-inline">折算后 <span class="amount amount-ink">¥{{ formatAmount(summary.convertedAmount) }}</span></span>
-        </el-descriptions-item>
-        <el-descriptions-item label="新签合计" :span="2">
-          <span class="amount amount-red">¥{{ formatAmount(summary.expectedAmount) }}</span>
-          <span class="converted-inline">折算后 <span class="amount amount-ink">¥{{ formatAmount(summary.expectedConvertedAmount) }}</span></span>
-        </el-descriptions-item>
-        <el-descriptions-item label="签约/认购时间">{{ formatDateTime(summary.businessDate) }}</el-descriptions-item>
-        <el-descriptions-item label="房源地址" :span="2">{{ summary.propertyAddress || '—' }}</el-descriptions-item>
-      </el-descriptions>
-      <div class="detail-table-wrap">
-        <div class="detail-table-title">每人业绩明细（{{ perfRows.length }} 条）</div>
-        <el-table :data="perfRows" border max-height="420" class="detail-facts-table" :row-class-name="perfRowClassName">
-          <el-table-column label="序号" type="index" width="55" align="center" />
-          <el-table-column label="门店/组别" align="left" min-width="150">
-            <template #default="scope">
-              <span v-if="scope.row.deptPath" class="dept-wrap" :title="scope.row.deptPath">
-                <span class="dept-store">{{ deptStore(scope.row.deptPath) }}</span>
-                <span v-if="deptGroup(scope.row.deptPath)" class="dept-group"> · {{ deptGroup(scope.row.deptPath) }}</span>
-              </span>
-              <span v-else>—</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="工号" align="center" width="100">
-            <template #default="scope">{{ scope.row.employeeCode || '—' }}</template>
-          </el-table-column>
-          <el-table-column label="姓名" align="center" min-width="120">
-            <template #default="scope">
-              <span class="person-name">{{ scope.row.employeeName || '—' }}</span>
-              <el-tag v-if="scope.row.manualAdjust" type="success" size="small" effect="dark" style="margin-left: 4px">新增角色人</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="所属角色" align="center" min-width="100">
-            <template #default="scope">{{ scope.row.roleType || scope.row.roleName || '—' }}</template>
-          </el-table-column>
-          <el-table-column label="角色占比" align="center" width="90">
-            <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
-          </el-table-column>
-          <el-table-column label="实收业绩" align="right" width="140">
-            <template #default="scope">
-              <span v-if="scope.row.receivedAmount != null" class="amount amount-red">¥{{ formatAmount(scope.row.receivedAmount) }}</span>
-              <span v-else>—</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="实收折算后" align="right" width="140">
-            <template #default="scope">
-              <span v-if="scope.row.receivedConvertedAmount != null" class="amount amount-ink">¥{{ formatAmount(scope.row.receivedConvertedAmount) }}</span>
-              <span v-else>—</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="新签业绩" align="right" width="190">
-            <template #default="scope">
-              <div>
-                <template v-if="isPerfAdjusted(scope.row)">
-                  <span class="amount-strike">¥{{ formatAmount(scope.row.originalAmount) }}</span>
-                  <span class="amount-arrow">→</span>
-                  <span class="amount">¥{{ formatAmount(scope.row.amount) }}</span>
-                </template>
-                <span v-else class="amount">¥{{ formatAmount(scope.row.amount) }}</span>
-              </div>
-              <div v-if="scope.row.expectPeriod" class="text-muted text-xs">{{ scope.row.expectPeriod }}</div>
-            </template>
-          </el-table-column>
-          <el-table-column label="折算后" align="right" width="180">
-            <template #default="scope">
-              <template v-if="isPerfAdjusted(scope.row)">
-                <span class="amount-strike">¥{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
-                <span class="amount-arrow">→</span>
-                <span class="amount amount-ink">¥{{ formatAmount(scope.row.convertedAmount) }}</span>
-              </template>
-              <span v-else class="amount amount-ink">¥{{ formatAmount(scope.row.convertedAmount) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="实收业绩" align="right" width="140">
-            <template #default="scope">
-              <span v-if="scope.row.receivedAmount != null" class="amount amount-red">¥{{ formatAmount(scope.row.receivedAmount) }}</span>
-              <span v-else>—</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="实收折算后" align="right" width="140">
-            <template #default="scope">
-              <span v-if="scope.row.receivedConvertedAmount != null" class="amount amount-ink">¥{{ formatAmount(scope.row.receivedConvertedAmount) }}</span>
-              <span v-else>—</span>
-            </template>
-          </el-table-column>
-          <template #empty>
-            <el-empty description="该合同暂无新签业绩明细" />
-          </template>
-        </el-table>
-      </div>
-    </template>
 
     <!-- 结佣调整弹窗（明细级）；合同级走 CommissionContractAdjustDialog 大弹窗（与新签调整一致） -->
     <el-dialog v-model="adjustDialog.visible" title="结佣调整（明细级）" width="520px" append-to-body destroy-on-close @close="onAdjustDialogClose">
@@ -320,18 +220,13 @@
 import { computed, reactive, ref, onMounted, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
-import { commissionApi, type CommissionApplication, type CommissionItemDetail, type CommissionContractVO } from '@/api/panjia/commission';
-import { performanceApi, type PerformanceManageRow } from '@/api/panjia/performance';
+import { commissionApi, type CommissionApplication, type CommissionItemDetail } from '@/api/panjia/commission';
 import { useEmployeeMap } from '../useEmployeeMap';
 import CommissionContractAdjustDialog from './CommissionContractAdjustDialog.vue';
 
 const props = defineProps<{
-  /** 已发起模式：结佣申请单 businessId（工作流查看/办理、结佣明细页已发起行） */
+  /** 结佣申请单 businessId（工作流查看/办理、结佣明细页详情） */
   businessId?: string | number;
-  /** 未发起模式：合同行摘要。无审批单，按同款界面骨架展示新签业绩构成 */
-  summary?: CommissionContractVO | null;
-  /** 未发起模式的查询号（合同号，一手房等无合同号时传订单号） */
-  bizNo?: string;
   /** 从列表「调整」入口进入：详情加载后自动弹出合同级调整弹窗（仅 LOCKED 生效） */
   autoAdjust?: boolean;
   /** 仅调整模式：不渲染详情内容，只展示调整弹窗（配合 autoAdjust 使用） */
@@ -344,8 +239,6 @@ const loading = ref(false);
 const loadError = ref('');
 const detail = ref<CommissionApplication | null>(null);
 const items = ref<CommissionItemDetail[]>([]);
-/** 未发起模式：合同新签业绩构成明细（listManageContractDetails，factType=PERF_EXPECT） */
-const perfRows = ref<PerformanceManageRow[]>([]);
 
 const { load: loadEmployees, name: employeeName } = useEmployeeMap();
 
@@ -403,13 +296,13 @@ const formatRatio = (val: number | string | undefined | null): string => {
 };
 
 const STATUS_MAP: Record<string, string> = {
-  NONE: '未发起', DRAFT: '待提交', SUBMITTED: '审批中', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
+  DRAFT: '待提交', SUBMITTED: '审批中', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
 };
 /** SUBMITTED 全程「审批中」，与结佣明细列表、工作流系统页（字典 waiting）保持一致 */
 const statusLabel = (s: string) => STATUS_MAP[s] || s || '—';
 const statusTagType = (s: string) => {
   const map: Record<string, string> = {
-    NONE: 'info', DRAFT: 'info', SUBMITTED: 'warning', APPROVED: 'success', LOCKED: 'success', REJECTED: 'danger', CANCELLED: 'info',
+    DRAFT: 'info', SUBMITTED: 'warning', APPROVED: 'success', LOCKED: 'success', REJECTED: 'danger', CANCELLED: 'info',
   };
   return (map as any)[s] || 'info';
 };
@@ -433,19 +326,9 @@ const applicantName = (name?: string | null, userId?: number | string | null) =>
   return '—';
 };
 
-/** 未发起模式业绩行：金额与调整前不一致即视为已调整（与合同业绩明细页同口径） */
-const isPerfAdjusted = (row: { amount?: number | string | null; originalAmount?: number | string | null }): boolean =>
-  num(row.amount) !== num(row.originalAmount);
-
 /** 新增角色人行高亮（已生效 MANUAL-ADJ/CADJ 或审批中新增）：浅绿底，一眼可辨 */
 const itemRowClassName = ({ row }: { row: any }): string =>
   row.manualAdjust || row.newMemberPending ? 'new-member-row' : '';
-const perfRowClassName = ({ row }: { row: any }): string =>
-  row.manualAdjust ? 'new-member-row' : '';
-
-/** 业绩行合并 key：员工 + 所属角色（实收口径与应收口径的行按此对应） */
-const perfKey = (row: { employeeId?: string | null; roleType?: string | null; roleName?: string | null }): string =>
-  `${row.employeeId}|${row.roleType || row.roleName || ''}`;
 
 // ==================== 结佣调整弹窗 ====================
 
@@ -606,7 +489,7 @@ watch(() => detail.value, (d) => {
   }
 });
 
-/** 已发起模式：加载申请单详情 + 每人明细 */
+/** 加载申请单详情 + 每人明细 */
 const loadDetail = async () => {
   if (props.businessId == null || props.businessId === '') return;
   loading.value = true;
@@ -623,43 +506,7 @@ const loadDetail = async () => {
   }
 };
 
-onMounted(async () => {
-  // 未发起模式：无审批单，按合同/订单号拉新签业绩构成（PERF_EXPECT），
-  // 并发拉实收口径（PERF_REAL）按员工+角色合并，补充每人实收金额
-  if (props.businessId == null || props.businessId === '') {
-    if (props.summary && props.bizNo) {
-      loading.value = true;
-      try {
-        const period = String(props.summary.period || '');
-        const nos = String(props.bizNo);
-        const [expectRes, realRes] = await Promise.all([
-          performanceApi.listManageContractDetails({ period, factType: 'PERF_EXPECT', contractNos: nos }),
-          performanceApi.listManageContractDetails({ period, factType: 'PERF_REAL', contractNos: nos }),
-        ]);
-        // 实收按「员工+角色」聚合（同 key 多条时累加）
-        const realMap = new Map<string, { amount: number; converted: number }>();
-        for (const r of (realRes.data ?? []) as PerformanceManageRow[]) {
-          const key = perfKey(r);
-          const prev = realMap.get(key);
-          realMap.set(key, {
-            amount: num(prev?.amount) + num(r.amount),
-            converted: num(prev?.converted) + num(r.convertedAmount),
-          });
-        }
-        perfRows.value = ((expectRes.data ?? []) as PerformanceManageRow[]).map((row) => {
-          const real = realMap.get(perfKey(row));
-          return { ...row, receivedAmount: real ? real.amount : null, receivedConvertedAmount: real ? real.converted : null };
-        });
-      } catch {
-        loadError.value = '加载业绩明细失败';
-      } finally {
-        loading.value = false;
-      }
-    }
-    return;
-  }
-  await loadDetail();
-});
+onMounted(loadDetail);
 </script>
 
 <style lang="scss" scoped>

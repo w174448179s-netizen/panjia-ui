@@ -105,7 +105,7 @@
       <el-table border class="data-table" :data="contractList">
         <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="{ row }">
-            <!-- 无论是否已发起单据，都允许点击：未发起 → 跳合同业绩详情；已发起 → 打开结佣申请详情 -->
+            <!-- 点击打开结佣申请详情 -->
             <el-button type="primary" link class="contract-link" @click="viewDetail(row)">
               {{ contractOrOrderNo(row) }}
             </el-button>
@@ -120,7 +120,7 @@
               <span class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
             </template>
             <el-tooltip
-              v-else-if="num(row.amount) === 0 && row.status === 'NONE'"
+              v-else-if="num(row.amount) === 0"
               content="新签业绩缺失，请先导入或补录该合同新签"
               placement="top"
             >
@@ -214,8 +214,8 @@
                 link type="warning"
                 :loading="submittingMap[contractOrOrderNo(row)]"
                 @click="onSubmit(row as CommissionContractVO)">{{ row.status === 'REJECTED' ? '重提' : '提交' }}</el-button>
-              <!-- 可作废：未发起 / 审批中 / 已驳回 / 已锁定；已作废除外；封账期间不可作废 -->
-              <el-button v-if="['NONE', 'DRAFT', 'SUBMITTED', 'REJECTED', 'LOCKED'].includes(row.status) && canCancel(row) && !row.periodClosed" link type="info" @click="cancel(row)">作废</el-button>
+              <!-- 可作废：草稿 / 审批中 / 已驳回 / 已锁定；已作废除外；封账期间不可作废 -->
+              <el-button v-if="['DRAFT', 'SUBMITTED', 'REJECTED', 'LOCKED'].includes(row.status) && canCancel(row) && !row.periodClosed" link type="info" @click="cancel(row)">作废</el-button>
             </div>
           </template>
         </el-table-column>
@@ -239,13 +239,11 @@
       </div>
     </el-card>
 
-    <!-- 详情弹窗：统一复用 CommissionApplyDetail——已发起显示结佣审批详情，未发起以同款骨架展示业绩构成 -->
+    <!-- 详情弹窗：结佣申请详情 -->
     <el-dialog v-model="showDetail" title="结佣详情" width="1100px" top="5vh" append-to-body destroy-on-close>
       <CommissionApplyDetail
         v-if="showDetail"
         :business-id="detailApplicationId ?? undefined"
-        :summary="detailSummary"
-        :biz-no="detailBizNo ?? undefined"
         :period-closed="detailPeriodClosed"
         @cancelled="onDetailCancelled"
       />
@@ -405,10 +403,9 @@ const userStore = useUserStore();
 /** 经纪人：本人口径（后端强制按本人 employeeId 过滤），不展示员工筛选 */
 const isAgent = computed(() => userStore.roles.includes('agent'));
 
-/** 是否可以作废：超管全部可操作；未发起行无申请人（列表已按部门范围过滤），权限由后端门店校验；已发起单仅本人可操作 */
+/** 是否可以作废：超管全部可操作；其他用户仅本人发起的单据可操作 */
 const canCancel = (row: CommissionContractVO): boolean => {
   if (userStore.roles.includes('admin') || userStore.roles.includes('superadmin')) return true;
-  if (!row.applicationId) return true;
   return String(row.applicantId) === String(userStore.userId);
 };
 
@@ -444,18 +441,9 @@ const queryParams = reactive({
   keyword: '' as string,
 });
 
-// 汇总统计（按合同维度）
-const summary = computed(() => {
-  const list = contractList.value;
-  const totalAmount = list.reduce((s, r) => s + num(r.amount), 0);
-  const detailCount = list.reduce((s, r) => s + (r.detailCount || 0), 0);
-  return {
-    contractCount: list.length,
-    detailCount,
-    employeeCount: 0,
-    totalAmount,
-  };
-});
+// 汇总统计：后端按过滤后全集返回（跨页全局，不随分页变化）
+const emptySummary = () => ({ contractCount: 0, employeeCount: 0, detailCount: 0, totalAmount: 0 });
+const summary = ref(emptySummary());
 
 // 数字安全转换
 const num = (v: number | string | null | undefined): number => {
@@ -537,7 +525,7 @@ const handleDeptChange = () => {
 // 与工作流系统页（我发起的/我的已办，全局字典 waiting）保持同一叫法——
 // 系统页状态是粗粒度运行中，无法按节点细分，两段式会导致页面间不一致
 const STATUS_MAP: Record<string, string> = {
-  NONE: '未发起', DRAFT: '草稿', SUBMITTED: '审批中', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
+  DRAFT: '草稿', SUBMITTED: '审批中', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
 };
 const statusLabel = (row: CommissionContractVO) => STATUS_MAP[row.status] || row.status || '—';
 // 筛选下拉只列实际会出现在列表中的状态：
@@ -549,16 +537,16 @@ const statusOptions = Object.entries(STATUS_MAP)
   .map(([value, label]) => ({ value, label }));
 const statusTagType = (s: string) => {
   const map: Record<string, string> = {
-    NONE: 'info', DRAFT: 'info', SUBMITTED: 'warning', APPROVED: 'primary', LOCKED: 'success', REJECTED: 'danger', CANCELLED: 'info',
+    DRAFT: 'info', SUBMITTED: 'warning', APPROVED: 'primary', LOCKED: 'success', REJECTED: 'danger', CANCELLED: 'info',
   };
   return (map as any)[s] || 'info';
 };
 
-// 可发起：未发起/已作废（需有金额，新签缺失时 amount=0 不允许）；草稿（始终可提交，
-// 明细可能因新签调整被冲销，提交时后端自动从当前新签事实重建）
+// 可提交：已作废（需有金额）或草稿（始终可提交，
+// 明细可能因新签调整被冲销，提交时后端自动从当前新签事实重建）；驳回单走「重提」
 const canOriginate = (row: CommissionContractVO) =>
   row.status === 'DRAFT'
-  || ((row.status === 'NONE' || row.status === 'CANCELLED') && num(row.amount) !== 0);
+  || (row.status === 'CANCELLED' && num(row.amount) !== 0);
 
 // 列表
 const getList = async () => {
@@ -577,9 +565,16 @@ const getList = async () => {
     const data = res.data;
     contractList.value = data?.rows ?? [];
     total.value = data?.total ?? 0;
+    summary.value = {
+      contractCount: num(data?.summary?.contractCount) || total.value,
+      employeeCount: num(data?.summary?.employeeCount),
+      detailCount: num(data?.summary?.detailCount),
+      totalAmount: num(data?.summary?.totalAmount),
+    };
   } catch {
     contractList.value = [];
     total.value = 0;
+    summary.value = emptySummary();
   } finally {
     loading.value = false;
   }
@@ -600,7 +595,7 @@ const resetQuery = () => {
   loadBizTypes().then(getList);
 };
 
-// 按钮 loading 状态（以 contractNo 为 key：未发起行无 applicationId，统一用 contractNo）
+// 按钮 loading 状态（以 contractNo 为 key）
 const submittingMap = reactive<Record<string, boolean>>({});
 
 // 审批节点中文名
@@ -704,17 +699,15 @@ const doBatchApprove = async () => {
   }
 };
 
-// 作废：未发起行创建 CANCELLED 占位单（本期不再发起，仍可重新发起）；已发起行走单据作废
+// 作废：已发起单据作废（审批中/已驳回/草稿/已锁定）
 const cancel = async (row: CommissionContractVO) => {
-  const unapplied = !row.applicationId;
+  if (!row.applicationId) return;
   const isLocked = row.status === 'LOCKED';
   try {
     await ElMessageBox.confirm(
-      unapplied
-        ? `确认作废合同「${resolveBizNo(row.bizType, row.contractNo, row.orderNo)}」本期结佣？作废后本期不再发起，仍可重新发起。`
-        : isLocked
-          ? `确认作废已锁定申请单「${row.applyNo}」？\n作废后该单全部结佣明细将冲销，不再计入工资；业绩事实释放，可重新发起并按发起日生成当月结佣记录。`
-          : `确认作废申请单「${row.applyNo}」？作废后不可恢复。`,
+      isLocked
+        ? `确认作废已锁定申请单「${row.applyNo}」？\n作废后该单全部结佣明细将冲销，不再计入工资；业绩事实释放，可重新发起并按发起日生成当月结佣记录。`
+        : `确认作废申请单「${row.applyNo}」？作废后不可恢复。`,
       '提示',
       { type: 'warning', dangerouslyUseHTMLString: false },
     );
@@ -722,31 +715,20 @@ const cancel = async (row: CommissionContractVO) => {
     return;
   }
   try {
-    if (unapplied) {
-      await commissionApi.cancelUnapplied(row.period, resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo);
-    } else {
-      await commissionApi.cancelApplication(row.applicationId);
-    }
+    await commissionApi.cancelApplication(row.applicationId);
     ElMessage.success('已作废');
     getList();
   } catch { /* 拦截器处理 */ }
 };
 
-// 详情：统一入口——已发起行显示结佣审批详情，未发起行以同款骨架展示业绩构成
+// 详情：结佣申请详情
 const showDetail = ref(false);
-// 传给 CommissionApplyDetail 的业务 ID（已发起行才设）
+// 传给 CommissionApplyDetail 的业务 ID
 const detailApplicationId = ref<number | string | null>(null);
-// 未发起行的合同摘要 + 查询号（合同号，一手房无合同号时为订单号）
-const detailSummary = ref<CommissionContractVO | null>(null);
-const detailBizNo = ref<string | null>(null);
 // 选中行的期间封账状态（封账后详情弹窗内隐藏作废/调整按钮）
 const detailPeriodClosed = ref(false);
 
 const viewDetail = (row: CommissionContractVO) => {
-  detailSummary.value = row.applicationId ? null : row;
-  detailBizNo.value = row.applicationId
-    ? null
-    : (resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || null);
   detailApplicationId.value = row.applicationId ?? null;
   detailPeriodClosed.value = !!row.periodClosed;
   showDetail.value = true;

@@ -12,6 +12,8 @@ export interface PageQuery {
 export interface PageResult<T = any> {
   total: number;
   rows: T[];
+  /** 跨页全局汇总（与过滤条件一致，不随分页变化），后端按需返回 */
+  summary?: Record<string, number | string>;
 }
 
 /**
