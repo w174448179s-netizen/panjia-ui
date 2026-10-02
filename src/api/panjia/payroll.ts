@@ -218,7 +218,7 @@ export const payrollApi = {
   },
 
   // 调整/补发
-  listAdjusts(params: { period?: string; adjustType?: string; status?: string; pageNum?: number; pageSize?: number }) {
+  listAdjusts(params: { period?: string; adjustType?: string; status?: string; employeeId?: number; pageNum?: number; pageSize?: number }) {
     return panjiaRequest.get<{ total: number; rows: PayrollAdjust[] }>('/payroll/adjust/list', params);
   },
   createAdjust(data: Partial<PayrollAdjust>) {

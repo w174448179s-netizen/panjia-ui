@@ -271,6 +271,7 @@ const getList = async () => {
       period: queryParams.period || undefined,
       adjustType: queryParams.adjustType || undefined,
       status: queryParams.status || undefined,
+      employeeId: queryParams.employeeId ? Number(queryParams.employeeId) : undefined,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
     });

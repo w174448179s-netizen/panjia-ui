@@ -279,6 +279,9 @@ export const commissionApi = {
     panjiaRequest.get<PageResult<CommissionApplication>>('/commission/apply/list', params),
   listContracts: (params: CommissionApplyQuery) =>
     panjiaRequest.get<PageResult<CommissionContractVO>>('/commission/apply/contract-list', params),
+  /** 有结佣申请单的期间（倒序），用于默认选中最新有数据期间 */
+  listPeriods: () =>
+    panjiaRequest.get<string[]>('/commission/apply/periods'),
   /** id 接受字符串：雪花 ID 由后端以字符串下发，Number() 转换 19 位会丢精度 */
   getApplication: (id: number | string) =>
     panjiaRequest.get<{ application: CommissionApplication; items: CommissionItemDetail[] }>(`/commission/apply/${id}`),

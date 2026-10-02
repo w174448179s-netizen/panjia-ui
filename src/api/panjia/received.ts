@@ -113,6 +113,9 @@ export interface BatchApproveResult {
 export const receivedApi = {
   list: (params: ReceivedQuery) =>
     panjiaRequest.get<ReceivedPage>('/performance/received/list', params),
+  /** 有实收审批单的期间（倒序），用于默认选中最新有数据期间 */
+  listPeriods: () =>
+    panjiaRequest.get<string[]>('/performance/received/periods'),
   getDetail: (id: string | number) =>
     panjiaRequest.get<ReceivedDetail>(`/performance/received/${id}`),
   /** 按审批单 ID 查流程实例 ID（绕过 workflow:instance:query 权限） */

@@ -724,10 +724,18 @@ const openFromWorkflow = async () => {
 // 本页会被 keep-alive 缓存复用，跳转进来时 onMounted 不一定触发 → 由该 Hook 兜住（含原因说明）
 useWorkflowRouteOpen('/performance/received', openFromWorkflow);
 
-onMounted(() => {
+onMounted(async () => {
   loadDeptTree();
   loadEmployeeMap();
   loadBizTypes();
+  // 默认选中最新有数据期间（当月有单据优先当月），与新签合同页口径一致
+  try {
+    const res = await receivedApi.listPeriods();
+    const periods = res.data ?? [];
+    const now = new Date();
+    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    queryParams.period = periods.includes(current) ? current : (periods[0] ?? '');
+  } catch { /* 期间加载失败保持不选，按全部期间查询 */ }
   getList();
 });
 </script>

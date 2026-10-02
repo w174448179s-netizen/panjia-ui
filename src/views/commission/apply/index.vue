@@ -815,11 +815,20 @@ const formatDateTime = (val?: string | null): string => {
 // 页签缓存复用场景下补开单据（详见 useWorkflowRouteOpen 注释）
 useWorkflowRouteOpen('/performance/apply', openFromWorkflow);
 
-onMounted(() => {
+onMounted(async () => {
   // 受限角色（店长/总监）默认选中本部门，首屏即按本部门查询
   queryParams.deptId = defaultDeptId();
   loadDeptTree();
   loadBizTypes();
+  // 默认选中最新有数据期间（当月有单据优先当月），与新签合同页口径一致；
+  // 不传期间时后端兜底为当月，无数据会是空表，故前端显式选中最新期间
+  try {
+    const res = await commissionApi.listPeriods();
+    const periods = res.data ?? [];
+    const now = new Date();
+    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    queryParams.period = periods.includes(current) ? current : (periods[0] ?? '');
+  } catch { /* 期间加载失败保持不选，由后端兜底 */ }
   getList();
 });
 </script>
