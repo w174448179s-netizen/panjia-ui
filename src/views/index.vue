@@ -128,8 +128,7 @@ const TAG_TYPE_MAP: Record<string, string> = {
   perf_adjust: 'warning',
   perf_received: 'success',
   bonus_apply: 'info',
-  payroll_batch: 'danger',
-  payroll_supplement: 'danger'
+  payroll_batch: 'danger'
 };
 const flowTagType = (flowCode: string) => TAG_TYPE_MAP[flowCode] || 'info';
 
