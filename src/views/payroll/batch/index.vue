@@ -39,9 +39,9 @@
               <el-button link type="primary" @click="viewDetail(row as PayrollBatch)">明细</el-button>
               <!-- 审批通过/驳回/锁定已收敛到「我的待办」（payroll_batch 工作流节点办理），
                    业务页仅保留算薪/提交/发放动作，按状态平铺 -->
-              <el-button v-if="canCalc(row.status)" link type="primary" @click="doAction(row as PayrollBatch, 'calculate')">算薪</el-button>
-              <el-button v-if="row.status === 'CALCULATED'" link type="success" @click="doAction(row as PayrollBatch, 'submit')">提交审批</el-button>
-              <el-button v-if="row.status === 'LOCKED'" link type="warning" @click="doAction(row as PayrollBatch, 'pay')">标记发放</el-button>
+              <el-button v-if="canCalc(row.status)" link type="primary" :loading="actingRowId === row.id" :disabled="!!actingRowId && actingRowId !== row.id" @click="doAction(row as PayrollBatch, 'calculate')">算薪</el-button>
+              <el-button v-if="row.status === 'CALCULATED'" link type="success" :loading="actingRowId === row.id" :disabled="!!actingRowId && actingRowId !== row.id" @click="doAction(row as PayrollBatch, 'submit')">提交审批</el-button>
+              <el-button v-if="row.status === 'LOCKED'" link type="warning" :loading="actingRowId === row.id" :disabled="!!actingRowId && actingRowId !== row.id" @click="doAction(row as PayrollBatch, 'pay')">标记发放</el-button>
             </div>
           </template>
         </el-table-column>
@@ -511,6 +511,8 @@ const commissionItems = ref<CommissionTraceItem[]>([]);
 const showCreate = ref(false);
 const creating = ref(false);
 const createForm = ref({ period: '', deptScope: 'ALL' });
+// 行级操作防抖：算薪/提交/发放期间锁定该行按钮，防止连点产生并发请求
+const actingRowId = ref<string | number>('');
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: '草稿', CALCULATING: '计算中', CALCULATED: '已计算', FAILED: '失败',
@@ -685,6 +687,7 @@ const createBatch = async () => {
 };
 
 const doAction = async (row: PayrollBatch, action: string) => {
+  if (actingRowId.value) return;
   const labelMap: Record<string, string> = { calculate: '算薪', submit: '提交审核', pay: '标记发放' };
   const label = labelMap[action];
   if (action === 'pay') {
@@ -694,13 +697,16 @@ const doAction = async (row: PayrollBatch, action: string) => {
       return;
     }
   }
+  actingRowId.value = row.id;
   try {
     await (payrollApi as any)[action](row.id);
     ElMessage.success(`${label}成功`);
-    loadBatches();
+    await loadBatches();
     if (currentBatch.value?.id === row.id && detailVisible.value) viewDetail(row);
   } catch (e) {
     /* 拦截器处理 */
+  } finally {
+    actingRowId.value = '';
   }
 };
 
