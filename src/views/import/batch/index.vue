@@ -89,7 +89,7 @@
                       <el-icon><Warning /></el-icon>
                     </a>
                   </el-tooltip>
-                  <el-tooltip content="撤销导入（冲销该批次业绩数据）" placement="top">
+                  <el-tooltip content="撤销导入（未结佣可全部回退，自动恢复被替换的旧批次）" placement="top">
                     <a
                       class="action-btn action-btn-danger"
                       :class="{ 'is-loading': cancellingId === scope.row.id }"
@@ -368,16 +368,18 @@ const handleCancelImport = async (row: ImportBatch) => {
   try {
     await modal.confirm(
       `确认撤销批次「${row.batchNo}」？\n` +
-      `将冲销该批次所有业绩事实（已调整事实不受影响），操作不可逆。`
+      `1. 未结佣的批次数据将全部删除回退；存在审批中/人工通过的实收单或结佣单、业绩调整单、结佣调整单时禁止撤销，需先作废处理；\n` +
+      `2. 系统自动通过的实收单及自动生成的结佣草稿将随批级联删除或回退；\n` +
+      `3. 若该批次曾替换同归属月旧批次，旧批次及其业绩将自动恢复生效。\n` +
+      `操作不可逆，请确认后继续。`
     );
   } catch {
     return;
   }
   cancellingId.value = row.id;
   try {
-    const res = await importApi.cancelImport(row.id);
-    const count = res.data ?? 0;
-    modal.msgSuccess(`撤销成功，已冲销 ${count} 条业绩事实`);
+    await importApi.cancelImport(row.id);
+    modal.msgSuccess('撤销成功，批次数据已回退');
     await getList();
   } finally {
     cancellingId.value = undefined;
