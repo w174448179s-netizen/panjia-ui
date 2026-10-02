@@ -136,18 +136,6 @@ export interface AdjustCreateForm {
   detailTargets?: { factId: string; targetAmount: number; shareRatio?: number }[];
 }
 
-export interface PeriodClose {
-  id: string;
-  period: string;
-  status: string;             // OPEN / CLOSED
-  statusName?: string;
-  closeReason?: string;
-  refBatchId?: string;
-  operatorId?: string;
-  closeTime?: string;
-  createTime: string;
-}
-
 export interface ManualFactForm {
   factType: string;
   period: string;
@@ -379,17 +367,9 @@ export const performanceApi = {
   createAdjust: (data: AdjustCreateForm) =>
     panjiaRequest.post<string>('/perf/adjust', data),
 
-  // 期间封账
-  listPeriods: () =>
-    panjiaRequest.get<PeriodClose[]>('/perf/period/list'),
-  closePeriod: (period: string, reason?: string) => {
-    const url = reason
-      ? `/perf/period/close/${period}?reason=${encodeURIComponent(reason)}`
-      : `/perf/period/close/${period}`;
-    return panjiaRequest.post<void>(url);
-  },
-  reopenPeriod: (period: string) =>
-    panjiaRequest.post<void>(`/perf/period/reopen/${period}`),
+  // 期间解封（反结账；封账由工资批次锁定自动完成，无手工封账入口）
+  reopenPeriod: (period: string, reason: string) =>
+    panjiaRequest.post<void>(`/perf/period/reopen/${period}?reason=${encodeURIComponent(reason)}`),
 
   // 手工批量提交实收：选合同 → 后端查 PERF_EXPECT → 镜像造 PERF_REAL → 按订单号分组建审批单
   manualBatchSubmitReceived: (data: { period: string; bizKeys: string[] }) =>

@@ -23,7 +23,7 @@
             {{ statusLabel(currentBatch.status) }}
           </el-tag>
           <span v-if="currentBatch?.status === 'LOCKED' || currentBatch?.status === 'PAID'" class="lock-hint">
-            <el-icon><Lock /></el-icon> 已锁定封账，如需修正请走补发单
+            <el-icon><Lock /></el-icon> 已锁定封账，如需修正请先在「结佣明细」页解封对应期间
           </span>
         </div>
         <div class="header-right">

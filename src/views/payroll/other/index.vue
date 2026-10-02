@@ -13,9 +13,16 @@
             @change="load"
             @keydown.enter.prevent="load"
           />
-          <el-button type="primary" @click="openAdd">+ 新增</el-button>
+          <el-tooltip :disabled="!frozen" :content="freezeTip" placement="top">
+            <span>
+              <el-button type="primary" :disabled="frozen" @click="openAdd">+ 新增</el-button>
+            </span>
+          </el-tooltip>
         </div>
       </div>
+
+      <!-- 期间冻结提示：工资批次审批中及以后状态，禁止新增/删除 -->
+      <el-alert v-if="frozen" :title="freezeTip" type="warning" :closable="false" show-icon class="mb-3" />
 
       <el-tabs v-model="activeTab" @tab-change="onTabChange">
         <!-- 其他收入 -->
@@ -39,8 +46,10 @@
             </el-table-column>
             <el-table-column label="操作" width="80" fixed="right">
               <template #default="{ row }">
-                <el-tooltip content="删除" placement="top">
-                  <el-button link type="danger" icon="Delete" @click="remove(row)"></el-button>
+                <el-tooltip :content="frozen ? freezeTip : '删除'" placement="top">
+                  <span>
+                    <el-button link type="danger" icon="Delete" :disabled="frozen" @click="remove(row)"></el-button>
+                  </span>
                 </el-tooltip>
               </template>
             </el-table-column>
@@ -73,8 +82,10 @@
             </el-table-column>
             <el-table-column label="操作" width="80" fixed="right">
               <template #default="{ row }">
-                <el-tooltip content="删除" placement="top">
-                  <el-button link type="danger" icon="Delete" @click="remove(row)"></el-button>
+                <el-tooltip :content="frozen ? freezeTip : '删除'" placement="top">
+                  <span>
+                    <el-button link type="danger" icon="Delete" :disabled="frozen" @click="remove(row)"></el-button>
+                  </span>
                 </el-tooltip>
               </template>
             </el-table-column>
@@ -151,6 +162,10 @@ import { payrollApi, type ManualItem } from '@/api/panjia/payroll';
 import { employeeApi } from '@/api/panjia/employee';
 import type { Employee } from '@/api/panjia/types';
 import { useDict } from '@/utils/dict';
+import { useManualItemFreeze } from '@/hooks/payroll/useManualItemFreeze';
+
+/** 期间冻结状态（工资批次审批中及以后禁止增删，最终以后端校验为准） */
+const { frozen, freezeTip, refreshFreeze } = useManualItemFreeze();
 
 /** 收入/支出类型字典（系统管理-字典管理可扩充）；存字典 value，展示翻 label */
 const {
@@ -242,6 +257,7 @@ const onTypeChange = () => {
 const load = async () => {
   if (!period.value) {
     list.value = [];
+    refreshFreeze();
     return;
   }
   loading.value = true;
@@ -254,6 +270,8 @@ const load = async () => {
   } finally {
     loading.value = false;
   }
+  // 同步该期间工资批次冻结状态（与列表无依赖，失败不阻断）
+  refreshFreeze(period.value);
 };
 
 const preloadEmployees = async () => {
@@ -285,6 +303,10 @@ const searchEmployee = (keyword: string) => {
 };
 
 const openAdd = () => {
+  if (frozen.value) {
+    ElMessage.warning(freezeTip.value);
+    return;
+  }
   form.value = {
     period: period.value,
     employeeId: null,

@@ -216,6 +216,8 @@
                 @click="onSubmit(row as CommissionContractVO)">{{ row.status === 'REJECTED' ? '重提' : '提交' }}</el-button>
               <!-- 可作废：草稿 / 审批中 / 已驳回 / 已锁定；已作废除外；封账期间不可作废 -->
               <el-button v-if="['DRAFT', 'SUBMITTED', 'REJECTED', 'LOCKED'].includes(row.status) && canCancel(row) && !row.periodClosed" link type="info" @click="cancel(row)">作废</el-button>
+              <!-- 已封账期间：总监/财务可解封（反结账），解封后调整/作废按钮恢复；留痕原因必填 -->
+              <el-button v-if="row.periodClosed && checkPermi(['perf:period:reopen'])" link type="danger" @click="reopenPeriod(row)">解封</el-button>
             </div>
           </template>
         </el-table-column>
@@ -795,6 +797,36 @@ const onSubmit = async (row: CommissionContractVO) => {
   } catch { /* 拦截器处理（含部分失败提示） */ } finally {
     submittingMap[no] = false;
   }
+};
+
+// 解封（反结账）：封账由工资批次「总监锁定」自动完成；封账期间结佣调整/作废被冻结，
+// 纠错时总监/财务在此解封。原因必填并随操作留痕审计（§3.5）
+const reopenPeriod = async (row: CommissionContractVO) => {
+  const period = row.period;
+  if (!period) return;
+  let reason = '';
+  try {
+    const res = await ElMessageBox.prompt(
+      `确认解封「${period}」期间？解封后该月业绩与结佣可重新调整/作废，修正后请重新锁定工资批次。`,
+      `解封 ${period}`,
+      {
+        confirmButtonText: '确认解封',
+        cancelButtonText: '取消',
+        type: 'warning',
+        inputType: 'textarea',
+        inputPlaceholder: '请输入解封原因（必填，留痕审计）',
+        inputValidator: (v: string) => (!!v && !!v.trim()) || '解封原因必填',
+      },
+    );
+    reason = res.value || '';
+  } catch {
+    return;
+  }
+  try {
+    await performanceApi.reopenPeriod(period, reason.trim());
+    ElMessage.success('已解封');
+    await getList();
+  } catch { /* 拦截器处理 */ }
 };
 
 // 工作流跳转：根据 query 参数打开详情（查看态；审批办理已改为「我的待办」原地弹窗）
