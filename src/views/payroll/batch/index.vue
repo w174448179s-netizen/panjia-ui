@@ -33,7 +33,7 @@
         </el-table-column>
         <el-table-column label="算薪次数" prop="attempt" width="80" align="center" />
         <el-table-column label="创建时间" prop="createTime" width="170" />
-        <el-table-column label="操作" width="210" fixed="right">
+        <el-table-column label="操作" width="270" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
               <el-button link type="primary" @click="viewDetail(row as PayrollBatch)">明细</el-button>
@@ -42,6 +42,9 @@
               <el-button v-if="canCalc(row.status)" link type="primary" :loading="actingRowId === row.id" :disabled="!!actingRowId && actingRowId !== row.id" @click="doAction(row as PayrollBatch, 'calculate')">算薪</el-button>
               <el-button v-if="row.status === 'CALCULATED'" link type="success" :loading="actingRowId === row.id" :disabled="!!actingRowId && actingRowId !== row.id" @click="doAction(row as PayrollBatch, 'submit')">提交审批</el-button>
               <el-button v-if="row.status === 'LOCKED'" link type="warning" :loading="actingRowId === row.id" :disabled="!!actingRowId && actingRowId !== row.id" @click="doAction(row as PayrollBatch, 'pay')">标记发放</el-button>
+              <!-- 解封（反结账）：仅已锁定批次可解封；解封同时解锁该期间所有 LOCKED 批次
+                   （LOCKED → CALCULATED），允许重算薪 + 重审批 + 再锁定。PAID 已发放为资金终态，禁止解封 -->
+              <el-button v-if="row.status === 'LOCKED' && checkPermi(['perf:period:reopen'])" link type="danger" :loading="actingRowId === row.id" :disabled="!!actingRowId && actingRowId !== row.id" @click="reopenPeriod(row as PayrollBatch)">解封</el-button>
             </div>
           </template>
         </el-table-column>
@@ -448,6 +451,8 @@ import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Download } from '@element-plus/icons-vue';
 import { payrollApi, orgCommissionTraceApi, type PayrollBatch, type PayrollDetail, type CommissionTraceItem } from '@/api/panjia/payroll';
+import { performanceApi } from '@/api/panjia/performance';
+import { checkPermi } from '@/utils/permission';
 import { useDeptEmpFilter } from '@/hooks/useDeptEmpFilter';
 import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
@@ -658,6 +663,47 @@ const doAction = async (row: PayrollBatch, action: string) => {
     await loadBatches();
     if (currentBatch.value?.id === row.id && detailVisible.value) viewDetail(row);
   } catch (e) {
+    /* 拦截器处理 */
+  } finally {
+    actingRowId.value = '';
+  }
+};
+
+// 解封（反结账）：解封该批次归属期间，同时解锁该期间所有 LOCKED 工资批次
+// （LOCKED → CALCULATED），允许重新算薪 → 重新审批 → 再次锁定。
+// 原因必填并随操作留痕审计。PAID 已发放批次不在此显示解封按钮（资金终态）。
+const reopenPeriod = async (row: PayrollBatch) => {
+  const period = row.period;
+  if (!period) return;
+  let reason = '';
+  try {
+    const res = await ElMessageBox.prompt(
+      `确认解封「${period}」期间？\n\n` +
+      `解封将同时解锁该期间所有已锁定工资批次（已锁定 → 已计算），解封后：\n` +
+      `  · 该期间业绩与结佣可重新调整 / 作废；\n` +
+      `  · 工资批次可重新算薪、重新走审批并再次锁定。\n\n` +
+      `请确认已与财务核对，避免影响已发放数据。`,
+      `解封 ${period}`,
+      {
+        confirmButtonText: '确认解封',
+        cancelButtonText: '取消',
+        type: 'warning',
+        inputType: 'textarea',
+        inputPlaceholder: '请输入解封原因（必填，留痕审计）',
+        inputValidator: (v: string) => (!!v && !!v.trim()) || '解封原因必填',
+      },
+    );
+    reason = res.value || '';
+  } catch {
+    return;
+  }
+  actingRowId.value = row.id;
+  try {
+    await performanceApi.reopenPeriod(period, reason.trim());
+    ElMessage.success('已解封，工资批次已解锁，可重新算薪');
+    await loadBatches();
+    if (currentBatch.value?.id === row.id && detailVisible.value) viewDetail(row);
+  } catch {
     /* 拦截器处理 */
   } finally {
     actingRowId.value = '';
