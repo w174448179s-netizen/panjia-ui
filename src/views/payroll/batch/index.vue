@@ -73,7 +73,7 @@
             <EmployeeSelect v-model="ag.filter.employeeId" :dept-id="ag.filter.deptId"
               width="210px" placeholder="员工姓名/工号搜索" />
           </div>
-          <el-table :data="ag.paged" stripe border max-height="600" :summary-method="summaryMethod" show-summary>
+          <el-table :data="ag.paged" stripe border size="small" max-height="600" :summary-method="summaryMethod" show-summary>
             <el-table-column label="门店" prop="deptName" width="110" fixed="left" />
             <el-table-column label="员工编号" prop="employeeCode" width="90" fixed="left" />
             <el-table-column label="姓名" prop="employeeName" width="80" fixed="left" />
@@ -152,7 +152,7 @@
             </el-table-column>
           </el-table>
           <el-pagination class="tab-pagination" v-model:current-page="ag.page" v-model:page-size="ag.pageSize"
-            :total="ag.filtered.length" :page-sizes="[50, 100, 200]" layout="total, sizes, prev, pager, next" size="small" />
+            :total="ag.filtered.length" :page-sizes="[20, 50, 100]" layout="total, sizes, prev, pager, next" size="small" />
         </el-tab-pane>
 
         <!-- ══════════ 店长工资 sheet（15 列，底薪计算与补齐依据，对齐天街工资表 店长工资 sheet） ══════════ -->
@@ -204,7 +204,7 @@
             </el-table-column>
           </el-table>
           <el-pagination class="tab-pagination" v-model:current-page="mf.page" v-model:page-size="mf.pageSize"
-            :total="mf.filtered.length" :page-sizes="[50, 100, 200]" layout="total, sizes, prev, pager, next" size="small" />
+            :total="mf.filtered.length" :page-sizes="[20, 50, 100]" layout="total, sizes, prev, pager, next" size="small" />
         </el-tab-pane>
 
         <!-- ══════════ 总监工资 sheet（19 列，树形可展开：汇总行+门店明细子行，对齐天街工资表 总监工资 sheet） ══════════ -->
@@ -271,7 +271,7 @@
             </el-table-column>
           </el-table>
           <el-pagination class="tab-pagination" v-model:current-page="df.page" v-model:page-size="df.pageSize"
-            :total="df.filtered.length" :page-sizes="[50, 100, 200]" layout="total, sizes, prev, pager, next" size="small" />
+            :total="df.filtered.length" :page-sizes="[20, 50, 100]" layout="total, sizes, prev, pager, next" size="small" />
         </el-tab-pane>
 
         <!-- ══════════ 新签业绩 sheet（12 列） ══════════ -->
@@ -308,7 +308,7 @@
             <el-table-column label="结算日期" prop="approvedMonth" width="110" align="center" />
           </el-table>
           <el-pagination class="tab-pagination" v-model:current-page="nsf.page" v-model:page-size="nsf.pageSize"
-            :total="nsf.filtered.length" :page-sizes="[50, 100, 200]" layout="total, sizes, prev, pager, next" size="small" />
+            :total="nsf.filtered.length" :page-sizes="[20, 50, 100]" layout="total, sizes, prev, pager, next" size="small" />
         </el-tab-pane>
 
         <!-- ══════════ 结佣业绩 sheet（12 列） ══════════ -->
@@ -345,7 +345,7 @@
             <el-table-column label="结算日期" prop="approvedMonth" width="110" align="center" />
           </el-table>
           <el-pagination class="tab-pagination" v-model:current-page="cf.page" v-model:page-size="cf.pageSize"
-            :total="cf.filtered.length" :page-sizes="[50, 100, 200]" layout="total, sizes, prev, pager, next" size="small" />
+            :total="cf.filtered.length" :page-sizes="[20, 50, 100]" layout="total, sizes, prev, pager, next" size="small" />
         </el-tab-pane>
 
         <!-- ══════════ 人事数据 sheet（18 列） ══════════ -->
@@ -394,7 +394,7 @@
             </el-table-column>
           </el-table>
           <el-pagination class="tab-pagination" v-model:current-page="hf.page" v-model:page-size="hf.pageSize"
-            :total="hf.filtered.length" :page-sizes="[50, 100, 200]" layout="total, sizes, prev, pager, next" size="small" />
+            :total="hf.filtered.length" :page-sizes="[20, 50, 100]" layout="total, sizes, prev, pager, next" size="small" />
         </el-tab-pane>
 
         <!-- ══════════ 绩效和扣款 sheet（19 列） ══════════ -->
@@ -422,7 +422,7 @@
             </el-table-column>
           </el-table>
           <el-pagination class="tab-pagination" v-model:current-page="pf.page" v-model:page-size="pf.pageSize"
-            :total="pf.filtered.length" :page-sizes="[50, 100, 200]" layout="total, sizes, prev, pager, next" size="small" />
+            :total="pf.filtered.length" :page-sizes="[20, 50, 100]" layout="total, sizes, prev, pager, next" size="small" />
         </el-tab-pane>
       </el-tabs>
     </el-dialog>
@@ -584,10 +584,10 @@ const matchByDeptEmp = (r: any, f: Record<string, any>) => {
   return true;
 };
 
-function pagedTable<T extends Record<string, any>>(source: () => T[]) {
+function pagedTable<T extends Record<string, any>>(source: () => T[], initialPageSize = 20) {
   const filter = ref<Record<string, any>>({ deptId: '', employeeId: '' });
   const page = ref(1);
-  const pageSize = ref(50);
+  const pageSize = ref(initialPageSize);
   const filtered = computed(() => {
     const f = filter.value;
     const hasFilter = (f.deptId !== '' && f.deptId != null) || (f.employeeId !== '' && f.employeeId != null);
@@ -605,6 +605,7 @@ function pagedTable<T extends Record<string, any>>(source: () => T[]) {
   });
 }
 
+// 所有 sheet 统一默认每页 20 行，可在分页器切换 50/100
 const ag = pagedTable(() => salaryDetails.value);
 const mf = pagedTable(() => managerDetails.value);
 const df = pagedTable(() => directorTreeData.value);
