@@ -182,10 +182,16 @@
             </template>
           </el-table-column>
           <el-table-column label="申请时间" align="center" prop="createTime" width="170" sortable />
-          <el-table-column label="操作" align="center" width="140" class-name="small-padding fixed-width">
+          <el-table-column label="操作" align="center" width="200" class-name="small-padding fixed-width">
             <template #default="scope">
               <el-button link type="primary" @click="handleDetail(scope.row)">详情</el-button>
               <el-button v-if="scope.row.status === 'SUBMITTED' && checkPermi(['workflow:task:edit'])" link type="success" :loading="approvalLoading" @click="onBizApprove(scope.row.id)">审批</el-button>
+              <el-button
+                v-if="scope.row.status === 'SUBMITTED' && String(scope.row.applicantId) === String(currentUserId) && checkPermi(['perf:adjust:add'])"
+                link
+                type="warning"
+                @click="handleWithdraw(scope.row)"
+              >撤回</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -275,6 +281,14 @@
           <div v-if="formData.factId" class="fact-amount-hint">
             当前新签业绩：¥{{ formatNumber(selectedFact?.amount) }}
           </div>
+          <el-alert
+            v-if="inFlight"
+            type="warning"
+            show-icon
+            :closable="false"
+            title="该合同已有审批中的业绩调整单，请待其审批完成或撤回后再发起新调整"
+            style="margin-top: 8px"
+          />
         </el-form-item>
         <el-form-item v-if="formData.adjustType === 'AMOUNT'" label="调整金额" prop="deltaAmount">
           <el-input-number
@@ -317,7 +331,8 @@
         <el-button
           v-if="formDialog.mode === 'create'"
           type="primary"
-          :loading="submitLoading"
+          :loading="submitLoading || inFlightChecking"
+          :disabled="inFlight"
           @click="handleSubmit"
         >
           提 交
@@ -359,14 +374,34 @@ import { useBizApproval } from '@/hooks/workflow/useBizApproval';
 import { checkPermi } from '@/utils/permission';
 import { useDeptScope } from '@/hooks/useDeptScope';
 import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
+import { useUserStore } from '@/store/modules/user';
 
 const route = useRoute();
+const userStore = useUserStore();
+/** 当前登录人 ID：撤回按钮仅对调整单发起人本人可见（后端二次强校验） */
+const currentUserId = computed(() => userStore.userId);
 
 /** 业务明细直接审批：通过 businessId 查当前用户可办理任务，复用 WorkflowHandle 弹窗 */
 const workflowHandleRef = ref<InstanceType<typeof WorkflowHandle>>();
 const { loading: approvalLoading, handleBizApproval } = useBizApproval();
 const onBizApprove = (businessId: string | number) =>
   handleBizApproval(businessId, (task) => workflowHandleRef.value?.open(task));
+
+/** 发起人撤回审批中的调整单：审批期间明细被其他操作改变无法执行时，撤回后按最新明细重新发起 */
+const handleWithdraw = async (row: any) => {
+  try {
+    await modal.confirm('撤回后审批流程作废、本单置为「已取消」，需按最新合同明细重新发起。确认撤回？');
+  } catch {
+    return;
+  }
+  try {
+    await performanceApi.withdrawAdjust(row.id);
+    modal.msgSuccess('已撤回');
+    getList();
+  } catch {
+    // 全局请求拦截器已弹出后端返回的具体失败原因
+  }
+};
 
 // ==================== 枚举 ====================
 const adjustTypeMap: Record<string, string> = {
@@ -520,6 +555,9 @@ const formDialog = reactive({
 });
 const formRef = ref();
 const submitLoading = ref(false);
+/** 所选合同是否存在审批中的业绩调整单（前端预检，true 时禁用提交） */
+const inFlight = ref(false);
+const inFlightChecking = ref(false);
 
 /** 详情弹窗：与「我的待办 → 业绩调整审批」共用 AdjustDetailPanel，仅传 businessId */
 const detailDialog = reactive({
@@ -604,10 +642,23 @@ const onFormEmployeeChange = async (
   await loadFactOptions();
 };
 
-// 切换关联业绩：联动基准变了，清空已算的调整金额/调整后业绩
-const onFactChange = () => {
+// 切换关联业绩：联动基准变了，清空已算的调整金额/调整后业绩，并预检该合同在途调整单
+const onFactChange = async () => {
   formData.deltaAmount = undefined;
   formData.targetAmount = undefined;
+  inFlight.value = false;
+  const fact = selectedFact.value;
+  const contractNo = fact?.contractNo;
+  if (!contractNo || !formData.period) return;
+  inFlightChecking.value = true;
+  try {
+    const res = await performanceApi.checkAdjustInFlight(contractNo, formData.period, fact.factType ?? 'PERF_EXPECT');
+    inFlight.value = !!res.data;
+  } catch {
+    inFlight.value = false;
+  } finally {
+    inFlightChecking.value = false;
+  }
 };
 
 const loadFactOptions = async () => {
@@ -631,6 +682,8 @@ const handleCreate = () => {
   Object.assign(formData, defaultFormData());
   selectedFormEmployee.value = null;
   factOptions.value = [];
+  inFlight.value = false;
+  inFlightChecking.value = false;
   formDialog.mode = 'create';
   formDialog.title = '新增调整单';
   formDialog.visible = true;

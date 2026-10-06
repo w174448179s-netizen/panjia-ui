@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, shallowRef, computed, onMounted } from 'vue';
 import { payrollApi } from '@/api/panjia/payroll';
 import { useEmployeeMap } from '../useEmployeeMap';
 
@@ -89,7 +89,8 @@ const props = defineProps<{ businessId: string | number }>();
 const loading = ref(false);
 const loadError = ref('');
 const batch = ref<any>(null);
-const details = ref<any[]>([]);
+// 只读明细行，整体替换驱动渲染，避免大数组深度响应式代理
+const details = shallowRef<any[]>([]);
 
 const { load: loadEmployees, name: employeeName } = useEmployeeMap();
 
@@ -115,8 +116,18 @@ const MONEY_PROPS = [
   'deduct', 'tax', 'net',
 ];
 
-const summaryMethod = ({ columns, data }: any) => {
+// 合计一次预算并缓存，避免 summary-method 被主表/fixed 表多次调用时每列全量 reduce
+const totals = computed<Record<string, number>>(() => {
+  const t: Record<string, number> = {};
+  for (const r of details.value) {
+    for (const p of MONEY_PROPS) t[p] = (t[p] || 0) + (Number(r[p]) || 0);
+  }
+  return t;
+});
+
+const summaryMethod = ({ columns }: any) => {
   const sums: string[] = [];
+  const t = totals.value;
   columns.forEach((col: any, idx: number) => {
     if (idx === 0) {
       sums[idx] = '合计';
@@ -124,8 +135,7 @@ const summaryMethod = ({ columns, data }: any) => {
     }
     const prop = col.property;
     if (MONEY_PROPS.includes(prop)) {
-      const total = data.reduce((s: number, r: any) => s + (Number(r[prop]) || 0), 0);
-      sums[idx] = fmt(total);
+      sums[idx] = fmt(t[prop] || 0);
     } else {
       sums[idx] = '';
     }

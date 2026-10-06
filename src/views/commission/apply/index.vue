@@ -728,6 +728,14 @@ const onSubmit = async (row: CommissionContractVO) => {
   }
   // 提交中拦截：防止连点重复弹出确认框/重复提交
   if (submittingMap[no]) return;
+  // 在途互斥预检：同合同当月已有审批中的申请单时，前端直接拦截，避免提交后才被后端拒绝
+  try {
+    const res = await commissionApi.checkApplyInFlight(row.period, no);
+    if (res.data) {
+      ElMessage.warning('该合同当月已有审批中的结佣申请单，请待其审批完成后再发起');
+      return;
+    }
+  } catch { /* 预检失败不阻断，交后端兜底 */ }
   const isResubmit = row.status === 'REJECTED';
   const isDraft = row.status === 'DRAFT';
   const action = isResubmit ? '重新提交' : isDraft ? '提交' : '发起并提交';

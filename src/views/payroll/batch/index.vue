@@ -61,11 +61,11 @@
       @closed="closeDetail"
     >
       <div v-if="currentBatch" class="detail-toolbar">
-        <el-button :disabled="!details.length" @click="exportExcel">
+        <el-button :disabled="!details.length" :loading="exporting" @click="exportExcel">
           <el-icon><Download /></el-icon>&nbsp;导出（七 sheet）
         </el-button>
       </div>
-      <el-tabs v-model="detailTab" class="detail-tabs">
+      <el-tabs v-model="detailTab" class="detail-tabs" @tab-change="onTabChange">
         <!-- ══════════ 工资表 sheet（28 列，含经纪人 + 店长） ══════════ -->
         <el-tab-pane label="工资表" name="AGENT" lazy>
           <div class="tab-toolbar">
@@ -281,7 +281,7 @@
             <EmployeeSelect v-model="nsf.filter.employeeId" :dept-id="nsf.filter.deptId"
               width="210px" placeholder="签约人姓名/工号搜索" />
           </div>
-          <el-table :data="nsf.paged" stripe border max-height="600" size="small" :summary-method="newSignSummary" show-summary>
+          <el-table v-loading="perfLoading.newsign" :data="nsf.paged" stripe border max-height="600" size="small" :summary-method="newSignSummary" show-summary>
             <el-table-column label="签约/认购日期" width="170" align="center">
               <template #default="{ row }">{{ row.businessDate || '—' }}</template>
             </el-table-column>
@@ -318,7 +318,7 @@
             <EmployeeSelect v-model="cf.filter.employeeId" :dept-id="cf.filter.deptId"
               width="210px" placeholder="签约人姓名/工号搜索" />
           </div>
-          <el-table :data="cf.paged" stripe border max-height="600" size="small" :summary-method="commissionSummary" show-summary>
+          <el-table v-loading="perfLoading.commission" :data="cf.paged" stripe border max-height="600" size="small" :summary-method="commissionSummary" show-summary>
             <el-table-column label="签约/认购日期" width="170" align="center">
               <template #default="{ row }">{{ row.businessDate || '—' }}</template>
             </el-table-column>
@@ -446,7 +446,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue';
+import { ref, shallowRef, reactive, computed, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Download } from '@element-plus/icons-vue';
@@ -464,15 +464,20 @@ import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 
 const route = useRoute();
 
-const batches = ref<PayrollBatch[]>([]);
-const details = ref<PayrollDetail[]>([]);
+// 大列表数据为纯只读表格行，整体替换引用即可驱动渲染；
+// 使用 shallowRef 避免对数千行 × 几十个字段做深度 reactive 代理（打开弹窗卡顿主因之一）
+const batches = shallowRef<PayrollBatch[]>([]);
+const details = shallowRef<PayrollDetail[]>([]);
 const currentBatch = ref<PayrollBatch | null>(null);
 const detailVisible = ref(false);
 const detailTab = ref<'AGENT' | 'MANAGER' | 'DIRECTOR' | 'NEWSIGN' | 'COMMISSION' | 'HR' | 'PERF'>('AGENT');
 const filterPeriod = ref('');
-// 业绩明细数据（新签/结佣，导出和 tab 展示共用）
-const newSignItems = ref<CommissionTraceItem[]>([]);
-const commissionItems = ref<CommissionTraceItem[]>([]);
+// 业绩明细数据（新签/结佣，切到对应 tab 时才懒加载；导出前按需补齐）
+const newSignItems = shallowRef<CommissionTraceItem[]>([]);
+const commissionItems = shallowRef<CommissionTraceItem[]>([]);
+// 懒加载状态（普通对象即可：只作为请求去重开关，无需响应式；loading 需驱动表格 v-loading）
+const perfLoaded = { newsign: false, commission: false };
+const perfLoading = ref({ newsign: false, commission: false });
 const showCreate = ref(false);
 const creating = ref(false);
 const createForm = ref({ period: '', deptScope: 'ALL' });
@@ -713,15 +718,38 @@ const reopenPeriod = async (row: PayrollBatch) => {
 const viewDetail = async (row: PayrollBatch) => {
   currentBatch.value = row;
   detailVisible.value = true;
-  // 并行加载工资明细 + 业绩明细（新签/结佣）
-  const [res, commissionRes, newSignRes] = await Promise.all([
-    payrollApi.getDetails(row.id),
-    orgCommissionTraceApi.allCommission(row.period).catch(() => ({ data: [] })),
-    orgCommissionTraceApi.allNewSign(row.period).catch(() => ({ data: [] })),
-  ]);
+  // 重入（算薪/解封后不关闭弹窗直接刷新）时让业绩懒加载缓存失效，
+  // 下次切到新签/结佣 tab 会重新拉取，避免看到解封前的旧明细
+  perfLoaded.newsign = false;
+  perfLoaded.commission = false;
+  // 弹窗打开只加载工资明细；新签/结佣全月明细数据量大，改为切到对应 tab 时再懒加载
+  // （两个 all-* 接口原本就是「导出用」全量口径，首屏加载会导致弹窗明显卡顿）
+  const res = await payrollApi.getDetails(row.id);
   details.value = (res as any).data ?? [];
-  commissionItems.value = (commissionRes as any).data ?? [];
-  newSignItems.value = (newSignRes as any).data ?? [];
+};
+
+/* ───────────── 新签/结佣全月明细懒加载（首屏不拉，切 tab/导出时按需加载） ───────────── */
+const ensurePerfData = async (kind: 'newsign' | 'commission') => {
+  if (perfLoaded[kind] || perfLoading.value[kind] || !currentBatch.value) return;
+  perfLoading.value[kind] = true;
+  try {
+    const period = currentBatch.value.period;
+    if (kind === 'newsign') {
+      const res = await orgCommissionTraceApi.allNewSign(period).catch(() => ({ data: [] }));
+      newSignItems.value = (res as any).data ?? [];
+    } else {
+      const res = await orgCommissionTraceApi.allCommission(period).catch(() => ({ data: [] }));
+      commissionItems.value = (res as any).data ?? [];
+    }
+    perfLoaded[kind] = true;
+  } finally {
+    perfLoading.value[kind] = false;
+  }
+};
+
+const onTabChange = (name: string | number) => {
+  if (name === 'NEWSIGN') void ensurePerfData('newsign');
+  else if (name === 'COMMISSION') void ensurePerfData('commission');
 };
 
 const closeDetail = () => {
@@ -730,6 +758,8 @@ const closeDetail = () => {
   details.value = [];
   newSignItems.value = [];
   commissionItems.value = [];
+  perfLoaded.newsign = false;
+  perfLoaded.commission = false;
   [ag, mf, df, nsf, cf, hf, pf].forEach((t) => t.reset());
 };
 
@@ -749,30 +779,39 @@ const openFromWorkflow = async () => {
   }
 };
 
+/* ───────────── 合计行：computed 一次预算，summaryMethod 仅做 O(列数) 查找 ─────────────
+ * el-table 主表 + fixed 列表会多次调用 summary-method，原实现每次对十几个金额列各做一次
+ * 全量 reduce（约 14N 次/调用），滚动/重渲染都可能触发；改为 computed 遍历一次并缓存，
+ * 数据引用不变就不重算。口径与原来完全一致：工资/店长/总监为全量，新签/结佣随筛选联动。
+ */
+const SALARY_MONEY_PROPS = ['commissionIncome', 'mentorBonus', 'bonus', 'pointsFee', 'gross', 'socialFee', 'housingFund', 'commercialInsurance', 'dormitoryFee', 'net', 'tax'];
+const SALARY_DEDUCT = new Set(['pointsFee', 'socialFee', 'housingFund', 'commercialInsurance', 'dormitoryFee', 'tax']);
+const salaryTotals = computed<Record<string, number>>(() => {
+  const t: Record<string, number> = {};
+  for (const r of salaryDetails.value) {
+    for (const p of SALARY_MONEY_PROPS) t[p] = (t[p] || 0) + (Number((r as any)[p]) || 0);
+    t.baseSalaryTotal = (t.baseSalaryTotal || 0) + baseSalaryOf(r);
+    t.grossDeductTotal = (t.grossDeductTotal || 0) + grossMinusDeduct(r);
+  }
+  return t;
+});
+
 const summaryMethod = ({ columns }: any) => {
   const sums: string[] = [];
-  // 工资表 sheet：与导出一致，仅对有 prop 的金额列求和
-  // 底薪列无 prop（经纪人取 baseSalary，店长取 teamIncome + guaranteeFill），单独处理
-  // 工资合计/实发工资列无 prop（= 应发-扣款，未减个税）；最终发放列 prop=net（减个税后）
   // 合计固定全量口径（分页后 data 只是当前页），与批次导出对账一致
-  const data = salaryDetails.value;
-  const moneyProps = ['commissionIncome', 'mentorBonus', 'bonus', 'pointsFee', 'gross', 'socialFee', 'housingFund', 'commercialInsurance', 'dormitoryFee', 'net', 'tax'];
-  const deductProps = new Set(['pointsFee', 'socialFee', 'housingFund', 'commercialInsurance', 'dormitoryFee', 'tax']);
+  const t = salaryTotals.value;
   columns.forEach((col: any, idx: number) => {
     if (idx === 0) {
       sums[idx] = '合计';
       return;
     }
     const prop = col.property;
-    if (prop && moneyProps.includes(prop)) {
-      const total = data.reduce((s: number, r: any) => s + (Number(r[prop]) || 0), 0);
-      sums[idx] = deductProps.has(prop) ? neg(total) : fmt(total);
+    if (prop && SALARY_MONEY_PROPS.includes(prop)) {
+      sums[idx] = SALARY_DEDUCT.has(prop) ? neg(t[prop] || 0) : fmt(t[prop] || 0);
     } else if (col.label === '底薪') {
-      const total = data.reduce((s: number, r: any) => s + baseSalaryOf(r), 0);
-      sums[idx] = fmt(total);
+      sums[idx] = fmt(t.baseSalaryTotal || 0);
     } else if (col.label === '工资合计' || col.label === '实发工资') {
-      const total = data.reduce((s: number, r: any) => s + grossMinusDeduct(r), 0);
-      sums[idx] = fmt(total);
+      sums[idx] = fmt(t.grossDeductTotal || 0);
     } else {
       sums[idx] = '';
     }
@@ -780,26 +819,37 @@ const summaryMethod = ({ columns }: any) => {
   return sums;
 };
 
-/** 新签/结佣业绩 tab 合计行：末行汇总「85后」金额（按当前筛选口径，随门店/员工筛选联动） */
-const perfSummary = (list: () => CommissionTraceItem[]) => ({ columns }: any) => {
+/** 新签/结佣 tab 合计行：末行汇总「85后」金额（按当前筛选口径，随门店/员工筛选联动），预算缓存 */
+const newSignTotal = computed(() =>
+  nsf.filtered.reduce((s, it) => s + (Number(it.convertedAmount ?? it.amount) || 0), 0));
+const commissionTotal = computed(() =>
+  cf.filtered.reduce((s, it) => s + (Number(it.convertedAmount ?? it.amount) || 0), 0));
+const perfSummary = (total: () => number) => ({ columns }: any) => {
   const sums: string[] = [];
-  const total = list().reduce((s, it) => s + (Number(it.convertedAmount ?? it.amount) || 0), 0);
+  const v = total();
   columns.forEach((col: any, idx: number) => {
     if (idx === 0) { sums[idx] = '合计'; return; }
-    sums[idx] = col.label === '85后' ? fmt(total) : '';
+    sums[idx] = col.label === '85后' ? fmt(v) : '';
   });
   return sums;
 };
-const newSignSummary = perfSummary(() => nsf.filtered);
-const commissionSummary = perfSummary(() => cf.filtered);
+const newSignSummary = perfSummary(() => newSignTotal.value);
+const commissionSummary = perfSummary(() => commissionTotal.value);
+
+const MANAGER_MONEY_PROPS = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'teamIncome', 'personalNewsignIncome', 'minSalary', 'guaranteeFill', 'otherDeduct'];
+const MANAGER_DEDUCT = new Set(['deptEmployerSocialTotal', 'otherDeduct']);
+const managerTotals = computed<Record<string, number>>(() => {
+  const t: Record<string, number> = {};
+  for (const r of managerDetails.value) {
+    for (const p of MANAGER_MONEY_PROPS) t[p] = (t[p] || 0) + (Number((r as any)[p]) || 0);
+  }
+  return t;
+});
 
 const managerSummary = ({ columns }: any) => {
   const sums: string[] = [];
-  // 店长 sheet 金额列（不含 gross：店长工资 = teamIncome + guaranteeFill，不含结佣提成和个人新签递延）
-  // 合计固定全量口径（分页后 data 只是当前页）
-  const data = managerDetails.value;
-  const moneyProps = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'teamIncome', 'personalNewsignIncome', 'minSalary', 'guaranteeFill', 'otherDeduct'];
-  const deductProps = new Set(['deptEmployerSocialTotal', 'otherDeduct']);
+  // 店长工资 = teamIncome + guaranteeFill（保底补足），不含结佣提成和个人新签递延；合计固定全量口径
+  const t = managerTotals.value;
   columns.forEach((col: any, idx: number) => {
     if (idx === 0) {
       sums[idx] = '合计';
@@ -807,12 +857,9 @@ const managerSummary = ({ columns }: any) => {
     }
     const prop = col.property;
     if (prop === 'gross') {
-      // 店长工资 = teamIncome + guaranteeFill（保底补足），不含结佣提成和个人新签递延
-      const total = data.reduce((s: number, r: any) => s + (Number(r.teamIncome) || 0) + (Number(r.guaranteeFill) || 0), 0);
-      sums[idx] = fmt(total);
-    } else if (prop && moneyProps.includes(prop)) {
-      const total = data.reduce((s: number, r: any) => s + (Number(r[prop]) || 0), 0);
-      sums[idx] = deductProps.has(prop) ? neg(total) : fmt(total);
+      sums[idx] = fmt((t.teamIncome || 0) + (t.guaranteeFill || 0));
+    } else if (prop && MANAGER_MONEY_PROPS.includes(prop)) {
+      sums[idx] = MANAGER_DEDUCT.has(prop) ? neg(t[prop] || 0) : fmt(t[prop] || 0);
     } else {
       sums[idx] = '';
     }
@@ -820,22 +867,28 @@ const managerSummary = ({ columns }: any) => {
   return sums;
 };
 
+const DIRECTOR_MONEY_PROPS = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'storeIncome', 'baseSalary', 'fullAttendance', 'bonus', 'commissionPerformance', 'commissionIncome', 'mentorBonus', 'socialFee', 'housingFund', 'commercialInsurance', 'gross', 'tax', 'net'];
+const DIRECTOR_DEDUCT = new Set(['deptEmployerSocialTotal', 'socialFee', 'housingFund', 'commercialInsurance', 'tax']);
+const directorTotals = computed<Record<string, number>>(() => {
+  // 只汇总顶层汇总行（directorDetails），避免树形子行 double-count；合计固定全量口径
+  const t: Record<string, number> = {};
+  for (const r of directorDetails.value) {
+    for (const p of DIRECTOR_MONEY_PROPS) t[p] = (t[p] || 0) + (Number((r as any)[p]) || 0);
+  }
+  return t;
+});
+
 const directorSummary = ({ columns }: any) => {
   const sums: string[] = [];
-  // 只汇总顶层汇总行（_isSummary），避免子行 double-count
-  // 合计固定全量口径（分页后 data 只是当前页顶层行）
-  const topRows = directorDetails.value;
-  const moneyProps = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'storeIncome', 'baseSalary', 'fullAttendance', 'bonus', 'commissionPerformance', 'commissionIncome', 'mentorBonus', 'socialFee', 'housingFund', 'commercialInsurance', 'gross', 'tax', 'net'];
-  const deductProps = new Set(['deptEmployerSocialTotal', 'socialFee', 'housingFund', 'commercialInsurance', 'tax']);
+  const t = directorTotals.value;
   columns.forEach((col: any, idx: number) => {
     if (idx === 0) {
       sums[idx] = '合计';
       return;
     }
     const prop = col.property;
-    if (prop && moneyProps.includes(prop)) {
-      const total = topRows.reduce((s: number, r: any) => s + (Number(r[prop]) || 0), 0);
-      sums[idx] = deductProps.has(prop) ? neg(total) : fmt(total);
+    if (prop && DIRECTOR_MONEY_PROPS.includes(prop)) {
+      sums[idx] = DIRECTOR_DEDUCT.has(prop) ? neg(t[prop] || 0) : fmt(t[prop] || 0);
     } else {
       sums[idx] = '';
     }
@@ -844,14 +897,22 @@ const directorSummary = ({ columns }: any) => {
 };
 
 /* ───────────── 导出（xlsx 七 sheet：工资表/新签业绩/结佣业绩/店长/总监/人事/绩效） ───────────── */
-const exportExcel = () => {
-  if (!details.value.length) return;
-  const extra: ExportExtraData = {
-    newSignItems: newSignItems.value,
-    commissionItems: commissionItems.value,
-  };
-  exportMultiSheet(details.value, currentBatch.value?.period || '', undefined, extra);
-  ElMessage.success('导出成功');
+const exporting = ref(false);
+const exportExcel = async () => {
+  if (!details.value.length || exporting.value) return;
+  exporting.value = true;
+  try {
+    // 导出需要七 sheet 全量数据：新签/结佣若未按 tab 懒加载过，此处补齐
+    await Promise.all([ensurePerfData('newsign'), ensurePerfData('commission')]);
+    const extra: ExportExtraData = {
+      newSignItems: newSignItems.value,
+      commissionItems: commissionItems.value,
+    };
+    exportMultiSheet(details.value, currentBatch.value?.period || '', undefined, extra);
+    ElMessage.success('导出成功');
+  } finally {
+    exporting.value = false;
+  }
 };
 
 // 页签缓存复用场景下补开单据（详见 useWorkflowRouteOpen 注释）

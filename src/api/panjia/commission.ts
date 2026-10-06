@@ -313,4 +313,10 @@ export const commissionApi = {
     panjiaRequest.get<CommissionAdjust>(`/commission/adjust/${id}`),
   createAdjust: (data: CommissionAdjustCreateDTO) =>
     panjiaRequest.post<number>('/commission/adjust', data),
+  // 预检：指定合同是否存在审批中的结佣调整单（前端打开调整弹窗前禁用提交）
+  checkAdjustInFlight: (contractNo: string) =>
+    panjiaRequest.get<boolean>('/commission/adjust/in-flight-check', { contractNo }),
+  // 预检：指定合同当月是否存在审批中的结佣申请单（前端单行提交/批量发起前拦截）
+  checkApplyInFlight: (period: string, contractNo: string) =>
+    panjiaRequest.get<boolean>('/commission/apply/in-flight-check', { period, contractNo }),
 };

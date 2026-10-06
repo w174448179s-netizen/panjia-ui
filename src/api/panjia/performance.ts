@@ -10,6 +10,8 @@ export interface PerformanceFact {
   businessDate: string;       // 业务发生日
   batchId?: string;
   sourceKey: string;
+  contractNo?: string;        // 合同号（发起调整时用于在途互斥预检）
+  orderNo?: string;           // 订单号
   bizType?: string;
   employeeId: string;
   employeeCode?: string;
@@ -366,6 +368,12 @@ export const performanceApi = {
     panjiaRequest.get<AdjustDetailVO>(`/perf/adjust/${id}/detail`),
   createAdjust: (data: AdjustCreateForm) =>
     panjiaRequest.post<string>('/perf/adjust', data),
+  // 申请人撤回审批中的调整单（仅发起人；工作流实例一并删除，单据置 CANCELLED）
+  withdrawAdjust: (id: string | number) =>
+    panjiaRequest.post<void>(`/perf/adjust/${id}/withdraw`),
+  // 预检：指定合同是否存在审批中的业绩调整单（前端选完事实后即时禁用提交）
+  checkAdjustInFlight: (contractNo: string, period: string, factType = 'PERF_EXPECT') =>
+    panjiaRequest.get<boolean>('/perf/adjust/in-flight-check', { contractNo, period, factType }),
 
   // 期间解封（反结账；封账由工资批次锁定自动完成，无手工封账入口）
   reopenPeriod: (period: string, reason: string) =>

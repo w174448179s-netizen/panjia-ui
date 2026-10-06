@@ -295,7 +295,7 @@ const targetConvertedTotal = computed(() => round2(
 ));
 
 // ==================== 打开弹窗：由父组件传入申请单 + 结佣明细行 ====================
-function open(payload: { applicationId: string | number; info: AdjustInfo; rows: CommissionItemDetail[] }) {
+async function open(payload: { applicationId: string | number; info: AdjustInfo; rows: CommissionItemDetail[] }) {
   applicationId.value = payload.applicationId;
   info.value = payload.info;
   adjustType.value = 'AMOUNT';
@@ -303,9 +303,17 @@ function open(payload: { applicationId: string | number; info: AdjustInfo; rows:
   totalInput.value = null;
   editRows.value = [];
   visible.value = true;
+  loading.value = true;
   const allRows = payload.rows || [];
   // 审批中在途预演：任意行带 adjustPending 即进入只读预演态；新人虚拟行仅进预演表，不进编辑表
   pendingBlocked.value = allRows.some(r => r.adjustPending);
+  // 后端合同级预检兜底：同合同任意在途调整单（含其他申请单）均拦截，防止 adjustPending 标记遗漏
+  if (!pendingBlocked.value && payload.info?.contractNo) {
+    try {
+      const res = await commissionApi.checkAdjustInFlight(payload.info.contractNo);
+      pendingBlocked.value = !!res.data;
+    } catch { /* 预检失败不阻断，交后端 create 兜底 */ }
+  }
   pendingRows.value = pendingBlocked.value ? allRows.filter(r => r.adjustPending) : [];
   editRows.value = allRows.filter(r => !r.newMemberPending).map(r => ({
     key: `i-${r.itemId}`,
@@ -326,6 +334,7 @@ function open(payload: { applicationId: string | number; info: AdjustInfo; rows:
   }));
   totalInput.value = originalTotal.value;
   deltaInput.value = 0;
+  loading.value = false;
 }
 
 // ==================== 联动逻辑 ====================
