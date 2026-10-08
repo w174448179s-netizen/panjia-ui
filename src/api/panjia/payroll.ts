@@ -69,8 +69,14 @@ export interface PayrollDetail {
   rateAdjustJson?: string | null;
   /** 店长/总监 sheet：门店当月新签计薪业绩合计（折算后） */
   deptNewSignTotal?: number;
-  /** 店长/总监 sheet：门店社保业绩扣款（门店全员公司承担社保合计） */
+  /** 店长/总监 sheet：门店社保业绩扣款（门店社保扣减标准 × 计缴参保人数） */
   deptEmployerSocialTotal?: number;
+  /** 门店社保扣减标准（每人每月固定额，DEPT 政策 socialStandard） */
+  deptSocialStandard?: number;
+  /** 门店计缴参保人数（非兼职+参保+个人社保比例>30%） */
+  deptInsuredCount?: number;
+  /** 新签与结佣差额（门店当月配置值，团队计薪业绩直接扣减） */
+  deptDiffAmount?: number;
   /** 店长 sheet：团队提成比例（职级 teamRate，如 0.10） */
   teamRate?: number;
   /** 总监 sheet：门店提成比例（跳点命中档 rate） */
@@ -127,6 +133,24 @@ export interface ConversionRule {
   bizType: string;
   factor: number;
   effectiveFrom: string;
+}
+
+/** 门店选项（顶级根的直接子部门），门店级配置页枚举门店用（雪花 ID 必须字符串处理） */
+export interface StoreDept {
+  deptId: number | string;
+  deptName: string;
+}
+
+/** 门店月度算薪配置（新签与结佣差额等，按门店×月份维护） */
+export interface DeptMonthlyConfig {
+  id?: number | string;
+  deptId: number | string;
+  /** 门店名（前端展示用，提交前剥离） */
+  deptName?: string;
+  period?: string;
+  /** 新签与结佣差额（团队计薪业绩直接扣减项，未配置按 0） */
+  diffAmount?: number | string | null;
+  remark?: string | null;
 }
 
 export interface ManualItem {
@@ -187,6 +211,20 @@ export const payrollApi = {
   },
   saveConversion(data: ConversionRule) {
     return panjiaRequest.post('/payroll/rule/conversion', data);
+  },
+
+  // 门店级配置
+  /** 门店列表（顶级根直接子部门），门店社保标准/月度配置页枚举门店 */
+  storeList() {
+    return panjiaRequest.get<StoreDept[]>('/payroll/rule/stores');
+  },
+  /** 门店月度配置列表（新签与结佣差额等） */
+  deptMonthlyList(period: string) {
+    return panjiaRequest.get<DeptMonthlyConfig[]>('/payroll/rule/dept-monthly', { period });
+  },
+  /** 批量保存某月门店月度配置 */
+  saveDeptMonthly(period: string, rows: DeptMonthlyConfig[]) {
+    return panjiaRequest.post('/payroll/rule/dept-monthly', rows, { params: { period } });
   },
 
   // 手工项

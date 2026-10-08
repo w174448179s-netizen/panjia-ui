@@ -166,17 +166,23 @@
             <el-table-column label="门店" prop="deptName" width="110" fixed="left" />
             <el-table-column label="姓名" prop="employeeName" width="80" fixed="left" />
             <el-table-column label="职级" prop="levelCode" width="60" />
-            <el-table-column label="新签团队业绩" width="120" align="right">
+            <el-table-column label="新签团队业绩" prop="deptNewSignTotal" width="120" align="right">
               <template #default="{ row }">{{ num(row.deptNewSignTotal) }}</template>
             </el-table-column>
-            <el-table-column label="社保业绩扣款" width="120" align="right">
+            <el-table-column label="社保扣减标准" width="120" align="right">
+              <template #default="{ row }">{{ num(row.deptSocialStandard) }}</template>
+            </el-table-column>
+            <el-table-column label="参保人数" prop="deptInsuredCount" width="80" align="center">
+              <template #default="{ row }">{{ row.deptInsuredCount ?? 0 }}</template>
+            </el-table-column>
+            <el-table-column label="社保业绩扣款" prop="deptEmployerSocialTotal" width="120" align="right">
               <template #default="{ row }">{{ neg(row.deptEmployerSocialTotal) }}</template>
             </el-table-column>
-            <el-table-column label="新签与结佣差额" width="130" align="right">
-              <template #default="{ row }">{{ num((Number(row.deptNewSignTotal) || 0) - (Number(row.commissionPerformance) || 0)) }}</template>
+            <el-table-column label="新签与结佣差额" prop="deptDiffAmount" width="130" align="right">
+              <template #default="{ row }">{{ neg(row.deptDiffAmount) }}</template>
             </el-table-column>
             <el-table-column label="团队计薪业绩" width="120" align="right">
-              <template #default="{ row }">{{ num((Number(row.deptNewSignTotal) || 0) - (Number(row.deptEmployerSocialTotal) || 0)) }}</template>
+              <template #default="{ row }">{{ num((Number(row.deptNewSignTotal) || 0) - (Number(row.deptEmployerSocialTotal) || 0) - (Number(row.deptDiffAmount) || 0)) }}</template>
             </el-table-column>
             <el-table-column label="提成比例" width="100" align="right">
               <template #default="{ row }">{{ row.teamRate != null ? ratePercent(row.teamRate) : '' }}</template>
@@ -218,14 +224,17 @@
             row-key="_id" :tree-props="{ children: 'children' }" default-expand-all>
             <el-table-column label="姓名" prop="employeeName" width="90" fixed="left" />
             <el-table-column label="组别" prop="deptName" width="120" fixed="left" />
-            <el-table-column label="新签业绩" width="120" align="right">
+            <el-table-column label="新签业绩" prop="deptNewSignTotal" width="120" align="right">
               <template #default="{ row }">{{ num(row.deptNewSignTotal) }}</template>
             </el-table-column>
-            <el-table-column label="社保业绩" width="110" align="right">
+            <el-table-column label="社保业绩" prop="deptEmployerSocialTotal" width="110" align="right">
               <template #default="{ row }">{{ neg(row.deptEmployerSocialTotal) }}</template>
             </el-table-column>
+            <el-table-column label="新签与结佣差额" prop="deptDiffAmount" width="130" align="right">
+              <template #default="{ row }">{{ neg(row.deptDiffAmount) }}</template>
+            </el-table-column>
             <el-table-column label="合计" width="110" align="right">
-              <template #default="{ row }">{{ num((Number(row.deptNewSignTotal) || 0) - (Number(row.deptEmployerSocialTotal) || 0)) }}</template>
+              <template #default="{ row }">{{ num((Number(row.deptNewSignTotal) || 0) - (Number(row.deptEmployerSocialTotal) || 0) - (Number(row.deptDiffAmount) || 0)) }}</template>
             </el-table-column>
             <el-table-column label="提成比例" width="100" align="right">
               <template #default="{ row }">{{ row.storeRate != null ? ratePercent(row.storeRate) : '' }}</template>
@@ -540,6 +549,7 @@ const directorTreeData = computed<DirectorTreeNode[]>(() => {
       deptName: it.deptName || dir.deptName || '',
       deptNewSignTotal: Number(it.newSign) || 0,
       deptEmployerSocialTotal: Number(it.social) || 0,
+      deptDiffAmount: Number(it.diff) || 0,
       storeRate: Number(it.rate) || 0,
       storeIncome: Number(it.income) || 0,
       baseSalary: undefined,
@@ -837,8 +847,8 @@ const perfSummary = (total: () => number) => ({ columns }: any) => {
 const newSignSummary = perfSummary(() => newSignTotal.value);
 const commissionSummary = perfSummary(() => commissionTotal.value);
 
-const MANAGER_MONEY_PROPS = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'teamIncome', 'personalNewsignIncome', 'minSalary', 'guaranteeFill', 'otherDeduct'];
-const MANAGER_DEDUCT = new Set(['deptEmployerSocialTotal', 'otherDeduct']);
+const MANAGER_MONEY_PROPS = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'deptInsuredCount', 'deptDiffAmount', 'teamIncome', 'personalNewsignIncome', 'minSalary', 'guaranteeFill', 'otherDeduct'];
+const MANAGER_DEDUCT = new Set(['deptEmployerSocialTotal', 'deptDiffAmount', 'otherDeduct']);
 const managerTotals = computed<Record<string, number>>(() => {
   const t: Record<string, number> = {};
   for (const r of managerDetails.value) {
@@ -859,6 +869,8 @@ const managerSummary = ({ columns }: any) => {
     const prop = col.property;
     if (prop === 'gross') {
       sums[idx] = fmt((t.teamIncome || 0) + (t.guaranteeFill || 0));
+    } else if (prop === 'deptInsuredCount') {
+      sums[idx] = String(Math.round(t.deptInsuredCount || 0));
     } else if (prop && MANAGER_MONEY_PROPS.includes(prop)) {
       sums[idx] = MANAGER_DEDUCT.has(prop) ? neg(t[prop] || 0) : fmt(t[prop] || 0);
     } else {
@@ -868,8 +880,8 @@ const managerSummary = ({ columns }: any) => {
   return sums;
 };
 
-const DIRECTOR_MONEY_PROPS = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'storeIncome', 'baseSalary', 'fullAttendance', 'bonus', 'commissionPerformance', 'commissionIncome', 'mentorBonus', 'socialFee', 'housingFund', 'commercialInsurance', 'gross', 'tax', 'net'];
-const DIRECTOR_DEDUCT = new Set(['deptEmployerSocialTotal', 'socialFee', 'housingFund', 'commercialInsurance', 'tax']);
+const DIRECTOR_MONEY_PROPS = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'deptDiffAmount', 'storeIncome', 'baseSalary', 'fullAttendance', 'bonus', 'commissionPerformance', 'commissionIncome', 'mentorBonus', 'socialFee', 'housingFund', 'commercialInsurance', 'gross', 'tax', 'net'];
+const DIRECTOR_DEDUCT = new Set(['deptEmployerSocialTotal', 'deptDiffAmount', 'socialFee', 'housingFund', 'commercialInsurance', 'tax']);
 const directorTotals = computed<Record<string, number>>(() => {
   // 只汇总顶层汇总行（directorDetails），避免树形子行 double-count；合计固定全量口径
   const t: Record<string, number> = {};

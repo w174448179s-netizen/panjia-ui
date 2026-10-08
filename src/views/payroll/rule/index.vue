@@ -1,6 +1,6 @@
 <template>
   <div class="payroll-rule" style="padding: 12px;">
-    <el-tabs v-model="activeTab">
+    <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <!-- ==================== 职级/提成规则 ==================== -->
       <el-tab-pane label="职级/提成规则" name="rank">
         <el-table :data="rankList" stripe border>
@@ -239,6 +239,66 @@
           </el-table-column>
         </el-table>
       </el-tab-pane>
+
+      <!-- ==================== 门店社保标准 ==================== -->
+      <el-tab-pane label="门店社保标准" name="deptSocial">
+        <div class="policy-toolbar">
+          <span class="policy-title">
+            门店社保扣减标准（每人每月固定额，算薪时 = 标准 × 计缴参保人数；计缴人数 = 非兼职、已参保且个人社保比例&gt;30%）
+          </span>
+          <el-button type="primary" :loading="socialSaving" @click="saveSocialStandards">保存</el-button>
+        </div>
+        <el-table :data="storeList" stripe border>
+          <el-table-column label="门店" prop="deptName" min-width="180" />
+          <el-table-column label="社保扣减标准（元/人/月）" width="240" align="center">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="socialRows[String(row.deptId)].standard"
+                :min="0" :precision="2" :controls="false" placeholder="未配置按0" style="width:180px"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="生效日" width="130" align="center">
+            <template #default="{ row }">{{ socialRows[String(row.deptId)].effectiveFrom || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="socialRows[String(row.deptId)].id" type="success" size="small">已配置</el-tag>
+              <el-tag v-else type="info" size="small">未配置</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
+      <!-- ==================== 门店月度配置 ==================== -->
+      <el-tab-pane label="门店月度配置" name="deptMonthly">
+        <div class="policy-toolbar">
+          <div class="monthly-toolbar-left">
+            <span class="policy-title" style="margin-right:12px">新签与结佣差额（按门店 × 月份，算薪直接扣减）</span>
+            <el-date-picker
+              v-model="monthlyPeriod" type="month" value-format="YYYY-MM" placeholder="选择月份"
+              style="width:140px" @change="loadMonthly"
+            />
+          </div>
+          <el-button type="primary" :loading="monthlySaving" @click="saveMonthly">保存</el-button>
+        </div>
+        <el-table :data="monthlyRows" stripe border v-loading="monthlyLoading">
+          <el-table-column label="门店" prop="deptName" min-width="180" />
+          <el-table-column label="新签与结佣差额（元）" width="220" align="center">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="row.diffAmount"
+                :precision="2" :controls="false" placeholder="未配置按0" style="width:170px"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="备注" min-width="220">
+            <template #default="{ row }">
+              <el-input v-model="row.remark" placeholder="选填" />
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
     </el-tabs>
 
     <!-- ==================== 职级编辑弹窗 ==================== -->
@@ -352,7 +412,14 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
-import { payrollApi, type RankRule, type PolicyRule, type ConversionRule } from '@/api/panjia/payroll';
+import {
+  payrollApi,
+  type RankRule,
+  type PolicyRule,
+  type ConversionRule,
+  type StoreDept,
+  type DeptMonthlyConfig,
+} from '@/api/panjia/payroll';
 
 const activeTab = ref('rank');
 const rankList = ref<RankRule[]>([]);
@@ -480,13 +547,136 @@ const saveConversion = async () => {
   load();
 };
 
+// ==================== 门店社保标准（DEPT 政策 socialStandard） ====================
+const storeList = ref<StoreDept[]>([]);
+const socialSaving = ref(false);
+/** deptId(字符串) → 编辑行（标准/已存在政策 id/生效日）；雪花 ID 一律字符串键，禁止 Number 转换 */
+interface SocialRow {
+  standard: number | null;
+  id?: number | string;
+  effectiveFrom?: string;
+}
+const socialRows = reactive<Record<string, SocialRow>>({});
+
+const buildSocialRows = () => {
+  const deptPolicies = policyList.value.filter((p) => p.scopeType === 'DEPT');
+  storeList.value.forEach((s) => {
+    const key = String(s.deptId);
+    const p = deptPolicies.find((x) => x.scopeKey === key);
+    socialRows[key] = p
+      ? { standard: safeParse(p.ruleContent).socialStandard ?? null, id: p.id, effectiveFrom: p.effectiveFrom }
+      : { standard: null };
+  });
+};
+
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+};
+
+const saveSocialStandards = async () => {
+  socialSaving.value = true;
+  try {
+    for (const s of storeList.value) {
+      const key = String(s.deptId);
+      const row = socialRows[key];
+      if (!row || row.standard == null) {
+        continue; // 未填 = 不生成配置（算薪按 0）
+      }
+      await payrollApi.savePolicy({
+        id: row.id as number,
+        scopeType: 'DEPT',
+        scopeKey: key,
+        baseSocial: 1637.15,
+        ruleContent: JSON.stringify({ socialStandard: row.standard }),
+        effectiveFrom: row.effectiveFrom || todayStr(),
+      } as PolicyRule);
+    }
+    ElMessage.success('已保存');
+    await load();
+  } finally {
+    socialSaving.value = false;
+  }
+};
+
+// ==================== 门店月度配置（新签与结佣差额） ====================
+const currentMonth = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+const monthlyPeriod = ref(currentMonth());
+const monthlyRows = ref<DeptMonthlyConfig[]>([]);
+const monthlyLoading = ref(false);
+const monthlySaving = ref(false);
+
+const loadMonthly = async () => {
+  if (!monthlyPeriod.value || storeList.value.length === 0) {
+    return;
+  }
+  monthlyLoading.value = true;
+  try {
+    const cfgs = ((await payrollApi.deptMonthlyList(monthlyPeriod.value)) as any).data ?? [];
+    const cfgMap = new Map<string, DeptMonthlyConfig>(cfgs.map((c: DeptMonthlyConfig) => [String(c.deptId), c]));
+    monthlyRows.value = storeList.value.map((s) => {
+      const c = cfgMap.get(String(s.deptId));
+      return {
+        id: c?.id,
+        deptId: s.deptId,
+        deptName: s.deptName,
+        diffAmount: c?.diffAmount ?? null,
+        remark: c?.remark ?? null,
+      };
+    });
+  } finally {
+    monthlyLoading.value = false;
+  }
+};
+
+const saveMonthly = async () => {
+  monthlySaving.value = true;
+  try {
+    // 提交前剥离展示字段（deptName），只传后端实体字段
+    await payrollApi.saveDeptMonthly(
+      monthlyPeriod.value,
+      monthlyRows.value.map(({ id, deptId, diffAmount, remark }) => ({ id, deptId, diffAmount, remark })),
+    );
+    ElMessage.success('已保存');
+    await loadMonthly();
+  } finally {
+    monthlySaving.value = false;
+  }
+};
+
+/** tab 首次切入时懒加载对应数据 */
+const onTabChange = (name: string | number) => {
+  if (name === 'deptSocial' && storeList.value.length === 0) {
+    load();
+  }
+  if (name === 'deptMonthly') {
+    loadMonthly();
+  }
+};
+
 // ==================== 加载 ====================
 const load = async () => {
-  rankList.value = ((await payrollApi.rankList()) as any).data ?? [];
-  policyList.value = ((await payrollApi.policyList()) as any).data ?? [];
-  conversionList.value = ((await payrollApi.conversionList()) as any).data ?? [];
+  const [rankRes, policyRes, convRes, storeRes] = await Promise.all([
+    payrollApi.rankList(),
+    payrollApi.policyList(),
+    payrollApi.conversionList(),
+    payrollApi.storeList(),
+  ]);
+  rankList.value = ((rankRes as any).data) ?? [];
+  policyList.value = ((policyRes as any).data) ?? [];
+  conversionList.value = ((convRes as any).data) ?? [];
+  storeList.value = ((storeRes as any).data) ?? [];
   if (policyList.value.length > 0) {
-    loadPolicy(policyList.value[0]);
+    // 客户政策页取 GLOBAL 政策（DEPT 政策在「门店社保标准」tab 维护，不覆盖全局表单）
+    const globalPolicy = policyList.value.find((p) => p.scopeType === 'GLOBAL') ?? policyList.value[0];
+    loadPolicy(globalPolicy);
+  }
+  buildSocialRows();
+  if (activeTab.value === 'deptMonthly') {
+    loadMonthly();
   }
 };
 
@@ -505,6 +695,10 @@ onMounted(load);
   font-size: 15px;
   font-weight: 600;
   color: #303133;
+}
+.monthly-toolbar-left {
+  display: flex;
+  align-items: center;
 }
 .policy-form {
   padding: 0 8px;

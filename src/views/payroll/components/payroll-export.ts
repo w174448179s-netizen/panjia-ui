@@ -40,10 +40,12 @@ const neg = (v: any): string | number => {
 
 /** 总监各门店提成明细（后端 DirectorStoreItem JSON） */
 export interface DirectorStoreItem {
-  deptId: number;
+  deptId: number | string;
   deptName?: string;
   newSign: number | string;
   social: number | string;
+  /** 新签与结佣差额（门店当月配置） */
+  diff?: number | string;
   billable: number | string;
   rate: number | string;
   income: number | string;
@@ -134,18 +136,20 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
     },
   },
 
-  // ────────────── 店长 sheet（15 列） ──────────────
+  // ────────────── 店长 sheet（17 列） ──────────────
   MANAGER: {
     name: '店长工资',
     heads: [
-      '门店', '姓名', '职级', '{period}月新签团队业绩', '社保业绩扣款', '新签与结佣差额',
-      '团队计薪业绩', '提成比例', '团队提成金额', '当月个人新签业绩提成',
-      '合计', '保底', '补足8000部分', '其他扣款', '店长工资',
+      '门店', '姓名', '职级', '{period}月新签团队业绩', '社保扣减标准', '计缴参保人数',
+      '社保业绩扣款', '新签与结佣差额', '团队计薪业绩', '提成比例', '团队提成金额',
+      '当月个人新签业绩提成', '合计', '保底', '补足8000部分', '其他扣款', '店长工资',
     ],
     row: (r) => {
       const newSign = Number(r.deptNewSignTotal) || 0;
       const social = Number(r.deptEmployerSocialTotal) || 0;
-      const commission = Number(r.commissionPerformance) || 0;
+      const diff = Number(r.deptDiffAmount) || 0;
+      const standard = Number(r.deptSocialStandard) || 0;
+      const insuredCount = Number(r.deptInsuredCount) || 0;
       const team = Number(r.teamIncome) || 0;
       const personal = Number(r.personalNewsignIncome) || 0;
       return [
@@ -153,9 +157,11 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         r.employeeName || '',
         r.levelCode || '',
         num(newSign),
-        neg(social),                       // 社保业绩扣款（与 Excel 一致展示负号）
-        num(newSign - commission),          // 新签与结佣差额
-        num(newSign - social),              // 团队计薪业绩
+        num(standard),                     // 社保扣减标准（元/人/月，门店配置）
+        insuredCount,                      // 计缴参保人数
+        neg(social),                       // 社保业绩扣款 = 标准 × 人数（展示负号）
+        neg(diff),                         // 新签与结佣差额（门店月度配置，直接扣减）
+        num(newSign - social - diff),      // 团队计薪业绩 = 新签 - 社保扣款 - 差额
         r.teamRate != null ? ratePercent(r.teamRate) : '',
         num(team),
         num(personal),
@@ -168,23 +174,25 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
     },
   },
 
-  // ────────────── 总监 sheet（19 列） ──────────────
+  // ────────────── 总监 sheet（20 列） ──────────────
   DIRECTOR: {
     name: '总监工资',
     heads: [
-      '姓名', '组别', '新签业绩', '社保业绩', '合计', '提成比例', '提成金额',
+      '姓名', '组别', '新签业绩', '社保业绩', '新签与结佣差额', '合计', '提成比例', '提成金额',
       '底薪', '全勤', '绩效', '结佣业绩', '业绩提成', '招聘提成',
       '社保', '公积金', '商业保险', '应发工资', '个税', '实发工资',
     ],
     row: (r) => {
       const newSign = Number(r.deptNewSignTotal) || 0;
       const social = Number(r.deptEmployerSocialTotal) || 0;
+      const diff = Number(r.deptDiffAmount) || 0;
       return [
         r.employeeName || '',
         r.deptName || '',
         num(newSign),
         neg(social),                       // 社保业绩（与 Excel 一致展示负号）
-        num(newSign - social),              // 合计 = 新签 - 社保业绩
+        neg(diff),                         // 新签与结佣差额（门店月度配置）
+        num(newSign - social - diff),       // 合计 = 新签 - 社保业绩 - 差额
         r.storeRate != null ? ratePercent(r.storeRate) : '',
         num(r.storeIncome),
         num(r.baseSalary),
@@ -206,9 +214,11 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
       const items = parseStoreItems(r);
       const newSign = Number(r.deptNewSignTotal) || 0;
       const social = Number(r.deptEmployerSocialTotal) || 0;
+      const diff = Number(r.deptDiffAmount) || 0;
       if (items.length === 0) {
         return [[
-          r.employeeName || '', r.deptName || '', num(newSign), neg(social), num(newSign - social),
+          r.employeeName || '', r.deptName || '', num(newSign), neg(social), neg(diff),
+          num(newSign - social - diff),
           r.storeRate != null ? ratePercent(r.storeRate) : '', num(r.storeIncome),
           num(r.baseSalary), num(r.fullAttendance), num(r.bonus), num(r.commissionPerformance),
           num(r.commissionIncome), num(r.mentorBonus), neg(r.socialFee), neg(r.housingFund),
@@ -218,13 +228,14 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
       return items.map((it, idx) => {
         const itNew = Number(it.newSign) || 0;
         const itSocial = Number(it.social) || 0;
+        const itDiff = Number(it.diff) || 0;
         const itBillable = Number(it.billable) || 0;
         const itIncome = Number(it.income) || 0;
         const storeName = it.deptName || r.deptName || '';
         if (idx === 0) {
           // 第一行：姓名 + 门店提成 + 底薪/全勤/绩效/社保等汇总
           return [
-            r.employeeName || '', storeName, num(itNew), neg(itSocial), num(itBillable),
+            r.employeeName || '', storeName, num(itNew), neg(itSocial), neg(itDiff), num(itBillable),
             ratePercent(it.rate), num(itIncome),
             num(r.baseSalary), num(r.fullAttendance), num(r.bonus), num(r.commissionPerformance),
             num(r.commissionIncome), num(r.mentorBonus), neg(r.socialFee), neg(r.housingFund),
@@ -233,9 +244,9 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         }
         // 后续行：只有门店提成相关列，其余空
         return [
-          '', storeName, num(itNew), neg(itSocial), num(itBillable),
+          '', storeName, num(itNew), neg(itSocial), neg(itDiff), num(itBillable),
           ratePercent(it.rate), num(itIncome),
-          '', '', '', '', '', '', '', '', '', '', '', '', '',
+          '', '', '', '', '', '', '', '', '', '', '', '',
         ];
       });
     },
