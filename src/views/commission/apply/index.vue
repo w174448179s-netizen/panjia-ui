@@ -202,7 +202,7 @@
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty :description="queryParams.period || queryParams.keyword?.trim() ? '该条件下暂无可结佣合同' : '请选择期间'" />
+          <el-empty description="该条件下暂无可结佣合同" />
         </template>
       </el-table>
 
@@ -274,8 +274,14 @@
 
       <template v-else>
         <el-form label-width="80px">
-          <el-form-item label="结佣期间">
-            <span class="batch-period">{{ batchApplyPeriod }}（自动取发起月，不按实收日期）</span>
+          <el-form-item label="结佣期间" required>
+            <el-date-picker
+              v-model="batchApplyForm.period"
+              type="month"
+              value-format="YYYY-MM"
+              placeholder="请选择结佣月份"
+              style="width: 200px"
+            />
           </el-form-item>
           <el-form-item label="合同号" required>
             <el-input
@@ -286,7 +292,7 @@
             />
           </el-form-item>
           <div class="batch-hint">
-            将为每个合同号发起结佣申请并提交审批，结佣期间自动归属为发起月（实收不限月份，历史实收审批通过且未结佣的均可发起）。已有未完结单的合同会跳过。
+            将按所选结佣期间为每个合同号发起结佣申请并提交审批（结佣期间不按实收日期，历史实收审批通过且未结佣的均可发起）。已有未完结单的合同会跳过。
           </div>
         </el-form>
       </template>
@@ -404,16 +410,11 @@ const loading = ref(false);
 const contractList = ref<CommissionContractVO[]>([]);
 const total = ref(0);
 
-// 当前月份（YYYY-MM）
-const currentPeriod = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
-
+// 期间默认空：不预选月份，空期间 = 跨全部期间查询；用户需要时自行选择月份
 const queryParams = reactive({
   pageNum: 1,
   pageSize: 20,
-  period: currentPeriod(),
+  period: '' as string,
   deptId: undefined as string | undefined,
   employeeId: undefined as string | undefined,
   bizType: undefined as string | undefined,
@@ -512,8 +513,8 @@ const getList = async () => {
   loading.value = true;
   try {
     const res: any = await commissionApi.listContracts({
-      // 有期间用期间；无期间有关键字 → 跨期查询；无期间无关键字 → 默认当前月
-      period: queryParams.period || (queryParams.keyword?.trim() ? undefined : currentPeriod()),
+      // 期间留空即跨全部期间查询（仅录合同号也能查到任意期间的单据）
+      period: queryParams.period || undefined,
       deptId: queryParams.deptId || undefined,
       employeeId: queryParams.employeeId || undefined,
       bizType: queryParams.bizType || undefined,
@@ -547,8 +548,8 @@ const handleQuery = () => {
 
 const resetQuery = () => {
   Object.assign(queryParams, {
-    // 受限角色重置回本部门默认值，不能清空为"全部"
-    period: currentPeriod(), deptId: defaultDeptId(), employeeId: undefined, bizType: undefined, status: '', keyword: '', pageNum: 1,
+    // 受限角色重置回本部门默认值，不能清空为"全部"；期间重置为空（跨全部期间）
+    period: '', deptId: defaultDeptId(), employeeId: undefined, bizType: undefined, status: '', keyword: '', pageNum: 1,
   });
   loadBizTypes().then(getList);
 };
@@ -564,17 +565,17 @@ const showBatchApply = ref(false);
 const batchApplyLoading = ref(false);
 const batchApplyResult = ref<BatchResultDTO | null>(null);
 const batchApplyForm = reactive({
+  period: '',
   contractNosText: '',
   parsedCount: 0,
 });
-// 结佣期间 = 发起月（弹窗展示用，后端以服务端当前月为准）
-const batchApplyPeriod = computed(() => currentPeriod());
 const batchApplySummary = computed(() => {
   const r = batchApplyResult.value;
   if (!r) return '';
   return `成功 ${r.success} 个，跳过 ${r.skipped} 个，失败 ${r.failed} 个`;
 });
 const resetBatchApply = () => {
+  batchApplyForm.period = '';
   batchApplyForm.contractNosText = '';
   batchApplyForm.parsedCount = 0;
   batchApplyLoading.value = false;
@@ -586,6 +587,10 @@ const closeBatchApply = () => {
   getList();
 };
 const doBatchApply = async () => {
+  if (!batchApplyForm.period) {
+    ElMessage.warning('请选择结佣期间');
+    return;
+  }
   const contractNos = batchApplyForm.contractNosText
     .split(/[\n,，\s]+/)
     .map((s) => s.trim())
@@ -597,8 +602,8 @@ const doBatchApply = async () => {
   batchApplyForm.parsedCount = contractNos.length;
   batchApplyLoading.value = true;
   try {
-    // period 传空：后端自动取发起月（服务端时间为准），实收事实跨期查找
-    const res: any = await commissionApi.batchApplyByContract('', contractNos);
+    // 传发起人选择的结佣期间；实收事实跨期查找，不按实收月归属
+    const res: any = await commissionApi.batchApplyByContract(batchApplyForm.period, contractNos);
     batchApplyResult.value = res.data;
   } catch { /* 拦截器处理 */ } finally {
     batchApplyLoading.value = false;
@@ -778,19 +783,11 @@ const formatDateTime = (val?: string | null): string => {
 // 页签缓存复用场景下补开单据（详见 useWorkflowRouteOpen 注释）
 useWorkflowRouteOpen('/performance/apply', openFromWorkflow);
 
-onMounted(async () => {
-  // 受限角色（店长/总监）默认选中本部门，首屏即按本部门查询
+onMounted(() => {
+  // 受限角色（店长/总监）默认选中本部门，首屏即按本部门查询；
+  // 期间默认留空，首屏跨全部期间查询，不再预选当前月/最新有数据期间
   queryParams.deptId = defaultDeptId();
   loadBizTypes();
-  // 默认选中最新有数据期间（当月有单据优先当月），与新签合同页口径一致；
-  // 不传期间时后端兜底为当月，无数据会是空表，故前端显式选中最新期间
-  try {
-    const res = await commissionApi.listPeriods();
-    const periods = res.data ?? [];
-    const now = new Date();
-    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    queryParams.period = periods.includes(current) ? current : (periods[0] ?? '');
-  } catch { /* 期间加载失败保持不选，由后端兜底 */ }
   getList();
 });
 </script>
@@ -905,11 +902,6 @@ onMounted(async () => {
   margin-top: 12px;
 }
 
-.batch-period {
-  font-size: 14px;
-  font-weight: 600;
-  color: #303133;
-}
 .batch-hint {
   font-size: 12px;
   color: #909399;
