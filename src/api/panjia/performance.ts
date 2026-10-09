@@ -308,6 +308,30 @@ export interface PerformanceFactSearch {
   detailCount: number;        // 明细条数
 }
 
+/** 业绩汇总行（/perf/fact/summary 返回，按期间维度 + 员工聚合新签业绩） */
+export interface PerformanceSummaryRow {
+  period: string;             // 期间标签（YYYY-MM / YYYY-Qn / YYYY）
+  employeeId: string;
+  employeeName?: string;
+  employeeCode?: string;
+  deptName?: string;
+  deptId?: string;
+  contractCount: number;      // 合同数（去重）
+  totalAmount: number;        // 新签业绩金额合计
+}
+
+/** 业绩排行行（/perf/fact/rank 返回，按员工聚合新签业绩金额降序） */
+export interface PerformanceRankRow {
+  rank: number;               // 排名（跨页连续）
+  employeeId: string;
+  employeeName?: string;
+  employeeCode?: string;
+  deptName?: string;
+  deptId?: string;
+  contractCount: number;
+  totalAmount: number;
+}
+
 /** 业绩查询·员工下拉选项（/perf/fact/search/employee-options 返回，已按部门数据权限过滤） */
 export interface PerformanceEmployeeOption {
   employeeId: string;
@@ -385,7 +409,7 @@ export const performanceApi = {
       '/performance/received/manual-batch-submit', data),
 
   // 完整业绩查询（合同维度；传 employeeId 时金额仅汇总该员工个人份额）
-  searchByContract: (params: { period?: string; deptId?: string; bizType?: string; keyword?: string; employeeId?: string; pageNum?: number; pageSize?: number }) =>
+  searchByContract: (params: { period?: string; deptId?: string; bizType?: string; keyword?: string; employeeId?: string; settled?: boolean; pageNum?: number; pageSize?: number }) =>
     panjiaRequest.get<PageResult<PerformanceFactSearch>>('/perf/fact/search', params),
 
   // 完整业绩查询·业务类型下拉选项（数据范围与 searchByContract 一致）
@@ -400,6 +424,14 @@ export const performanceApi = {
   // 一手房/房产金融/家装荐客传订单号，其余传合同号，空则订单号）
   getSearchDetails: (params: { bizNo: string }) =>
     panjiaRequest.get<PerformanceSearchDetailRow[]>('/perf/fact/search/details', params),
+
+  // 业绩汇总报表（按月/季/年 + 员工聚合新签业绩；经纪人本人、店长本店、总监全员）
+  listSummary: (params: { periodType: string; year: string; quarter?: number; deptId?: string; employeeId?: string; bizType?: string; pageNum?: number; pageSize?: number }) =>
+    panjiaRequest.get<PageResult<PerformanceSummaryRow>>('/perf/fact/summary', params),
+
+  // 业绩排行（按员工聚合新签业绩金额降序，分页；rank 跨页连续）
+  listRank: (params: { periodType: string; year: string; quarter?: number; deptId?: string; bizType?: string; pageNum?: number; pageSize?: number }) =>
+    panjiaRequest.get<PageResult<PerformanceRankRow>>('/perf/fact/rank', params),
 
   // 合同级作废：该合同该期间全部有效业绩一次性作废（不区分人员/角色）
   voidByContract: (period: string, factType: string, contractNo: string, reason: string) =>

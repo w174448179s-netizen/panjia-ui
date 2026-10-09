@@ -56,6 +56,18 @@
               @clear="handleQuery"
             />
           </el-form-item>
+          <el-form-item label="结佣" prop="settled">
+            <el-select
+              v-model="queryParams.settled"
+              placeholder="全部"
+              clearable
+              style="width: 120px"
+              @change="handleQuery"
+            >
+              <el-option :value="true" label="已结佣" />
+              <el-option :value="false" label="未结佣" />
+            </el-select>
+          </el-form-item>
           <el-form-item>
             <el-button type="primary" :icon="Search" @click="handleQuery">查询</el-button>
             <el-button :icon="Refresh" @click="resetQuery">重置</el-button>
@@ -436,6 +448,7 @@ const queryParams = reactive({
   employeeId: undefined as string | undefined,
   bizType: undefined as string | undefined,
   keyword: undefined as string | undefined,
+  settled: undefined as boolean | undefined,
 });
 
 // ==================== 员工筛选（EmployeeSelect 公共组件，选项受后端部门数据权限约束） ====================
@@ -484,6 +497,7 @@ const getList = async () => {
       employeeId: isAgent.value ? undefined : queryParams.employeeId,
       bizType: queryParams.bizType,
       keyword: queryParams.keyword,
+      settled: queryParams.settled,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
     });
@@ -521,6 +535,7 @@ const resetQuery = () => {
   clearEmployeeFilter();
   queryParams.bizType = undefined;
   queryParams.keyword = undefined;
+  queryParams.settled = undefined;
   loadBizTypes().then(handleQuery);
 };
 
