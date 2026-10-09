@@ -84,7 +84,7 @@
       </div>
 
       <!-- 合同维度表格 -->
-      <el-table border class="data-table" :data="contractList">
+      <el-table border class="data-table" :data="contractList" :empty-text="emptyText">
         <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="{ row }">
             <!-- 点击打开结佣申请详情 -->
@@ -510,6 +510,13 @@ const canOriginate = (row: CommissionContractVO) =>
 
 // 列表
 const getList = async () => {
+  // 必须选择期间或录入关键字，避免全表扫描
+  if (!queryParams.period && !queryParams.keyword?.trim()) {
+    contractList.value = [];
+    total.value = 0;
+    summary.value = emptySummary();
+    return;
+  }
   loading.value = true;
   try {
     const res: any = await commissionApi.listContracts({
@@ -545,6 +552,14 @@ const handleQuery = () => {
   queryParams.pageNum = 1;
   getList();
 };
+
+/** 空态提示：引导用户选择查询条件 */
+const emptyText = computed(() => {
+  if (!queryParams.period && !queryParams.keyword?.trim()) {
+    return '请选择结佣期间或录入关键字查询';
+  }
+  return '该条件下暂无可结佣合同';
+});
 
 const resetQuery = () => {
   Object.assign(queryParams, {
