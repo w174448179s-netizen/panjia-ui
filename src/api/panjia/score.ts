@@ -17,6 +17,13 @@ export const scoreApi = {
   getById(id: string | number) {
     return panjiaRequest.get<ScoreRecord>(`/people/score/${id}`);
   },
+  /**
+   * 本人/组织视角积分查询（综合查询→积分查询）。
+   * 数据权限：超管/总监全量；店长本门店；其他仅本人。
+   */
+  myList(params: ScoreQuery) {
+    return panjiaRequest.get<PageResult<ScoreRecord>>('/people/score/my/list', params);
+  },
   /** 手工新增积分记录（补录/修正；scoreMonth 格式 yyyy-MM；期间未锁定才允许） */
   create(data: {
     employeeId: string | number;
