@@ -63,7 +63,9 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="考勤月份" align="center" prop="attendMonth" width="120" />
+        <el-table-column label="考勤月份" align="center" width="120">
+          <template #default="{ row }">{{ row.attendMonth?.slice(0, 7) ?? '—' }}</template>
+        </el-table-column>
         <el-table-column label="出勤(天)" align="center" prop="attendDays" width="90" />
         <el-table-column label="休息(天)" align="center" prop="restDays" width="90" />
         <el-table-column label="迟到次数" align="center" prop="lateCount" width="90" />
