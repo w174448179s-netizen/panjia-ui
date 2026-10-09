@@ -65,7 +65,43 @@
         </div>
       </template>
 
-      <el-table v-loading="loading" border class="data-table" :data="scoreList" :max-height="tableMaxHeight">
+      <el-table v-loading="loading" border class="data-table" :data="scoreList" :max-height="tableMaxHeight" @expand-change="handleExpandChange">
+        <el-table-column type="expand">
+          <template #default="{ row }">
+            <div class="detail-expand">
+              <el-table
+                :data="scoreDetailMap[row.scoreMonth?.slice(0, 7)] || []"
+                size="small"
+                border
+                v-loading="detailLoadingMap[row.scoreMonth?.slice(0, 7)]"
+                max-height="300"
+              >
+                <el-table-column label="填报日期" align="center" prop="pointDate" width="120" />
+                <el-table-column v-if="isManager" label="工号" align="center" prop="employeeCode" width="100" />
+                <el-table-column v-if="isManager" label="姓名" align="center" prop="employeeName" width="90" />
+                <el-table-column label="当日积分" align="center" prop="score" width="100" />
+                <el-table-column label="填报时间" align="center" prop="submitTime" width="180">
+                  <template #default="{ row: r }">{{ r.submitTime ?? '—' }}</template>
+                </el-table-column>
+                <el-table-column label="是否计入" align="center" width="100">
+                  <template #default="{ row: r }">
+                    <el-tag v-if="r.isValid" type="success" effect="plain" size="small">计入</el-tag>
+                    <el-tag v-else type="info" effect="plain" size="small">不计入</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="晚提交" align="center" width="90">
+                  <template #default="{ row: r }">
+                    <el-tag v-if="r.isLateSubmit" type="danger" effect="plain" size="small">晚提交</el-tag>
+                    <span v-else>—</span>
+                  </template>
+                </el-table-column>
+                <template #empty>
+                  <span>该月无每日积分明细</span>
+                </template>
+              </el-table>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="积分期间" align="center" prop="scoreMonth" width="110">
           <template #default="{ row }">{{ row.scoreMonth?.slice(0, 7) ?? '—' }}</template>
         </el-table-column>
@@ -129,7 +165,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import type { FormInstance } from 'element-plus';
 import { scoreApi } from '@/api/panjia/score';
-import type { ScoreQuery, ScoreRecord } from '@/api/panjia/types';
+import type { ScoreDetail, ScoreQuery, ScoreRecord } from '@/api/panjia/types';
 import { useUserStore } from '@/store/modules/user';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 
@@ -139,6 +175,31 @@ const loading = ref(false);
 const scoreList = ref<ScoreRecord[]>([]);
 const total = ref(0);
 const tableMaxHeight = ref(600);
+
+/** 每日明细缓存：scoreMonth(yyyy-MM) → details 列表 */
+const scoreDetailMap = ref<Record<string, ScoreDetail[]>>({});
+/** 每日明细加载中标记 */
+const detailLoadingMap = ref<Record<string, boolean>>({});
+
+/** 展开行时加载每日明细 */
+const handleExpandChange = async (row: ScoreRecord, expanded: any) => {
+  const month = row.scoreMonth?.slice(0, 7);
+  if (!month) return;
+  const isExpanded = Array.isArray(expanded)
+    ? expanded.some((r: ScoreRecord) => r.scoreMonth?.slice(0, 7) === month)
+    : Boolean(expanded);
+  if (!isExpanded || scoreDetailMap.value[month]) return;
+  detailLoadingMap.value[month] = true;
+  try {
+    const res = await scoreApi.myDetails(month);
+    scoreDetailMap.value[month] = res.data ?? [];
+  } catch (e) {
+    console.error('加载积分每日明细失败', e);
+    scoreDetailMap.value[month] = [];
+  } finally {
+    detailLoadingMap.value[month] = false;
+  }
+};
 
 /** 管理角色判断：店长/总监/超管可见部门/员工筛选列 */
 const isManager = computed(() => {
@@ -250,6 +311,10 @@ onMounted(() => {
 
   .deduct-text {
     color: var(--el-color-danger);
+  }
+
+  .detail-expand {
+    padding: 8px 12px 4px 48px;
   }
 
   .pagination-wrap {

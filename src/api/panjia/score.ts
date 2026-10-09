@@ -1,5 +1,5 @@
 import panjiaRequest from './index';
-import type { PageResult, ScoreApproval, ScoreQuery, ScoreRecord } from './types';
+import type { PageResult, ScoreApproval, ScoreDetail, ScoreQuery, ScoreRecord } from './types';
 
 /**
  * 绩效积分接口（员工域，实际前缀 /api/panjia）。
@@ -23,6 +23,10 @@ export const scoreApi = {
    */
   myList(params: ScoreQuery) {
     return panjiaRequest.get<PageResult<ScoreRecord>>('/people/score/my/list', params);
+  },
+  /** 本人/组织视角的积分每日明细（展开行加载） */
+  myDetails(scoreMonth: string) {
+    return panjiaRequest.get<ScoreDetail[]>('/people/score/my/details', { scoreMonth });
   },
   /** 手工新增积分记录（补录/修正；scoreMonth 格式 yyyy-MM；期间未锁定才允许） */
   create(data: {

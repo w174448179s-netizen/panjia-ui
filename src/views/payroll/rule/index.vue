@@ -258,8 +258,14 @@
               />
             </template>
           </el-table-column>
-          <el-table-column label="生效日" width="130" align="center">
-            <template #default="{ row }">{{ socialRows[String(row.deptId)].effectiveFrom || '—' }}</template>
+          <el-table-column label="生效日" width="160" align="center">
+            <template #default="{ row }">
+              <el-date-picker
+                v-model="socialRows[String(row.deptId)].effectiveFrom"
+                type="date" value-format="YYYY-MM-DD" placeholder="默认当月"
+                :clearable="true" style="width:140px"
+              />
+            </template>
           </el-table-column>
           <el-table-column label="状态" width="100" align="center">
             <template #default="{ row }">

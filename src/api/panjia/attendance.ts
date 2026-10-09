@@ -1,6 +1,7 @@
 import panjiaRequest from './index';
 import type {
   AttendanceApproval,
+  AttendanceDetail,
   AttendanceQuery,
   AttendanceRecord,
   AttendanceSaveForm,
@@ -42,6 +43,10 @@ export const attendanceApi = {
   /** 本人考勤详情 */
   myGetById(id: string | number) {
     return panjiaRequest.get<AttendanceRecord>(`/people/attendance/my/${id}`);
+  },
+  /** 本人考勤每日明细（展开行加载） */
+  myDetails(attendMonth: string) {
+    return panjiaRequest.get<AttendanceDetail[]>('/people/attendance/my/details', { attendMonth });
   },
   // ==================== 考勤审批 ====================
   /** 查询期间审批状态 */

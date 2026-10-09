@@ -412,6 +412,16 @@ export interface AttendanceQuery extends PageQuery {
   monthEnd?: string;
 }
 
+/** 考勤每日明细（一员工一天一行，导入同步） */
+export interface AttendanceDetail {
+  id: string;
+  employeeId: string;
+  employeeCode?: string;
+  employeeName?: string;
+  attendDate: string;
+  status?: string;
+}
+
 /** 考勤汇总新增/编辑表单（人月维度） */
 export interface AttendanceSaveForm {
   employeeId?: string;
@@ -501,6 +511,19 @@ export interface ScoreQuery extends PageQuery {
   deptId?: string;
   monthStart?: string;
   monthEnd?: string;
+}
+
+/** 积分每日明细（一员工一天一行，导入同步） */
+export interface ScoreDetail {
+  id: string;
+  employeeId: string;
+  employeeCode?: string;
+  employeeName?: string;
+  pointDate: string;
+  submitTime?: string;
+  score?: number;
+  isValid?: boolean;
+  isLateSubmit?: boolean;
 }
 
 /** 积分审批单（一期间一行；无审批单时 status 为空表示未提交） */

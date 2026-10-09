@@ -33,7 +33,36 @@
         </div>
       </template>
 
-      <el-table v-loading="loading" border class="data-table" :data="attendanceList">
+      <el-table v-loading="loading" border class="data-table" :data="attendanceList" @expand-change="handleExpandChange">
+        <el-table-column type="expand">
+          <template #default="{ row }">
+            <div class="detail-expand">
+              <el-table
+                :data="detailMap[row.attendMonth?.slice(0, 7)] || []"
+                size="small"
+                border
+                v-loading="detailLoadingMap[row.attendMonth?.slice(0, 7)]"
+                max-height="300"
+              >
+                <el-table-column label="考勤日期" align="center" prop="attendDate" width="140" />
+                <el-table-column label="考勤状态" align="center" prop="status" min-width="120">
+                  <template #default="{ row: r }">
+                    <el-tag
+                      v-if="r.status"
+                      :type="attendStatusTagType(r.status)"
+                      effect="plain"
+                      size="small"
+                    >{{ r.status }}</el-tag>
+                    <span v-else>—</span>
+                  </template>
+                </el-table-column>
+                <template #empty>
+                  <span>该月无每日考勤明细</span>
+                </template>
+              </el-table>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="考勤月份" align="center" prop="attendMonth" width="120" />
         <el-table-column label="出勤(天)" align="center" prop="attendDays" width="90" />
         <el-table-column label="休息(天)" align="center" prop="restDays" width="90" />
@@ -65,13 +94,46 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
 import { attendanceApi } from '@/api/panjia/attendance';
-import type { AttendanceQuery, AttendanceRecord } from '@/api/panjia/types';
+import type { AttendanceDetail, AttendanceQuery, AttendanceRecord } from '@/api/panjia/types';
 import modal from '@/plugins/modal';
 
 const loading = ref(false);
 const attendanceList = ref<AttendanceRecord[]>([]);
 const total = ref(0);
 const monthRange = ref<[string, string] | []>([]);
+
+/** 每日明细缓存：attendMonth(yyyy-MM) → details 列表 */
+const detailMap = ref<Record<string, AttendanceDetail[]>>({});
+/** 每日明细加载中标记 */
+const detailLoadingMap = ref<Record<string, boolean>>({});
+
+/** 展开行时加载每日明细 */
+const handleExpandChange = async (row: AttendanceRecord, expanded: any) => {
+  const month = row.attendMonth?.slice(0, 7);
+  if (!month) return;
+  const isExpanded = Array.isArray(expanded)
+    ? expanded.some((r: AttendanceRecord) => r.attendMonth?.slice(0, 7) === month)
+    : Boolean(expanded);
+  if (!isExpanded || detailMap.value[month]) return;
+  detailLoadingMap.value[month] = true;
+  try {
+    const res = await attendanceApi.myDetails(month);
+    detailMap.value[month] = res.data ?? [];
+  } catch (e) {
+    console.error('加载考勤每日明细失败', e);
+    detailMap.value[month] = [];
+  } finally {
+    detailLoadingMap.value[month] = false;
+  }
+};
+
+/** 考勤状态标签颜色 */
+const attendStatusTagType = (status: string): 'success' | 'warning' | 'danger' | 'info' => {
+  if (status.includes('正常')) return 'success';
+  if (status.includes('迟到') || status.includes('缺卡')) return 'warning';
+  if (status.includes('旷工')) return 'danger';
+  return 'info';
+};
 
 const queryParams = reactive<AttendanceQuery>({
   pageNum: 1,
@@ -148,6 +210,10 @@ onMounted(() => {
     letter-spacing: 1px;
     text-transform: uppercase;
     color: var(--el-color-primary);
+  }
+
+  .detail-expand {
+    padding: 8px 12px 4px 48px;
   }
 
   .pagination-wrap {
