@@ -107,6 +107,33 @@
       </el-form>
     </div>
 
+    <!-- 首登强制改密弹窗 -->
+    <el-dialog
+      v-model="forcePwdVisible"
+      title="首次登录必须修改密码"
+      width="420px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :show-close="false"
+      destroy-on-close
+    >
+      <el-form ref="pwdFormRef" :model="pwdForm" :rules="pwdRules" label-width="80px">
+        <el-form-item label="旧密码">
+          <el-input :model-value="loginForm.password" type="password" disabled />
+        </el-form-item>
+        <el-form-item label="新密码" prop="newPassword">
+          <el-input v-model="pwdForm.newPassword" type="password" show-password placeholder="6-20位，不含特殊字符" />
+        </el-form-item>
+        <el-form-item label="确认密码" prop="confirmPassword">
+          <el-input v-model="pwdForm.confirmPassword" type="password" show-password placeholder="请再次输入新密码" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="handleForcePwdCancel">退出登录</el-button>
+        <el-button type="primary" :loading="pwdLoading" @click="handleForcePwdSubmit">确认修改</el-button>
+      </template>
+    </el-dialog>
+
     <div class="el-login-footer">
       <span>Copyright © 2018-{{ currentYear }} 疯狂的狮子Li All Rights Reserved.</span>
     </div>
@@ -121,6 +148,8 @@ import { authRouterUrl } from '@/api/system/social/auth';
 import { LoginData } from '@/api/types';
 import { HttpStatus } from '@/enums/RespEnum';
 import { useUserStore } from '@/store/modules/user';
+import { updateUserPwd } from '@/api/system/user';
+import modal from '@/plugins/modal';
 
 const title = import.meta.env.VITE_APP_TITLE;
 const currentYear = new Date().getFullYear();
@@ -173,6 +202,33 @@ const register = ref(false);
 const redirect = ref('/');
 const loginRef = ref<ElFormInstance>();
 
+// 首登强制改密弹窗
+const forcePwdVisible = ref(false);
+const pwdLoading = ref(false);
+const pwdFormRef = ref<ElFormInstance>();
+const pwdForm = reactive({
+  newPassword: '',
+  confirmPassword: ''
+});
+
+const pwdRules: ElFormRules = {
+  newPassword: [
+    { required: true, message: '请输入新密码', trigger: 'blur' },
+    { min: 6, max: 20, message: '长度在 6 到 20 个字符', trigger: 'blur' },
+    { pattern: /^[^<>"'|\\]+$/, message: '不能包含特殊字符：< > " \' \\ |', trigger: 'blur' }
+  ],
+  confirmPassword: [
+    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    {
+      validator: (_rule: any, value: string, callback: any) => {
+        if (value !== pwdForm.newPassword) callback(new Error('两次输入的密码不一致'));
+        else callback();
+      },
+      trigger: 'blur'
+    }
+  ]
+};
+
 watch(
   () => router.currentRoute.value,
   (newRoute: any) => {
@@ -195,8 +251,15 @@ const handleLogin = () => {
       localStorage.removeItem('password');
       const [err] = await to(userStore.login(loginForm.value));
       if (!err) {
-        const redirectUrl = redirect.value || '/';
-        await router.push(redirectUrl);
+        // 首登强制改密：密码仍为系统初始密码时，弹窗强制修改，否则不允许进入系统
+        if (userStore.needChangePassword) {
+          pwdForm.newPassword = '';
+          pwdForm.confirmPassword = '';
+          forcePwdVisible.value = true;
+        } else {
+          const redirectUrl = redirect.value || '/';
+          await router.push(redirectUrl);
+        }
         loading.value = false;
       } else {
         loading.value = false;
@@ -206,6 +269,34 @@ const handleLogin = () => {
       }
     } else {
       console.log('error submit!', fields);
+    }
+  });
+};
+
+/** 强制改密：取消 → 退出登录 */
+const handleForcePwdCancel = async () => {
+  forcePwdVisible.value = false;
+  await userStore.logout();
+};
+
+/** 强制改密：提交新密码 */
+const handleForcePwdSubmit = async () => {
+  pwdFormRef.value?.validate(async (valid: boolean) => {
+    if (!valid) return;
+    pwdLoading.value = true;
+    try {
+      await updateUserPwd(String(loginForm.value.password), pwdForm.newPassword);
+      modal.msgSuccess('密码修改成功，请重新登录');
+      forcePwdVisible.value = false;
+      await userStore.logout();
+      loginForm.value.password = '';
+      if (captchaEnabled.value) {
+        await getCode();
+      }
+    } catch (e: any) {
+      modal.msgError(e?.msg || '修改失败，请重试');
+    } finally {
+      pwdLoading.value = false;
     }
   });
 };
