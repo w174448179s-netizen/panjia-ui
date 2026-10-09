@@ -202,7 +202,7 @@
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty :description="queryParams.period ? '该期间暂无可结佣合同' : '请选择期间'" />
+          <el-empty :description="queryParams.period || queryParams.keyword?.trim() ? '该条件下暂无可结佣合同' : '请选择期间'" />
         </template>
       </el-table>
 
@@ -516,7 +516,8 @@ const getList = async () => {
   loading.value = true;
   try {
     const res: any = await commissionApi.listContracts({
-      period: queryParams.period || currentPeriod(),
+      // 有期间用期间；无期间有关键字 → 跨期查询；无期间无关键字 → 默认当前月
+      period: queryParams.period || (queryParams.keyword?.trim() ? undefined : currentPeriod()),
       deptId: queryParams.deptId || undefined,
       employeeId: queryParams.employeeId || undefined,
       bizType: queryParams.bizType || undefined,

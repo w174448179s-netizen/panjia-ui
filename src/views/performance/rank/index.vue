@@ -33,7 +33,7 @@
               <el-option label="Q4" :value="4" />
             </el-select>
           </el-form-item>
-          <el-form-item v-if="!isAgent" label="门店/组别" prop="deptId">
+          <el-form-item label="门店/组别" prop="deptId">
             <PanjiaDeptSelect
               v-model="queryParams.deptId"
               :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
@@ -116,14 +116,9 @@ import { Search, Refresh } from '@element-plus/icons-vue';
 import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceRankRow } from '@/api/panjia/performance';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
-import { useUserStore } from '@/store/modules/user';
 import { useDeptScope } from '@/hooks/useDeptScope';
 
 defineOptions({ name: 'PerformanceRank' });
-
-const userStore = useUserStore();
-/** 经纪人：本人口径（后端强制按本人过滤），不展示门店/组别筛选 */
-const isAgent = computed(() => userStore.roles.includes('agent'));
 
 const tableMaxHeight = ref(580);
 
@@ -158,8 +153,8 @@ const getList = async () => {
       periodType: queryParams.periodType,
       year: queryParams.year,
       quarter: queryParams.quarter,
-      // 经纪人走后端本人 employeeId 口径，不传部门筛选
-      deptId: isAgent.value ? undefined : queryParams.deptId,
+      // 排行榜全员全量，部门仅作筛选
+      deptId: queryParams.deptId,
       bizType: queryParams.bizType,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,

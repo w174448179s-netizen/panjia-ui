@@ -145,7 +145,7 @@
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty :description="queryParams.period ? '该期间暂无实收审批单' : '请选择期间'" />
+          <el-empty :description="queryParams.period || queryParams.keyword ? '该条件下暂无实收审批单' : '请选择期间'" />
         </template>
       </el-table>
 

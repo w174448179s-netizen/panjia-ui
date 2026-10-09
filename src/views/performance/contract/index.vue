@@ -8,9 +8,9 @@
             v-model="queryParams.period"
             type="month"
             value-format="YYYY-MM"
-            placeholder="选择月份"
-            :clearable="false"
-            style="width: 150px"
+            placeholder="全部期间（可按合同号搜）"
+            :clearable="true"
+            style="width: 170px"
             @change="handleQuery"
           />
         </el-form-item>
@@ -176,7 +176,7 @@
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty :description="queryParams.period ? '该期间暂无业绩数据' : '请选择期间查询业绩'" />
+          <el-empty :description="queryParams.period || queryParams.keyword ? '该条件下暂无业绩数据' : '请选择期间或输入合同号查询业绩'" />
         </template>
       </el-table>
 
@@ -509,11 +509,12 @@ const goDetail = async (row: PerformanceManageContract) => {
 };
 
 const loadDetailList = async () => {
-  if (!detailDialog.bizKey || !detailDialog.period) return;
+  // 明细按业务键查询；跨期搜索场景 period 可为空（查该合同全部期间明细）
+  if (!detailDialog.bizKey) return;
   detailLoading.value = true;
   try {
     const res = await performanceApi.listManageContractDetails({
-      period: detailDialog.period,
+      period: detailDialog.period || undefined,
       factType: detailDialog.factType,
       contractNos: detailDialog.bizKey,
     });
@@ -764,7 +765,8 @@ const bizTypeOptions = ref<string[]>([]);
 
 // ==================== 加载 ====================
 const getList = async () => {
-  if (!queryParams.period) {
+  // 口径：期间与关键字（合同号等）至少一项——仅录合同号不选期间时跨期查询
+  if (!queryParams.period && !queryParams.keyword?.trim()) {
     contractData.value = [];
     totalContracts.value = 0;
     summary.value = emptySummary();
@@ -774,7 +776,7 @@ const getList = async () => {
   loading.value = true;
   try {
     const res = await performanceApi.listManageByContract({
-      period: queryParams.period,
+      period: queryParams.period || undefined,
       factType: 'PERF_EXPECT',
       deptId: queryParams.deptId ? String(queryParams.deptId) : undefined,
       employeeId: queryParams.employeeId || undefined,
