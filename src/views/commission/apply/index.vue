@@ -274,14 +274,8 @@
 
       <template v-else>
         <el-form label-width="80px">
-          <el-form-item label="结算月" required>
-            <el-date-picker
-              v-model="batchApplyForm.period"
-              type="month"
-              value-format="YYYY-MM"
-              placeholder="请选择月份"
-              style="width: 100%"
-            />
+          <el-form-item label="结佣期间">
+            <span class="batch-period">{{ batchApplyPeriod }}（自动取发起月，不按实收日期）</span>
           </el-form-item>
           <el-form-item label="合同号" required>
             <el-input
@@ -291,7 +285,9 @@
               placeholder="每行一个合同号/订单号（以列表展示的编号为准），或用逗号/空格分隔"
             />
           </el-form-item>
-          <div class="batch-hint">将为每个合同号发起结佣申请并提交审批。已有未完结单的合同会跳过。</div>
+          <div class="batch-hint">
+            将为每个合同号发起结佣申请并提交审批，结佣期间自动归属为发起月（实收不限月份，历史实收审批通过且未结佣的均可发起）。已有未完结单的合同会跳过。
+          </div>
         </el-form>
       </template>
 
@@ -568,17 +564,17 @@ const showBatchApply = ref(false);
 const batchApplyLoading = ref(false);
 const batchApplyResult = ref<BatchResultDTO | null>(null);
 const batchApplyForm = reactive({
-  period: '' as string,
   contractNosText: '',
   parsedCount: 0,
 });
+// 结佣期间 = 发起月（弹窗展示用，后端以服务端当前月为准）
+const batchApplyPeriod = computed(() => currentPeriod());
 const batchApplySummary = computed(() => {
   const r = batchApplyResult.value;
   if (!r) return '';
   return `成功 ${r.success} 个，跳过 ${r.skipped} 个，失败 ${r.failed} 个`;
 });
 const resetBatchApply = () => {
-  batchApplyForm.period = '';
   batchApplyForm.contractNosText = '';
   batchApplyForm.parsedCount = 0;
   batchApplyLoading.value = false;
@@ -590,10 +586,6 @@ const closeBatchApply = () => {
   getList();
 };
 const doBatchApply = async () => {
-  if (!batchApplyForm.period) {
-    ElMessage.warning('请选择结算月');
-    return;
-  }
   const contractNos = batchApplyForm.contractNosText
     .split(/[\n,，\s]+/)
     .map((s) => s.trim())
@@ -605,7 +597,8 @@ const doBatchApply = async () => {
   batchApplyForm.parsedCount = contractNos.length;
   batchApplyLoading.value = true;
   try {
-    const res: any = await commissionApi.batchApplyByContract(batchApplyForm.period, contractNos);
+    // period 传空：后端自动取发起月（服务端时间为准），实收事实跨期查找
+    const res: any = await commissionApi.batchApplyByContract('', contractNos);
     batchApplyResult.value = res.data;
   } catch { /* 拦截器处理 */ } finally {
     batchApplyLoading.value = false;
@@ -912,6 +905,11 @@ onMounted(async () => {
   margin-top: 12px;
 }
 
+.batch-period {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
 .batch-hint {
   font-size: 12px;
   color: #909399;
