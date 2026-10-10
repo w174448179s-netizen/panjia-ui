@@ -448,19 +448,20 @@ export const performanceApi = {
   listRank: (params: { periodType: string; year: string; quarter?: number; deptId?: string; bizType?: string; pageNum?: number; pageSize?: number }) =>
     panjiaRequest.get<PageResult<PerformanceRankRow>>('/perf/fact/rank', params),
 
-  // 合同级作废：该合同该期间全部有效业绩一次性作废（不区分人员/角色）
-  voidByContract: (period: string, factType: string, contractNo: string, reason: string) =>
-    panjiaRequest.post<number>(`/perf/fact/void-contract?period=${period}&factType=${factType}&contractNo=${encodeURIComponent(contractNo)}&reason=${encodeURIComponent(reason)}`),
+  // 合同级作废：该订单该期间全部有效业绩一次性作废（不区分人员/角色）；orderNo 与合同号双键精确匹配
+  voidByContract: (period: string, factType: string, contractNo: string, reason: string, orderNo?: string) =>
+    panjiaRequest.post<number>(`/perf/fact/void-contract?period=${period}&factType=${factType}&contractNo=${encodeURIComponent(contractNo)}&reason=${encodeURIComponent(reason)}${orderNo ? `&orderNo=${encodeURIComponent(orderNo)}` : ''}`),
 
-  // 合同级恢复：该合同该期间全部已作废业绩一次性恢复（period 改为当前月）
-  restoreByContract: (period: string, factType: string, contractNo: string, reason: string) =>
-    panjiaRequest.post<number>(`/perf/fact/restore-contract?period=${period}&factType=${factType}&contractNo=${encodeURIComponent(contractNo)}&reason=${encodeURIComponent(reason)}`),
+  // 合同级恢复：该订单该期间全部已作废业绩一次性恢复（period 改为当前月）；orderNo 与合同号双键精确匹配
+  restoreByContract: (period: string, factType: string, contractNo: string, reason: string, orderNo?: string) =>
+    panjiaRequest.post<number>(`/perf/fact/restore-contract?period=${period}&factType=${factType}&contractNo=${encodeURIComponent(contractNo)}&reason=${encodeURIComponent(reason)}${orderNo ? `&orderNo=${encodeURIComponent(orderNo)}` : ''}`),
 };
 
 // ========== 独立导出函数 ==========
 /** 业绩冲正/补录（批量，一个合同录入多人） */
 export function createManualOffset(data: {
   contractNo: string;
+  orderNo?: string;
   period: string;
   items: {
     employeeId: number;

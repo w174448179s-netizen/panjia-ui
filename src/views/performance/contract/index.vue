@@ -545,7 +545,7 @@ const handleVoidContract = async (row: PerformanceManageContract) => {
         inputValidator: (v) => !!v?.trim() || '请输入作废原因',
       },
     );
-    await performanceApi.voidByContract(queryParams.period, 'PERF_EXPECT', row.contractNo, value.trim());
+    await performanceApi.voidByContract(queryParams.period, 'PERF_EXPECT', row.contractNo, value.trim(), row.orderNo);
     ElMessage.success('已作废');
     getList();
   } catch (e: any) {
@@ -568,7 +568,7 @@ const handleRestoreContract = async (row: PerformanceManageContract) => {
         inputValidator: (v) => !!v?.trim() || '请输入恢复原因',
       },
     );
-    await performanceApi.restoreByContract(queryParams.period, 'PERF_EXPECT', row.contractNo, value.trim());
+    await performanceApi.restoreByContract(queryParams.period, 'PERF_EXPECT', row.contractNo, value.trim(), row.orderNo);
     ElMessage.success('已恢复，业绩计入当前月');
     getList();
   } catch (e: any) {

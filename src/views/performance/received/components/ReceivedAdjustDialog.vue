@@ -122,6 +122,7 @@ const submitting = ref(false);
 
 interface ReceivedInfo {
   contractNo: string;
+  orderNo?: string;   // 订单号（同合同号多订单时订单号优先精确匹配明细，防串单）
   bizType?: string;
   propertyAddress?: string;
   period?: string; // 来源实收单的期间，从实收明细页进入时优先使用
@@ -178,6 +179,8 @@ async function loadRows() {
       period: formData.period,
       factType: 'PERF_REAL',
       contractNos: info.value.contractNo,
+      // 同合同号多订单时按订单号精确限定明细（防跨订单串单）
+      ...(info.value.orderNo ? { orderNos: info.value.orderNo } : {}),
     });
     const list: PerformanceManageRow[] = (res.data ?? [])
       .filter((r: PerformanceManageRow) => r.factStatus !== 'VOIDED');
@@ -229,6 +232,7 @@ async function submit() {
       adjustType: 'RECEIVED_AMOUNT',
       adjustScope: 'CONTRACT',
       contractNo: info.value.contractNo,
+      orderNo: info.value.orderNo,
       factType: 'PERF_REAL',
       period: formData.period,
       targetAmount: targetAmount.value,

@@ -334,7 +334,7 @@ const handleVoidContract = async () => {
         inputValidator: (v) => !!v?.trim() || '请输入作废原因',
       },
     );
-    await performanceApi.voidByContract(period.value, 'PERF_EXPECT', contractNo.value, value.trim());
+    await performanceApi.voidByContract(period.value, 'PERF_EXPECT', contractNo.value, value.trim(), detailList.value[0]?.orderNo);
     ElMessage.success('已作废');
     await loadDetails();
   } catch (e: any) {
