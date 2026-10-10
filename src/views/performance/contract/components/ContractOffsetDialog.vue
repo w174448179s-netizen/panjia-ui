@@ -17,7 +17,7 @@
       </el-descriptions>
 
       <!-- 冲正期间（必选） -->
-      <el-form :model="formData" label-width="70px" class="offset-form">
+      <el-form :model="formData" label-width="90px" class="offset-form">
         <el-form-item label="冲正期间" required>
           <el-date-picker
             v-model="formData.period"
