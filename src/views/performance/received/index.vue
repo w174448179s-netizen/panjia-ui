@@ -145,7 +145,7 @@
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty :description="queryParams.period || queryParams.keyword ? '该条件下暂无实收审批单' : '请选择期间'" />
+          <el-empty description="该条件下暂无实收审批单" />
         </template>
       </el-table>
 
@@ -382,18 +382,13 @@ const loading = ref(false);
 const applyList = ref<ReceivedApply[]>([]);
 const total = ref(0);
 
-const currentPeriod = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
-
 // ==================== 门店/组别筛选（全系统统一口径：所有用户查本部门及以下） ====================
 const { deptLocked, defaultDeptId } = useDeptScope();
 
 const queryParams = reactive({
   pageNum: 1,
   pageSize: 20,
-  period: currentPeriod(),
+  period: '',
   status: '',
   keyword: '',
   deptId: defaultDeptId(),
@@ -554,7 +549,7 @@ const contractOrOrderNo = (row: ReceivedApply): string =>
   resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—';
 const resetQuery = () => {
   Object.assign(queryParams, {
-    period: currentPeriod(), status: '', keyword: '',
+    status: '', keyword: '',
     deptId: defaultDeptId(), pageNum: 1,
     employeeId: undefined, bizType: undefined,
   });

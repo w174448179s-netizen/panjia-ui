@@ -343,11 +343,10 @@ const loading = ref(false);
 const contractList = ref<CommissionContractVO[]>([]);
 const total = ref(0);
 
-// 期间默认空：不预选月份，空期间 = 跨全部期间查询；用户需要时自行选择月份
 const queryParams = reactive({
   pageNum: 1,
   pageSize: 20,
-  period: '' as string,
+  period: '',
   deptId: undefined as string | undefined,
   employeeId: undefined as string | undefined,
   bizType: undefined as string | undefined,
@@ -437,13 +436,6 @@ const statusTagType = (s: string) => {
 
 // 列表
 const getList = async () => {
-  // 必须选择期间或录入关键字，避免全表扫描
-  if (!queryParams.period && !queryParams.keyword?.trim()) {
-    contractList.value = [];
-    total.value = 0;
-    summary.value = emptySummary();
-    return;
-  }
   loading.value = true;
   try {
     const res: any = await commissionApi.listContracts({
@@ -480,18 +472,13 @@ const handleQuery = () => {
   getList();
 };
 
-/** 空态提示：引导用户选择查询条件 */
-const emptyText = computed(() => {
-  if (!queryParams.period && !queryParams.keyword?.trim()) {
-    return '请选择结佣期间或录入关键字查询';
-  }
-  return '该条件下暂无可结佣合同';
-});
+/** 空态提示 */
+const emptyText = computed(() => '该条件下暂无可结佣合同');
 
 const resetQuery = () => {
   Object.assign(queryParams, {
-    // 受限角色重置回本部门默认值，不能清空为"全部"；期间重置为空（跨全部期间）
-    period: '', deptId: defaultDeptId(), employeeId: undefined, bizType: undefined, status: '', keyword: '', pageNum: 1,
+    // 受限角色重置回本部门默认值，不能清空为"全部"；期间保持当前选择不清空
+    deptId: defaultDeptId(), employeeId: undefined, bizType: undefined, status: '', keyword: '', pageNum: 1,
   });
   loadBizTypes().then(getList);
 };
@@ -625,10 +612,15 @@ const formatDateTime = (val?: string | null): string => {
 // 页签缓存复用场景下补开单据（详见 useWorkflowRouteOpen 注释）
 useWorkflowRouteOpen('/performance/apply', openFromWorkflow);
 
-onMounted(() => {
+onMounted(async () => {
   // 受限角色（店长/总监）默认选中本部门，首屏即按本部门查询；
-  // 期间默认留空，首屏跨全部期间查询，不再预选当前月/最新有数据期间
+  // 期间默认取最新有数据的期间（非当前月），取不到则不选（跨全部期间查询）
   queryParams.deptId = defaultDeptId();
+  try {
+    const res = await commissionApi.listPeriods();
+    const periods = res.data ?? [];
+    queryParams.period = periods[0] ?? '';
+  } catch { /* 期间加载失败保持不选，按全部期间查询 */ }
   loadBizTypes();
   getList();
 });

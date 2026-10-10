@@ -176,7 +176,7 @@
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty :description="queryParams.period || queryParams.keyword ? '该条件下暂无业绩数据' : '请选择期间或输入合同号查询业绩'" />
+          <el-empty description="该条件下暂无业绩数据" />
         </template>
       </el-table>
 
@@ -765,14 +765,6 @@ const bizTypeOptions = ref<string[]>([]);
 
 // ==================== 加载 ====================
 const getList = async () => {
-  // 口径：期间与关键字（合同号等）至少一项——仅录合同号不选期间时跨期查询
-  if (!queryParams.period && !queryParams.keyword?.trim()) {
-    contractData.value = [];
-    totalContracts.value = 0;
-    summary.value = emptySummary();
-    bizTypeOptions.value = [];
-    return;
-  }
   loading.value = true;
   try {
     const res = await performanceApi.listManageByContract({

@@ -270,8 +270,8 @@ const handleDeptChange = () => {
 
 // 列表
 const getList = async () => {
-  // 必须录入关键字，避免全表扫描
-  if (!queryParams.keyword?.trim()) {
+  // 至少选择门店或录入关键字，避免全公司全表扫描
+  if (!queryParams.deptId && !queryParams.keyword?.trim()) {
     contractList.value = [];
     total.value = 0;
     summary.value = emptySummary();
@@ -310,10 +310,10 @@ const handleQuery = () => {
   getList();
 };
 
-/** 空态提示：引导用户录入关键字查询 */
+/** 空态提示 */
 const emptyText = computed(() => {
-  if (!queryParams.keyword?.trim()) {
-    return '请录入合同号/订单号/房源关键字查询';
+  if (!queryParams.deptId && !queryParams.keyword?.trim()) {
+    return '请选择门店或录入关键字查询';
   }
   return '该条件下暂无可发起合同';
 });
