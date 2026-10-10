@@ -406,7 +406,9 @@ const handleWithdraw = async (row: any) => {
 // ==================== 枚举 ====================
 const adjustTypeMap: Record<string, string> = {
   AMOUNT: '金额调整',
-  ADD_MEMBER: '增加角色人'
+  ADD_MEMBER: '增加角色人',
+  MANUAL_OFFSET: '业绩冲正',
+  RECEIVED_AMOUNT: '实收调整'
 };
 const adjustTypeOptions = Object.entries(adjustTypeMap).map(([value, label]) => ({ value, label }));
 

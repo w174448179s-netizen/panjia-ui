@@ -118,13 +118,17 @@ export interface AdjustCreateForm {
   period: string;
   employeeId?: string;       // 明细级调整时必填（被调整事实所属员工）；合同级/ADD_MEMBER 不传
   deptId?: string;           // 同上，明细级必填
-  adjustType: string;        // AMOUNT / ADD_MEMBER / MANUAL_OFFSET
+  adjustType: string;        // AMOUNT / ADD_MEMBER / MANUAL_OFFSET / RECEIVED_AMOUNT
   adjustScope?: string;      // CONTRACT / DETAIL
   contractNo?: string;       // 合同级调整时填
-  factType?: string;         // PERF_REAL / PERF_EXPECT
+  factType?: string;         // PERF_REAL / PERF_EXPECT（RECEIVED_AMOUNT 固定 PERF_REAL）
   targetAmount?: number;     // 调整后目标金额
   reason: string;
   payloadJson?: string;
+  // ---- 实收调整（RECEIVED_AMOUNT，合同级，2026-10-10）----
+  // 只需 adjustType/adjustScope/contractNo/factType/period/targetAmount/reason：
+  // period=实收期间（YYYY-MM），targetAmount=调整后实收合计（正多收负少收），
+  // 后端按实收明细等比分摊并快照 payload，无需传明细行
   // ---- 增加角色人（ADD_MEMBER，合同级）专用 ----
   newEmployeeId?: string;    // 新角色人员工 ID
   newRoleType?: string;      // 新角色人角色类型
@@ -137,10 +141,12 @@ export interface AdjustCreateForm {
   // 合同级 AMOUNT 与 ADD_MEMBER 均支持，为空时保持旧交互
   detailTargets?: { factId: string; targetAmount: number; shareRatio?: number }[];
   // ---- 业绩冲正（MANUAL_OFFSET，合同级）专用 ----
-  // 每条含员工ID、角色类型、角色名、冲正金额（正增负减），审批通过后循环创建 MANUAL 事实
+  // 每条含员工ID、角色类型、角色名、冲正金额（正增负减），审批通过后循环创建 MANUAL 事实。
+  // employeeId/factId 用 string：雪花 ID 超过 JS 安全整数范围，传 number 会被取整丢精度
+  // （后端以工号+角色归一化，ID 仅作优先匹配）
   offsetItems?: {
-    employeeId: number; roleType: string; roleName?: string; amount: number;
-    factId?: number; employeeCode?: string; deptName?: string;
+    employeeId: string | number; roleType: string; roleName?: string; amount: number;
+    factId?: string | number; employeeCode?: string; deptName?: string;
     shareRatio?: number; originalAmount?: number;
   }[];
 }

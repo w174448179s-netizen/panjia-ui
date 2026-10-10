@@ -138,7 +138,8 @@
             <el-table-column label="姓名" prop="employeeName" width="90" show-overflow-tooltip />
             <el-table-column label="所属角色" min-width="110" show-overflow-tooltip>
               <template #default="scope">
-                <span>{{ scope.row.roleName || scope.row.roleType || '—' }}</span>
+                <!-- role_type 才是角色（客源成交人/合作人）；role_name 列在本系统存的是人员姓名 -->
+                <span>{{ scope.row.roleType || scope.row.roleName || '—' }}</span>
               </template>
             </el-table-column>
             <el-table-column label="角色占比" width="100" align="right">
@@ -213,7 +214,8 @@ const { load: loadEmployees, name: employeeName } = useEmployeeMap();
 const ADJUST_TYPE_MAP: Record<string, string> = {
   AMOUNT: '金额调整',
   ADD_MEMBER: '增加角色人',
-  MANUAL_OFFSET: '业绩冲正'
+  MANUAL_OFFSET: '业绩冲正',
+  RECEIVED_AMOUNT: '实收调整'
 };
 const adjustTypeLabel = (t: string) => ADJUST_TYPE_MAP[t] ?? t ?? '—';
 

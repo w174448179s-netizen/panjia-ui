@@ -134,11 +134,12 @@
         <el-table-column label="发起人" align="center" width="100">
           <template #default="{ row }">{{ applicantName(row.applicantName, row.applicantId) }}</template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="170" fixed="right">
+        <el-table-column label="操作" align="center" width="220" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
               <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
               <el-button v-if="row.status === 'SUBMITTED' && checkPermi(['perf:received:approve'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.id)">审批</el-button>
+              <el-button v-if="!isAgent && row.status === 'APPROVED'" link type="warning" @click="openReceivedAdjust(row)">调整</el-button>
               <el-button v-if="row.status === 'REJECTED' || (row.status === 'DRAFT' && Number(row.expectedAmount) !== 0)" link type="warning" @click="resubmit(row)">重提</el-button>
               <el-button v-if="(row.status === 'DRAFT' || row.status === 'SUBMITTED') && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
             </div>
@@ -335,6 +336,9 @@
 
     <!-- 业务明细直接审批弹窗（与「我的待办」共用同一 WorkflowHandle 组件） -->
     <WorkflowHandle ref="workflowHandleRef" @handled="getList" />
+
+    <!-- 实收调整弹窗（RECEIVED_AMOUNT，合同级）：入口在实收明细页，审批通过的单据才可调整 -->
+    <ReceivedAdjustDialog ref="receivedAdjustDialogRef" @submitted="getList" />
   </div>
 </template>
 
@@ -355,6 +359,7 @@ import { checkPermi } from '@/utils/permission';
 import { resolveBizNo } from '@/utils/panjiaBiz';
 import { useUserStore } from '@/store/modules/user';
 import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
+import ReceivedAdjustDialog from './components/ReceivedAdjustDialog.vue';
 
 const route = useRoute();
 const userStore = useUserStore();
@@ -365,6 +370,16 @@ const isAgent = computed(() => userStore.roles.includes('agent'));
 const canCancel = (row: ReceivedApply): boolean => {
   if (userStore.roles.includes('admin') || userStore.roles.includes('superadmin')) return true;
   return String(row.applicantId) === String(userStore.userId);
+};
+
+// ==================== 实收调整（RECEIVED_AMOUNT，合同级） ====================
+const receivedAdjustDialogRef = ref();
+const openReceivedAdjust = (row: ReceivedApply) => {
+  receivedAdjustDialogRef.value?.open({
+    contractNo: resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '',
+    bizType: row.bizType,
+    propertyAddress: row.propertyAddress,
+  });
 };
 
 /** 业务明细直接审批：通过 businessId 查当前用户可办理任务，复用 WorkflowHandle 弹窗 */

@@ -60,7 +60,7 @@
         </div>
         <div class="summary-right">
           <span class="summary-amount">结佣合计：<b>{{ formatAmount(summary.totalAmount) }}</b></span>
-          <el-button v-if="checkPermi(['commission:apply:add'])" type="primary" icon="Plus" @click="showBatchApply = true">
+          <el-button v-if="checkPermi(['commission:apply:add'])" type="primary" icon="Plus" @click="openBatchApply">
             批量发起
           </el-button>
         </div>
@@ -105,9 +105,10 @@
         <el-table-column label="明细条数" align="center" width="80">
           <template #default="{ row }">{{ row.detailCount ?? 0 }}</template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="120" fixed="right">
+        <el-table-column label="操作" align="center" width="150" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
+              <el-button link type="primary" @click="openDetail(row as CommissionContractVO)">详情</el-button>
               <el-button
                 link type="warning"
                 :loading="submittingMap[contractOrOrderNo(row as CommissionContractVO)]"
@@ -194,15 +195,105 @@
         <el-button v-if="batchApplyResult" type="primary" @click="closeBatchApply">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 单个发起：选择结佣期间（月份选择框，YYYY-MM） -->
+    <el-dialog v-model="singleApplyForm.visible" title="发起结佣" width="420px" append-to-body @close="resetSingleApply">
+      <el-form label-width="92px" @submit.prevent>
+        <el-form-item label="合同号">
+          <span class="single-contract-no">{{ singleApplyForm.bizNo }}</span>
+        </el-form-item>
+        <el-form-item label="结佣期间" required>
+          <el-date-picker
+            v-model="singleApplyForm.period"
+            type="month"
+            value-format="YYYY-MM"
+            placeholder="请选择结佣月份"
+            style="width: 220px"
+          />
+        </el-form-item>
+        <div class="single-hint">发起后将提交审批；历史实收已审批通过且未结佣的业绩均可计入所选期间。</div>
+      </el-form>
+      <template #footer>
+        <el-button @click="singleApplyForm.visible = false">取消</el-button>
+        <el-button type="primary" :loading="singleApplyForm.submitting" @click="doSingleApply">确定发起</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 合同详情：跨期新签业绩构成（结佣金额口径 = ACTIVE PERF_EXPECT） -->
+    <el-dialog
+      v-model="detailDialog.visible"
+      title="合同详情"
+      width="860px"
+      append-to-body
+      class="contract-detail-dialog"
+    >
+      <el-descriptions :column="3" border size="small" class="detail-desc">
+        <el-descriptions-item label="合同号">{{ detailDialog.contractNo || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="订单号">{{ detailDialog.orderNo || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="类型">{{ detailDialog.bizType || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="房源地址" :span="3">{{ detailDialog.propertyAddress || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="签约/认购时间">{{ formatDateTime(detailDialog.businessDate) }}</el-descriptions-item>
+        <el-descriptions-item label="实收状态">
+          <el-tag v-if="detailDialog.receivedStatus === 'APPROVED'" type="success" size="small">审批通过</el-tag>
+          <el-tag v-else-if="detailDialog.receivedStatus === 'SUBMITTED'" type="warning" size="small">审批中</el-tag>
+          <el-tag v-else-if="detailDialog.receivedStatus === 'DRAFT'" type="info" size="small">草稿</el-tag>
+          <span v-else>—</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="结佣合计">
+          <span class="amount amount-red">¥{{ formatAmount(detailDialog.amount) }}</span>
+        </el-descriptions-item>
+      </el-descriptions>
+
+      <div class="detail-summary-bar">
+        <span>新签业绩构成：涉及 <b>{{ detailEmployees }}</b> 人 · <b>{{ detailList.length }}</b> 条明细（跨全部期间）</span>
+        <span class="detail-total">
+          新签合计：<b :class="{ 'amount-negative': detailTotal < 0 }">{{ formatAmount(detailTotal) }}</b>
+          <template v-if="detailConvertedTotal !== null">
+            ｜折算后：<b :class="{ 'amount-negative': detailConvertedTotal < 0 }">{{ formatAmount(detailConvertedTotal) }}</b>
+          </template>
+        </span>
+      </div>
+
+      <el-table border class="data-table" :data="detailList" v-loading="detailLoading" max-height="420">
+        <el-table-column label="期间" align="center" width="90">
+          <template #default="{ row }">{{ row.period }}</template>
+        </el-table-column>
+        <el-table-column label="门店/组别" align="left" prop="deptPath" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.deptPath || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="工号" align="center" width="100">
+          <template #default="{ row }">{{ row.employeeCode || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="姓名" align="center" width="90">
+          <template #default="{ row }">{{ row.employeeName || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="角色" align="center" width="100">
+          <template #default="{ row }">{{ row.roleType || row.roleName || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="占比" align="center" width="80">
+          <template #default="{ row }">{{ row.shareRatio != null ? (Number(row.shareRatio) * 100).toFixed(1) + '%' : '—' }}</template>
+        </el-table-column>
+        <el-table-column label="新签业绩" align="right" width="120">
+          <template #default="{ row }">
+            <span :class="['amount', num(row.amount) < 0 ? 'amount-negative' : 'amount-ink']">{{ formatAmount(row.amount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="折算后" align="right" width="120">
+          <template #default="{ row }">
+            <span :class="['amount', num(row.convertedAmount) < 0 ? 'amount-negative' : 'amount-ink']">{{ formatAmount(row.convertedAmount) }}</span>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage } from 'element-plus';
 import { Loading } from '@element-plus/icons-vue';
 import { commissionApi, type CommissionContractVO, type BatchResultDTO } from '@/api/panjia/commission';
-import { performanceApi } from '@/api/panjia/performance';
+import { performanceApi, type PerformanceManageRow } from '@/api/panjia/performance';
 import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import { useDeptScope } from '@/hooks/useDeptScope';
@@ -328,6 +419,12 @@ const resetQuery = () => {
 // 按钮 loading 状态（以 contractNo 为 key）
 const submittingMap = reactive<Record<string, boolean>>({});
 
+// 当前月份 YYYY-MM（弹框默认值）
+const currentPeriod = (): string => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
 // 批量发起（按合同号）
 const showBatchApply = ref(false);
 const batchApplyLoading = ref(false);
@@ -337,6 +434,12 @@ const batchApplyForm = reactive({
   contractNosText: '',
   parsedCount: 0,
 });
+const openBatchApply = () => {
+  // 每次打开默认当前月，用户可改选；结果态关闭后也重置
+  resetBatchApply();
+  batchApplyForm.period = currentPeriod();
+  showBatchApply.value = true;
+};
 const batchApplySummary = computed(() => {
   const r = batchApplyResult.value;
   if (!r) return '';
@@ -378,45 +481,101 @@ const doBatchApply = async () => {
   }
 };
 
-// 发起并提交一步到位：后端 POST /commission/apply 一次完成发起+提交
-const onSubmit = async (row: CommissionContractVO) => {
+// 单个发起：月份选择框选择结佣期间，确定后一次完成发起+提交
+const singleApplyForm = reactive({
+  visible: false,
+  submitting: false,
+  bizNo: '',
+  period: '',
+});
+const resetSingleApply = () => {
+  singleApplyForm.submitting = false;
+  singleApplyForm.bizNo = '';
+  singleApplyForm.period = '';
+};
+const onSubmit = (row: CommissionContractVO) => {
   const no = contractOrOrderNo(row);
   if (!no || no === '—') {
     ElMessage.warning('该合同缺少合同号/订单号，无法发起');
     return;
   }
-  // 提交中拦截：防止连点重复弹出确认框/重复提交
   if (submittingMap[no]) return;
-  try {
-    await ElMessageBox.confirm(
-      `确认为合同「${no}」发起结佣？发起后需选择结佣期间并提交审批。`,
-      '发起结佣', { type: 'info' },
-    );
-  } catch {
+  singleApplyForm.bizNo = no;
+  singleApplyForm.period = currentPeriod();
+  singleApplyForm.visible = true;
+};
+const doSingleApply = async () => {
+  if (!singleApplyForm.period) {
+    ElMessage.warning('请选择结佣期间');
     return;
   }
-  // 发起时需要选择结佣期间，这里弹出选择对话框
+  const no = singleApplyForm.bizNo;
+  if (submittingMap[no]) return;
+  submittingMap[no] = true;
+  singleApplyForm.submitting = true;
   try {
-    const { value: period } = await ElMessageBox.prompt(
-      '请选择结佣期间（YYYY-MM）',
-      '发起结佣',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        inputPattern: /^\d{4}-\d{2}$/,
-        inputErrorMessage: '格式应为 YYYY-MM，如 2026-10',
-      },
-    );
-    if (!period) return;
-    submittingMap[no] = true;
-    try {
-      await commissionApi.createApplication({ period, contractNo: no });
-      ElMessage.success('发起成功');
-      await getList();
-    } catch { /* 拦截器处理 */ } finally {
-      submittingMap[no] = false;
-    }
-  } catch { /* 用户取消 */ }
+    await commissionApi.createApplication({ period: singleApplyForm.period, contractNo: no });
+    ElMessage.success('发起成功');
+    singleApplyForm.visible = false;
+    await getList();
+  } catch { /* 拦截器处理 */ } finally {
+    submittingMap[no] = false;
+    singleApplyForm.submitting = false;
+  }
+};
+
+// 合同详情：跨期新签业绩构成（结佣金额口径 = ACTIVE PERF_EXPECT）
+const detailLoading = ref(false);
+const detailList = ref<PerformanceManageRow[]>([]);
+const detailDialog = reactive({
+  visible: false,
+  contractNo: '',
+  orderNo: '',
+  bizType: '',
+  propertyAddress: '',
+  businessDate: '',
+  receivedStatus: null as string | null,
+  amount: 0 as number | string,
+});
+const detailActiveRows = computed(() => detailList.value.filter((r) => r.factStatus !== 'VOIDED'));
+const detailTotal = computed(() =>
+  detailActiveRows.value.reduce((s, r) => s + num(r.amount), 0));
+const detailConvertedTotal = computed(() => {
+  const rows = detailActiveRows.value;
+  if (rows.some((r) => r.convertedAmount == null)) return null;
+  return rows.reduce((s, r) => s + num(r.convertedAmount), 0);
+});
+const detailEmployees = computed(() => new Set(
+  detailActiveRows.value.map((r) => r.employeeId || r.employeeCode || '').filter(Boolean),
+).size);
+
+const openDetail = async (row: CommissionContractVO) => {
+  const no = contractOrOrderNo(row);
+  if (!no || no === '—') {
+    ElMessage.warning('该合同缺少合同号/订单号');
+    return;
+  }
+  detailDialog.contractNo = row.contractNo || '';
+  detailDialog.orderNo = row.orderNo || '';
+  detailDialog.bizType = row.bizType || '';
+  detailDialog.propertyAddress = row.propertyAddress || '';
+  detailDialog.businessDate = row.businessDate ? String(row.businessDate) : '';
+  detailDialog.receivedStatus = row.receivedStatus ?? null;
+  detailDialog.amount = row.amount ?? 0;
+  detailList.value = [];
+  detailDialog.visible = true;
+  detailLoading.value = true;
+  try {
+    // period 不传：跨全部期间汇总新签构成，与发起时明细合并口径一致
+    const res: any = await performanceApi.listManageContractDetails({
+      period: '',
+      factType: 'PERF_EXPECT',
+      contractNos: no,
+    });
+    detailList.value = res.data ?? [];
+  } catch { /* 拦截器处理 */ } finally {
+    detailLoading.value = false;
+  }
 };
 
 const formatDateTime = (val?: string | null): string => {
@@ -525,6 +684,41 @@ onMounted(() => {
   line-height: 1.5;
   margin-top: 4px;
   padding-left: 80px;
+}
+
+.single-contract-no {
+  font-weight: 600;
+  color: #303133;
+}
+
+.single-hint {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.6;
+  padding-left: 92px;
+}
+
+.contract-detail-dialog {
+  .detail-desc {
+    margin-bottom: 12px;
+  }
+
+  .detail-summary-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: #606266;
+    margin-bottom: 8px;
+
+    .detail-total b {
+      color: #303133;
+    }
+  }
+
+  .amount-negative {
+    color: #13ce66;
+  }
 }
 
 .batch-waiting {

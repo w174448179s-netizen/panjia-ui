@@ -298,11 +298,13 @@ async function submit() {
       return r.offsetAmount != null && num(r.offsetAmount) !== 0;
     })
     .map(r => ({
-      employeeId: Number(r.employeeId),
+      // ID 必须保持字符串：雪花 ID 超过 JS Number.MAX_SAFE_INTEGER，Number() 强转会取整
+      // （如 ...890946 → ...891000），后端会按工号+角色重新归一化，前端只负责原样传递
+      employeeId: r.employeeId != null ? String(r.employeeId) : undefined,
       roleType: (r.roleType || '').trim() || '合作人',
       roleName: (r.roleName || '').trim() || undefined,
       amount: round2(num(r.offsetAmount)),
-      factId: !r.isNew && r.factId ? Number(r.factId) : undefined,
+      factId: !r.isNew && r.factId ? String(r.factId) : undefined,
       employeeCode: r.employeeCode || undefined,
       deptName: r.deptPath || undefined,
       shareRatio: r.shareRatio ?? undefined,

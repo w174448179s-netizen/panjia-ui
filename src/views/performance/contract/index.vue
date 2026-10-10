@@ -157,7 +157,7 @@
           </template>
         </el-table-column>
         <!-- 操作列：详情 + 合同级调整 + 提交实收 + 合同级作废/恢复（作废以合同为维度，不区分人员） -->
-        <el-table-column label="操作" align="center" width="260" fixed="right">
+        <el-table-column label="操作" align="center" width="300" fixed="right">
           <template #default="scope">
             <div class="action-btns">
               <el-button size="small" link type="primary" @click="goDetail(scope.row as PerformanceManageContract)">详情</el-button>
