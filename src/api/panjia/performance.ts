@@ -138,7 +138,11 @@ export interface AdjustCreateForm {
   detailTargets?: { factId: string; targetAmount: number; shareRatio?: number }[];
   // ---- 业绩冲正（MANUAL_OFFSET，合同级）专用 ----
   // 每条含员工ID、角色类型、角色名、冲正金额（正增负减），审批通过后循环创建 MANUAL 事实
-  offsetItems?: { employeeId: number; roleType: string; roleName?: string; amount: number }[];
+  offsetItems?: {
+    employeeId: number; roleType: string; roleName?: string; amount: number;
+    factId?: number; employeeCode?: string; deptName?: string;
+    shareRatio?: number; originalAmount?: number;
+  }[];
 }
 
 export interface ManualFactForm {

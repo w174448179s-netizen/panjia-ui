@@ -113,9 +113,12 @@
       <!-- 受影响明细 -->
       <div v-if="detail.details && detail.details.length" class="detail-block">
         <div class="block-title">
-          受影响明细
+          {{ isOffset ? '冲正明细' : '受影响明细' }}
           <span class="block-subtitle">
-            <template v-if="isAddMember">
+            <template v-if="isOffset">
+              （审批通过后在冲正期间 {{ detail.period }} 生成以下记录；正数补录、负数冲正）
+            </template>
+            <template v-else-if="isAddMember">
               （增加角色人：既有角色人按快照扣减/调整后金额预演，新角色人调整前业绩为 0；{{
                 addMemberTotalChanged
                   ? `合同总额同步调整 ${totalChangedText}`
@@ -176,6 +179,7 @@
             <el-table-column label="状态" width="90" align="center">
               <template #default="scope">
                 <el-tag v-if="isNewMemberRow(scope.row)" type="success" size="small" effect="dark">新增角色人</el-tag>
+                <el-tag v-else-if="isOffset && scope.row.target" type="warning" size="small" effect="dark">冲正记录</el-tag>
                 <el-tag v-else-if="scope.row.target" type="danger" size="small" effect="dark">调整行</el-tag>
                 <el-tag v-else type="info" size="small" effect="plain">参考行</el-tag>
               </template>
@@ -208,12 +212,16 @@ const { load: loadEmployees, name: employeeName } = useEmployeeMap();
 
 const ADJUST_TYPE_MAP: Record<string, string> = {
   AMOUNT: '金额调整',
-  ADD_MEMBER: '增加角色人'
+  ADD_MEMBER: '增加角色人',
+  MANUAL_OFFSET: '业绩冲正'
 };
 const adjustTypeLabel = (t: string) => ADJUST_TYPE_MAP[t] ?? t ?? '—';
 
 /** 增加角色人单：逐人展示 原值→调整后（新角色人为 —/0 → X） */
 const isAddMember = computed(() => detail.value?.adjustType === 'ADD_MEMBER');
+
+/** 业绩冲正单：明细为待生成的冲正记录清单（正数补录/负数冲正） */
+const isOffset = computed(() => detail.value?.adjustType === 'MANUAL_OFFSET');
 
 /** ADD_MEMBER 调整后合同总额：payload 回填 afterTotalAmount，旧单为空时回退原总额（总额不变） */
 const addMemberAfterTotal = computed(() => {

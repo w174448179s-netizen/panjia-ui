@@ -176,12 +176,14 @@ let keySeq = 0;
 interface EditRow {
   key: string;
   isNew: boolean;
+  factId?: string | null;   // 源事实 ID（既有行带出，执行时按此行精确复制）
   employeeId?: string;
   employeeCode: string;
   employeeName: string;
   deptPath?: string;
   roleType?: string;
   roleName?: string;
+  shareRatio?: number | null; // 角色占比
   amount: number;           // 当前业绩（已有行有值，新行为 0）
   offsetAmount: number | null; // 冲正金额（正数补录/负数冲正）
 }
@@ -218,12 +220,14 @@ async function open(payload: OffsetInfo) {
     editRows.value = rows.map(r => ({
       key: `f-${r.id ?? Math.random()}`,
       isNew: false,
+      factId: r.id ?? undefined,
       employeeId: r.employeeId,
       employeeCode: r.employeeCode || '',
       employeeName: r.employeeName || '',
       deptPath: r.deptPath,
       roleType: r.roleType,
       roleName: r.roleName,
+      shareRatio: r.shareRatio ?? null,
       amount: num(r.amount),
       offsetAmount: null,
     }));
@@ -286,7 +290,8 @@ async function submit() {
     ElMessage.warning('请选择冲正期间');
     return;
   }
-  // 收集有冲正金额的行（已有行金额为 0/空跳过，新行必须有金额）
+  // 收集有冲正金额的行（已有行金额为 0/空跳过，新行必须有金额）；
+  // 保存表格行全部字段快照（factId/工号/门店/占比/当前业绩），详情与执行按快照还原
   const items = editRows.value
     .filter(r => {
       if (r.isNew) return r.employeeId && r.offsetAmount != null;
@@ -297,6 +302,11 @@ async function submit() {
       roleType: (r.roleType || '').trim() || '合作人',
       roleName: (r.roleName || '').trim() || undefined,
       amount: round2(num(r.offsetAmount)),
+      factId: !r.isNew && r.factId ? Number(r.factId) : undefined,
+      employeeCode: r.employeeCode || undefined,
+      deptName: r.deptPath || undefined,
+      shareRatio: r.shareRatio ?? undefined,
+      originalAmount: round2(num(r.amount)),
     }));
   if (!items.length) {
     ElMessage.warning('请至少录入一行冲正金额');

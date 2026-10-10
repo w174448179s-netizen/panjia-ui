@@ -598,7 +598,7 @@ const doSubmitReceived = async (rows: PerformanceManageContract[]) => {
     const data = (resp as any)?.data ?? resp;
     const skipped = Object.entries(data.skipped || {});
     ElMessage.success(
-      `PERF_REAL 新建 ${data.createdRealCount} 条，审批单新建 ${data.createdApplyCount} 张`
+      `实收明细新建 ${data.createdRealCount} 条，审批单新建 ${data.createdApplyCount} 张`
       + (skipped.length ? `，跳过 ${skipped.length} 条（${skipped[0]?.[1]}${skipped.length > 1 ? ' 等' : ''}）` : '')
     );
     selectedRows.value = [];
@@ -614,7 +614,7 @@ const openBatchReceivedDialog = async () => {
   if (!selectedRows.value.length) return;
   try {
     await ElMessageBox.confirm(
-      `将为选中的 ${selectedRows.value.length} 个合同镜像生成 PERF_REAL（实收业绩），\n`
+      `将为选中的 ${selectedRows.value.length} 个合同在实收域生成实收明细（pj_received_detail），\n`
       + `并按订单号分组建实收审批单。金额默认取新签应收值。`,
       '批量提交实收',
       { type: 'warning', confirmButtonText: '确认提交', cancelButtonText: '取消' }
@@ -628,7 +628,7 @@ const openBatchReceivedDialog = async () => {
 const submitSingleReceived = async (row: PerformanceManageContract) => {
   try {
     await ElMessageBox.confirm(
-      `合同 ${row.contractNo || row.orderNo}：将镜像 ${row.detailCount} 条 PERF_EXPECT 为 PERF_REAL 并创建实收审批单。`,
+      `合同 ${row.contractNo || row.orderNo}：将按 ${row.detailCount} 条应收明细在实收域生成实收明细并创建实收审批单。`,
       '提交实收',
       { type: 'warning', confirmButtonText: '确认提交', cancelButtonText: '取消' }
     );
