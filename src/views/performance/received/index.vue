@@ -379,6 +379,7 @@ const openReceivedAdjust = (row: ReceivedApply) => {
     contractNo: resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '',
     bizType: row.bizType,
     propertyAddress: row.propertyAddress,
+    period: row.period,
   });
 };
 

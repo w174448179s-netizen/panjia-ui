@@ -124,6 +124,7 @@ interface ReceivedInfo {
   contractNo: string;
   bizType?: string;
   propertyAddress?: string;
+  period?: string; // 来源实收单的期间，从实收明细页进入时优先使用
 }
 const info = ref<ReceivedInfo | null>(null);
 const formData = reactive({ period: '' });
@@ -155,8 +156,13 @@ function open(payload: ReceivedInfo) {
   targetInput.value = null;
   rows.value = [];
   visible.value = true;
-  const now = new Date();
-  formData.period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  // 优先用来源实收单的期间；无则默认当前月
+  if (payload.period) {
+    formData.period = payload.period;
+  } else {
+    const now = new Date();
+    formData.period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }
   loadRows();
 }
 

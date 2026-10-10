@@ -137,10 +137,11 @@
               {{ adjustTypeMap[scope.row.adjustType] ?? scope.row.adjustType }}
             </template>
           </el-table-column>
-          <el-table-column label="新签业绩" align="right" prop="originalAmount" width="130">
+          <el-table-column label="调整前金额" align="right" prop="originalAmount" width="130">
             <template #default="scope">
               <span class="origin-amount">{{ formatOrigin(scope.row.originalAmount) }}</span>
               <div v-if="scope.row.adjustType === 'ADD_MEMBER'" class="cell-sub">合同总额</div>
+              <div v-else-if="scope.row.adjustType === 'RECEIVED_AMOUNT'" class="cell-sub">实收口径</div>
             </template>
           </el-table-column>
           <el-table-column label="折算后" align="right" width="130">
@@ -148,7 +149,7 @@
               <span class="amount-ink">{{ formatOrigin(scope.row.convertedOriginalAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="调整后业绩" align="right" width="140">
+          <el-table-column label="调整后金额" align="right" width="140">
             <template #default="scope">
               <!-- 增加角色人：targetAmount 即新角色人业绩（新增 +X）；afterTotalAmount≠原总额时为混合金额调整 -->
               <template v-if="scope.row.adjustType === 'ADD_MEMBER'">

@@ -22,7 +22,7 @@
         <el-descriptions-item label="门店/组别">
           <span>{{ detail.deptName || '—' }}</span>
         </el-descriptions-item>
-        <el-descriptions-item :label="isAddMember ? '合同业绩总额(调整前)' : '新签业绩'">
+        <el-descriptions-item :label="isReceivedAdjust ? '实收业绩(调整前)' : (isAddMember ? '合同业绩总额(调整前)' : '新签业绩')">
           {{ formatYuan(detail.originalAmount) }}
         </el-descriptions-item>
         <el-descriptions-item label="折算后业绩">
@@ -52,7 +52,7 @@
             <el-tag v-else type="success" size="small" effect="plain" style="margin-left: 6px">总额不变</el-tag>
           </el-descriptions-item>
         </template>
-        <el-descriptions-item v-else label="调整后业绩">
+        <el-descriptions-item v-else :label="isReceivedAdjust ? '实收业绩(调整后)' : '调整后业绩'">
           <span class="amount-red">{{ formatYuan(detail.targetAmount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item v-if="!isAddMember" label="折算后业绩">
@@ -73,7 +73,7 @@
           <el-descriptions-item label="订单号">{{ detail.orderNo || '—' }}</el-descriptions-item>
           <el-descriptions-item label="签约/认购时间">{{ detail.businessDate || '—' }}</el-descriptions-item>
           <el-descriptions-item label="明细条数">{{ detail.detailCount ?? 0 }} 条</el-descriptions-item>
-          <el-descriptions-item :label="isAddMember ? '合同业绩总额(调整前)' : '新签业绩'">
+          <el-descriptions-item :label="isReceivedAdjust ? '实收业绩(调整前)' : (isAddMember ? '合同业绩总额(调整前)' : '新签业绩')">
             <span class="amount">{{ formatYuan(detail.originalAmount) }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="折算后业绩">
@@ -100,7 +100,7 @@
               <el-tag type="success" size="small" effect="plain" style="margin-left: 6px">总额不变</el-tag>
             </el-descriptions-item>
           </template>
-          <el-descriptions-item v-else label="调整后业绩">
+          <el-descriptions-item v-else :label="isReceivedAdjust ? '实收业绩(调整后)' : '调整后业绩'">
             <span class="amount amount-red">{{ formatYuan(detail.targetAmount) }}</span>
           </el-descriptions-item>
           <el-descriptions-item v-if="!isAddMember" label="折算后业绩">
@@ -147,7 +147,7 @@
                 <span>{{ formatRatio(scope.row.shareRatio) }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="新签业绩" width="120" align="right">
+            <el-table-column :label="isReceivedAdjust ? '实收业绩' : '新签业绩'" width="120" align="right">
               <template #default="scope">
                 <!-- ADD_MEMBER 新角色人（在途虚拟行 amount=null / 已执行 amount=0）调整前业绩按 0.00 展示 -->
                 <span class="amount amount-expected">{{ formatNumber(scope.row.amount) }}</span>
@@ -163,7 +163,7 @@
                 <span :class="getAmountClass(scope.row.deltaAmount)">{{ formatDelta(scope.row.deltaAmount) }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="调整后业绩" width="120" align="right">
+            <el-table-column :label="isReceivedAdjust ? '调整后实收' : '调整后业绩'" width="120" align="right">
               <template #default="scope">
                 <span class="amount" :class="getAmountClass(scope.row.deltaAmount)">
                   {{ formatNumber(scope.row.afterAmount) }}
@@ -224,6 +224,9 @@ const isAddMember = computed(() => detail.value?.adjustType === 'ADD_MEMBER');
 
 /** 业绩冲正单：明细为待生成的冲正记录清单（正数补录/负数冲正） */
 const isOffset = computed(() => detail.value?.adjustType === 'MANUAL_OFFSET');
+
+/** 实收调整单：金额口径为实收（pj_received_detail），标签不得再用「新签业绩」 */
+const isReceivedAdjust = computed(() => detail.value?.adjustType === 'RECEIVED_AMOUNT');
 
 /** ADD_MEMBER 调整后合同总额：payload 回填 afterTotalAmount，旧单为空时回退原总额（总额不变） */
 const addMemberAfterTotal = computed(() => {
