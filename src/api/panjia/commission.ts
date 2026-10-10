@@ -279,6 +279,9 @@ export const commissionApi = {
     panjiaRequest.get<PageResult<CommissionApplication>>('/commission/apply/list', params),
   listContracts: (params: CommissionApplyQuery) =>
     panjiaRequest.get<PageResult<CommissionContractVO>>('/commission/apply/contract-list', params),
+  /** 结佣发起页：查可发起合同（实收审批通过 + 未被结佣） */
+  listAvailableContracts: (params: CommissionApplyQuery) =>
+    panjiaRequest.get<PageResult<CommissionContractVO>>('/commission/apply/available-contracts', params),
   /** 有结佣申请单的期间（倒序），用于默认选中最新有数据期间 */
   listPeriods: () =>
     panjiaRequest.get<string[]>('/commission/apply/periods'),
