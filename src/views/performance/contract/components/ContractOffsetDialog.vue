@@ -163,6 +163,7 @@ const submitting = ref(false);
 
 interface OffsetInfo {
   contractNo: string;
+  orderNo?: string;   // 订单号（同合同号多订单时订单号优先精确匹配明细）
   bizType?: string;
   propertyAddress?: string;
 }
@@ -214,6 +215,7 @@ async function open(payload: OffsetInfo) {
       period: '',
       factType: 'PERF_EXPECT',
       contractNos: payload.contractNo,
+      orderNos: payload.orderNo,
     });
     const rows: PerformanceManageRow[] = (res.data ?? [])
       .filter((r: PerformanceManageRow) => r.factStatus !== 'VOIDED');
@@ -320,6 +322,7 @@ async function submit() {
       adjustType: 'MANUAL_OFFSET',
       adjustScope: 'CONTRACT',
       contractNo: info.value.contractNo,
+      orderNo: info.value.orderNo,
       factType: 'PERF_EXPECT',
       period: formData.period,
       reason: reason.value.trim() || '业绩冲正',

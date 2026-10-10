@@ -414,7 +414,9 @@ const submitAdjust = async () => {
 const adjustDialogRef = ref<InstanceType<typeof ContractAdjustDialog>>();
 const openContractAdjust = () => {
   adjustDialogRef.value?.open({
-    contractNo: contractNo.value,
+    // contractNo 传真实合同号（路由参数可能是业务键，优先取明细行的真实合同号），与 orderNo 双键精确匹配
+    contractNo: detailList.value[0]?.contractNo || contractNo.value,
+    orderNo: detailList.value[0]?.orderNo,
     bizType: contractInfo.value.bizType,
     propertyAddress: contractInfo.value.propertyAddress,
     businessDate: contractInfo.value.businessDate,

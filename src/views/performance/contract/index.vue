@@ -817,7 +817,9 @@ const adjustDialogRef = ref<InstanceType<typeof ContractAdjustDialog>>();
 
 const openAdjustDialog = (row: PerformanceManageContract) => {
   adjustDialogRef.value?.open({
-    contractNo: resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '',
+    // contractNo 传真实合同号（为空兜底订单号），与 orderNo 一起构成后端「订单号+合同号」双键精确匹配
+    contractNo: row.contractNo || row.orderNo || '',
+    orderNo: row.orderNo,
     bizType: row.bizType,
     propertyAddress: row.propertyAddress,
     businessDate: row.businessDate,
@@ -829,7 +831,9 @@ const openAdjustDialog = (row: PerformanceManageContract) => {
 const offsetDialogRef = ref();
 const openOffsetDialog = (row: PerformanceManageContract) => {
   offsetDialogRef.value?.open({
-    contractNo: resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '',
+    // contractNo 传真实合同号（为空兜底订单号），与 orderNo 一起构成后端「订单号+合同号」双键精确匹配
+    contractNo: row.contractNo || row.orderNo || '',
+    orderNo: row.orderNo,
     bizType: row.bizType,
     propertyAddress: row.propertyAddress,
   });

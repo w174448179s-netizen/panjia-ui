@@ -121,6 +121,7 @@ export interface AdjustCreateForm {
   adjustType: string;        // AMOUNT / ADD_MEMBER / MANUAL_OFFSET / RECEIVED_AMOUNT
   adjustScope?: string;      // CONTRACT / DETAIL
   contractNo?: string;       // 合同级调整时填
+  orderNo?: string;          // 订单号（同合同号多订单时订单号优先精确匹配；为空后端退化按合同号）
   factType?: string;         // PERF_REAL / PERF_EXPECT（RECEIVED_AMOUNT 固定 PERF_REAL）
   targetAmount?: number;     // 调整后目标金额
   reason: string;
@@ -276,6 +277,7 @@ export interface ManageContractDetailQuery {
   period: string;
   factType: string;
   contractNos: string;       // 合同号，逗号分隔（单合同展开传 1 个）
+  orderNos?: string;         // 订单号，逗号分隔（可空；非空时按订单号精确限定单订单明细）
 }
 
 /** 业绩管理合同维度分页结果（rows=当前页合同聚合行，明细懒加载） */

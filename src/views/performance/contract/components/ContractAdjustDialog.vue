@@ -268,6 +268,7 @@ const pendingRows = ref<PendingRow[]>([]);
 
 interface AdjustInfo {
   contractNo: string;
+  orderNo?: string;   // 订单号（同合同号多订单时订单号优先精确匹配明细）
   bizType?: string;
   propertyAddress?: string;
   businessDate?: string;
@@ -330,6 +331,7 @@ async function open(payload: AdjustInfo) {
       period: payload.period,
       factType: 'PERF_EXPECT',
       contractNos: payload.contractNo,
+      orderNos: payload.orderNo,
     });
     const allRows: PerformanceManageRow[] = (res.data ?? [])
       .filter((r: PerformanceManageRow) => r.factStatus !== 'VOIDED');
@@ -534,6 +536,7 @@ async function submit() {
     factType: 'PERF_EXPECT',
     adjustScope: 'CONTRACT',
     contractNo: info.value.contractNo,
+    orderNo: info.value.orderNo,
     reason: why,
     detailTargets,
   };
