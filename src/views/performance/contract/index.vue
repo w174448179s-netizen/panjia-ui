@@ -157,11 +157,12 @@
           </template>
         </el-table-column>
         <!-- 操作列：详情 + 合同级调整 + 提交实收 + 合同级作废/恢复（作废以合同为维度，不区分人员） -->
-        <el-table-column label="操作" align="center" width="220" fixed="right">
+        <el-table-column label="操作" align="center" width="260" fixed="right">
           <template #default="scope">
             <div class="action-btns">
               <el-button size="small" link type="primary" @click="goDetail(scope.row as PerformanceManageContract)">详情</el-button>
               <el-button v-if="!isBroker && scope.row.factStatus !== 'VOIDED'" size="small" link type="warning" @click="openAdjustDialog(scope.row as PerformanceManageContract)">调整</el-button>
+              <el-button v-if="!isBroker && scope.row.factStatus !== 'VOIDED'" size="small" link type="primary" @click="openOffsetDialog(scope.row as PerformanceManageContract)">冲正</el-button>
               <el-dropdown @command="(cmd: string) => handleRowCommand(cmd, scope.row as PerformanceManageContract)">
                 <el-button size="small" link type="primary">更多<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
                 <template #dropdown>
@@ -392,6 +393,9 @@
         <el-button type="primary" :loading="detailAdjustSubmitting" @click="submitDetailAdjust">提交审批</el-button>
       </template>
     </el-dialog>
+
+    <!-- 业绩冲正/补录弹窗 -->
+    <ContractOffsetDialog ref="offsetDialogRef" @submitted="getList" />
   </div>
 </template>
 
@@ -403,6 +407,7 @@ import type { PerformanceManageContract, PerformanceManageRow } from '@/api/panj
 import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import ContractAdjustDialog from './components/ContractAdjustDialog.vue';
+import ContractOffsetDialog from './components/ContractOffsetDialog.vue';
 import { useUserStore } from '@/store/modules/user';
 import { resolveBizNo } from '@/utils/panjiaBiz';
 import { checkPermi } from '@/utils/permission';
@@ -817,6 +822,16 @@ const openAdjustDialog = (row: PerformanceManageContract) => {
     propertyAddress: row.propertyAddress,
     businessDate: row.businessDate,
     period: queryParams.period,
+  });
+};
+
+// ==================== 业绩冲正/补录弹窗 ====================
+const offsetDialogRef = ref();
+const openOffsetDialog = (row: PerformanceManageContract) => {
+  offsetDialogRef.value?.open({
+    contractNo: resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '',
+    bizType: row.bizType,
+    propertyAddress: row.propertyAddress,
   });
 };
 

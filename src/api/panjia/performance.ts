@@ -118,7 +118,7 @@ export interface AdjustCreateForm {
   period: string;
   employeeId?: string;       // 明细级调整时必填（被调整事实所属员工）；合同级/ADD_MEMBER 不传
   deptId?: string;           // 同上，明细级必填
-  adjustType: string;        // AMOUNT / ADD_MEMBER
+  adjustType: string;        // AMOUNT / ADD_MEMBER / MANUAL_OFFSET
   adjustScope?: string;      // CONTRACT / DETAIL
   contractNo?: string;       // 合同级调整时填
   factType?: string;         // PERF_REAL / PERF_EXPECT
@@ -136,6 +136,9 @@ export interface AdjustCreateForm {
   // 按行提交「调整后金额/角色占比」，审批通过后按指定值精确落库（不再等比分摊）；
   // 合同级 AMOUNT 与 ADD_MEMBER 均支持，为空时保持旧交互
   detailTargets?: { factId: string; targetAmount: number; shareRatio?: number }[];
+  // ---- 业绩冲正（MANUAL_OFFSET，合同级）专用 ----
+  // 每条含员工ID、角色类型、角色名、冲正金额（正增负减），审批通过后循环创建 MANUAL 事实
+  offsetItems?: { employeeId: number; roleType: string; roleName?: string; amount: number }[];
 }
 
 export interface ManualFactForm {
@@ -441,3 +444,19 @@ export const performanceApi = {
   restoreByContract: (period: string, factType: string, contractNo: string, reason: string) =>
     panjiaRequest.post<number>(`/perf/fact/restore-contract?period=${period}&factType=${factType}&contractNo=${encodeURIComponent(contractNo)}&reason=${encodeURIComponent(reason)}`),
 };
+
+// ========== 独立导出函数 ==========
+/** 业绩冲正/补录（批量，一个合同录入多人） */
+export function createManualOffset(data: {
+  contractNo: string;
+  period: string;
+  items: {
+    employeeId: number;
+    roleType: string;
+    roleName?: string;
+    amount: number;
+  }[];
+  reason?: string;
+}) {
+  return panjiaRequest.post<number>('/perf/fact/manual-offset', data);
+}
