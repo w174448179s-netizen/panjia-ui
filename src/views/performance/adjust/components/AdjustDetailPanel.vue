@@ -96,8 +96,11 @@
               <span class="amount amount-positive">+{{ formatYuan(detail.targetAmount) }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="调整后合同总额">
-              <span class="amount amount-ink">{{ formatYuan(detail.originalAmount) }}</span>
-              <el-tag type="success" size="small" effect="plain" style="margin-left: 6px">总额不变</el-tag>
+              <span class="amount amount-ink">{{ formatYuan(addMemberAfterTotal) }}</span>
+              <el-tag v-if="addMemberTotalChanged" type="warning" size="small" effect="plain" style="margin-left: 6px">
+                总额调整 {{ totalChangedText }}
+              </el-tag>
+              <el-tag v-else type="success" size="small" effect="plain" style="margin-left: 6px">总额不变</el-tag>
             </el-descriptions-item>
           </template>
           <el-descriptions-item v-else :label="isReceivedAdjust ? '实收业绩(调整后)' : '调整后业绩'">
