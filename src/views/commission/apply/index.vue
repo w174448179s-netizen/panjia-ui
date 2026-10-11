@@ -70,7 +70,9 @@
       <el-table border class="data-table" :data="contractList" :empty-text="emptyText">
         <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="{ row }">
-            <span class="contract-text">{{ contractOrOrderNo(row as CommissionContractVO) }}</span>
+            <el-button type="primary" link class="contract-link" @click="openDetail(row as CommissionContractVO)">
+              {{ contractOrOrderNo(row as CommissionContractVO) }}
+            </el-button>
           </template>
         </el-table-column>
         <el-table-column label="结佣业绩" align="right" width="180" fixed="left">
@@ -223,7 +225,8 @@
     <el-dialog
       v-model="detailDialog.visible"
       title="合同详情"
-      width="860px"
+      width="1100px"
+      top="5vh"
       append-to-body
       class="contract-detail-dialog"
     >
@@ -258,7 +261,7 @@
         <el-table-column label="期间" align="center" width="90">
           <template #default="{ row }">{{ row.period }}</template>
         </el-table-column>
-        <el-table-column label="门店/组别" align="left" prop="deptPath" min-width="180" show-overflow-tooltip>
+        <el-table-column label="门店/组别" align="left" prop="deptPath" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">{{ row.deptPath || '—' }}</template>
         </el-table-column>
         <el-table-column label="工号" align="center" width="100">
@@ -650,9 +653,8 @@ onMounted(() => {
 .data-table {
   width: 100%;
 
-  .contract-text {
+  .contract-link {
     font-weight: 600;
-    color: #303133;
   }
 
   .amount {

@@ -398,6 +398,8 @@ const onBizApprove = (businessId: string | number) =>
 const loading = ref(false);
 const applyList = ref<ReceivedApply[]>([]);
 const total = ref(0);
+// 后端全量汇总（与查询条件一致、不随分页变化）：totalReceivedAmount=实收合计
+const pageSummary = ref<Record<string, number | string> | null>(null);
 
 // ==================== 门店/组别筛选（全系统统一口径：所有用户查本部门及以下） ====================
 const { deptLocked, defaultDeptId } = useDeptScope();
@@ -468,7 +470,11 @@ const formatRatio = (val: number | string | undefined | null): string => {
   return `${Number.isInteger(pct) ? pct : pct.toFixed(2)}%`;
 };
 
-const summaryAmount = computed(() => applyList.value.reduce((s, r) => s + num(r.receivedAmount), 0));
+// 汇总条「实收合计」：优先用后端全量汇总（同查询条件全量 SUM），接口未返回时退回当前页求和
+const summaryAmount = computed(() => {
+  const s = pageSummary.value?.totalReceivedAmount;
+  return s != null && s !== '' ? Number(s) : applyList.value.reduce((s, r) => s + num(r.receivedAmount), 0);
+});
 
 const STATUS_MAP: Record<string, string> = {
   DRAFT: '待补新签', SUBMITTED: '审批中', APPROVED: '已通过', REJECTED: '已驳回', CANCELLED: '已作废',
@@ -528,9 +534,11 @@ const getList = async () => {
     });
     applyList.value = res.data?.rows ?? [];
     total.value = res.data?.total ?? 0;
+    pageSummary.value = res.data?.summary ?? null;
   } catch {
     applyList.value = [];
     total.value = 0;
+    pageSummary.value = null;
   } finally {
     loading.value = false;
   }

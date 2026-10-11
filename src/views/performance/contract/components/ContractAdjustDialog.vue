@@ -141,12 +141,13 @@
             <el-input-number
               v-model="row.ratioPct"
               :precision="4"
-              :min="0.0001"
+              :min="0"
               :max="100"
               :controls="false"
               :disabled="pendingBlocked"
               placeholder="不改"
               style="width: 120px"
+              @change="() => normalizeRatio(row as EditRow)"
             />
             <div class="cell-sub">{{ ratioText(row as EditRow) }}</div>
           </template>
@@ -542,21 +543,38 @@ async function submit() {
   };
 
   if (adjustType.value === 'ADD_MEMBER') {
-    const nr = newRows.value[0];
-    if (!nr || !nr.employeeId) {
-      ElMessage.warning('增加角色人需选择员工');
+    const nrs = newRows.value;
+    if (!nrs.length) {
+      ElMessage.warning('请先增加角色人');
       return;
     }
-    if (nr.targetAmount == null || num(nr.targetAmount) <= 0) {
-      ElMessage.warning('新角色人业绩金额必须大于 0');
-      return;
+    // 逐人校验：必须选员工、金额大于 0
+    for (const nr of nrs) {
+      if (!nr.employeeId) {
+        ElMessage.warning('每个新角色人都需选择员工');
+        return;
+      }
+      if (nr.targetAmount == null || num(nr.targetAmount) <= 0) {
+        ElMessage.warning(`新角色人「${nr.employeeName || ''}」的业绩金额必须大于 0`);
+        return;
+      }
+    }
+    // 同一员工不允许重复添加
+    const pickedIds = new Set<string>();
+    for (const nr of nrs) {
+      if (pickedIds.has(nr.employeeId!)) {
+        ElMessage.warning(`员工「${nr.employeeName || ''}」不能重复添加为新角色人`);
+        return;
+      }
+      pickedIds.add(nr.employeeId!);
     }
     // 允许「增加角色人 + 合同金额调整」混合发起：总额发生变化时二次确认，不再拦截提交
     const diff = totalDelta.value;
     if (Math.abs(diff) > 0.004) {
+      const memberNames = nrs.map(nr => nr.employeeName || '未命名').join('、');
       try {
         await ElMessageBox.confirm(
-          `本次调整除增加角色人「${nr.employeeName || ''}」外，合同业绩总额将由 ${formatAmount(originalTotal.value)} `
+          `本次调整增加角色人「${memberNames}」共 ${nrs.length} 人，合同业绩总额将由 ${formatAmount(originalTotal.value)} `
           + `调整为 ${formatAmount(targetTotal.value)}（${diff > 0 ? '+' : ''}${diff.toFixed(2)}）。是否确认提交审批？`,
           '合同金额有调整',
           { confirmButtonText: '确认提交', cancelButtonText: '再检查一下', type: 'warning' },
@@ -565,13 +583,16 @@ async function submit() {
         return; // 用户取消
       }
     }
+    // 全部新人随单一调整单提交（后端以 newMembers 为权威列表）
     Object.assign(form, {
       adjustType: 'ADD_MEMBER',
-      newEmployeeId: nr.employeeId,
-      newRoleType: nr.roleType?.trim() || '合作人',
-      newAmount: round2(num(nr.targetAmount)),
-      newShareRatio: nr.ratioPct != null && num(nr.ratioPct) > 0
-        ? round6(num(nr.ratioPct) / 100) : undefined,
+      newMembers: nrs.map(nr => ({
+        employeeId: nr.employeeId!,
+        roleType: nr.roleType?.trim() || '合作人',
+        amount: round2(num(nr.targetAmount)),
+        shareRatio: nr.ratioPct != null && num(nr.ratioPct) > 0
+          ? round6(num(nr.ratioPct) / 100) : undefined,
+      })),
     });
   } else {
     if (totalInput.value == null) {

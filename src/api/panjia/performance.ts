@@ -131,11 +131,22 @@ export interface AdjustCreateForm {
   // period=实收期间（YYYY-MM），targetAmount=调整后实收合计（正多收负少收），
   // 后端按实收明细等比分摊并快照 payload，无需传明细行
   // ---- 增加角色人（ADD_MEMBER，合同级）专用 ----
-  newEmployeeId?: string;    // 新角色人员工 ID
+  newEmployeeId?: string;    // 新角色人员工 ID（旧版单人字段，新弹窗请用 newMembers）
   newRoleType?: string;      // 新角色人角色类型
   newAmount?: number;        // 新角色人业绩金额
   newShareRatio?: number;    // 新角色人业绩比例（小数，如 0.5；空=不设置）
   newDeptId?: string;        // 新角色人业绩归属部门（默认员工档案部门，可改）
+  /**
+   * 新角色人清单（2026-10-11 起支持一张调整单添加多人）。
+   * 非空时后端以清单为准；弹窗可连续添加多行，一次提交统一审批。
+   */
+  newMembers?: {
+    employeeId: string;      // 新角色人员工 ID
+    roleType?: string;       // 角色类型（空默认"合作人"）
+    amount: number;          // 该新人业绩金额（>0）
+    shareRatio?: number;     // 角色占比（小数，如 0.5；空=不设置）
+    deptId?: string;         // 归属部门（空=员工档案部门）
+  }[];
   deductions?: { factId: string; amount: number }[]; // 指定扣除行（剩余由未指定行等比分摊）
   // ---- 明细指定值（可编辑表格，2026-09-28）----
   // 按行提交「调整后金额/角色占比」，审批通过后按指定值精确落库（不再等比分摊）；
