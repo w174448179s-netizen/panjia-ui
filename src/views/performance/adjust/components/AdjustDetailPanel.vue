@@ -197,7 +197,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { performanceApi, type AdjustDetailVO } from '@/api/panjia/performance';
+import { performanceApi, receivedAdjustApi, type AdjustDetailVO } from '@/api/panjia/performance';
 import { useEmployeeMap } from '@/components/WorkflowHandle/useEmployeeMap';
 
 /**
@@ -205,8 +205,17 @@ import { useEmployeeMap } from '@/components/WorkflowHandle/useEmployeeMap';
  *
  * 「业绩调整 → 详情」与「我的待办 → 业绩调整审批」曾经各写了一份几乎相同的模板，
  * 口径与列宽长期漂移。现统一由本组件承担，两处只传入 businessId。
+ *
+ * kind：
+ * - perf（默认）：新签调整单（pj_perf_adjust，/perf/adjust）
+ * - received：实收调整单（pj_perf_received_adjust，/perf/received-adjust，2026-10-12 物理拆表）
  */
-const props = defineProps<{ businessId: string | number }>();
+const props = withDefaults(defineProps<{
+  businessId: string | number;
+  kind?: 'perf' | 'received';
+}>(), {
+  kind: 'perf'
+});
 
 const loading = ref(false);
 const loadError = ref('');
@@ -366,11 +375,18 @@ const rowClassName = ({ row }: { row: any }) => (row.target ? 'target-row' : '')
 onMounted(async () => {
   loading.value = true;
   try {
-    const [res] = await Promise.all([performanceApi.getAdjustDetail(props.businessId), loadEmployees()]);
+    const fetchDetail = props.kind === 'received'
+      ? receivedAdjustApi.getDetail(props.businessId)
+      : performanceApi.getAdjustDetail(props.businessId);
+    const [res] = await Promise.all([fetchDetail, loadEmployees()]);
     detail.value = (res as any).data ?? null;
-    if (!detail.value) loadError.value = '未找到该业绩调整单';
+    if (!detail.value) {
+      loadError.value = props.kind === 'received' ? '未找到该实收调整单' : '未找到该业绩调整单';
+    }
   } catch {
-    loadError.value = '加载业绩调整单详情失败';
+    loadError.value = props.kind === 'received'
+      ? '加载实收调整单详情失败'
+      : '加载业绩调整单详情失败';
   } finally {
     loading.value = false;
   }

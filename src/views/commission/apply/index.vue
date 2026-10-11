@@ -177,7 +177,7 @@
               style="width: 200px"
             />
           </el-form-item>
-          <el-form-item label="合同号" required>
+          <el-form-item label="合同号/订单号" required>
             <el-input
               v-model="batchApplyForm.contractNosText"
               type="textarea"
@@ -186,7 +186,7 @@
             />
           </el-form-item>
           <div class="batch-hint">
-            将按所选结佣期间为每个合同号发起结佣申请并提交审批（结佣期间不按实收日期，历史实收审批通过且未结佣的均可发起）。已有未完结单的合同会跳过。
+            将按所选结佣期间逐张发起结佣申请并提交审批（结佣期间不按实收日期，历史实收审批通过且未结佣的均可发起）。<b>录入合同号时自动展开该合同下全部订单分别发起；录入订单号则仅发起该订单。</b>已有未完结单的订单会跳过。
           </div>
         </el-form>
       </template>
@@ -201,8 +201,11 @@
     <!-- 单个发起：选择结佣期间（月份选择框，YYYY-MM） -->
     <el-dialog v-model="singleApplyForm.visible" title="发起结佣" width="500px" append-to-body @close="resetSingleApply">
       <el-form label-width="110px" @submit.prevent>
-        <el-form-item label="合同号/订单号">
-          <span class="single-contract-no">{{ singleApplyForm.bizNo }}</span>
+        <el-form-item label="合同号">
+          <span class="single-contract-no">{{ singleApplyForm.contractNo || '—' }}</span>
+        </el-form-item>
+        <el-form-item v-if="singleApplyForm.orderNo" label="订单号">
+          <span class="single-contract-no">{{ singleApplyForm.orderNo }}</span>
         </el-form-item>
         <el-form-item label="结佣期间" required>
           <el-date-picker
@@ -470,7 +473,7 @@ const doBatchApply = async () => {
     .map((s) => s.trim())
     .filter(Boolean);
   if (contractNos.length === 0) {
-    ElMessage.warning('请输入至少一个合同号');
+    ElMessage.warning('请输入至少一个合同号/订单号');
     return;
   }
   batchApplyForm.parsedCount = contractNos.length;
@@ -485,15 +488,20 @@ const doBatchApply = async () => {
 };
 
 // 单个发起：月份选择框选择结佣期间，确定后一次完成发起+提交
+// 合同号、订单号同传后台：以订单号为准（同合同多订单各自独立发起，互不串单）
 const singleApplyForm = reactive({
   visible: false,
   submitting: false,
   bizNo: '',
+  contractNo: '',
+  orderNo: '' as string | undefined,
   period: '',
 });
 const resetSingleApply = () => {
   singleApplyForm.submitting = false;
   singleApplyForm.bizNo = '';
+  singleApplyForm.contractNo = '';
+  singleApplyForm.orderNo = undefined;
   singleApplyForm.period = '';
 };
 const onSubmit = (row: CommissionContractVO) => {
@@ -504,6 +512,9 @@ const onSubmit = (row: CommissionContractVO) => {
   }
   if (submittingMap[no]) return;
   singleApplyForm.bizNo = no;
+  // 合同号必填、订单号有则同传（老数据无订单号时后台退合同号口径并做多订单防串单校验）
+  singleApplyForm.contractNo = row.contractNo || no;
+  singleApplyForm.orderNo = row.orderNo || undefined;
   singleApplyForm.period = currentPeriod();
   singleApplyForm.visible = true;
 };
@@ -517,7 +528,11 @@ const doSingleApply = async () => {
   submittingMap[no] = true;
   singleApplyForm.submitting = true;
   try {
-    await commissionApi.createApplication({ period: singleApplyForm.period, contractNo: no });
+    await commissionApi.createApplication({
+      period: singleApplyForm.period,
+      contractNo: singleApplyForm.contractNo,
+      orderNo: singleApplyForm.orderNo,
+    });
     ElMessage.success('发起成功');
     singleApplyForm.visible = false;
     // 刷新不阻塞弹窗关闭（P0：列表查询数百 ms，用户感知「点了没反应」的主要来源）

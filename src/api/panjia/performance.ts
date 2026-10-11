@@ -488,3 +488,70 @@ export function createManualOffset(data: {
 }) {
   return panjiaRequest.post<number>('/perf/fact/manual-offset', data);
 }
+
+// ========== 实收调整（pj_perf_received_adjust，2026-10-12 与新签调整物理拆表） ==========
+
+/** 实收调整单（独立表，固定合同级 + PERF_REAL） */
+export interface ReceivedAdjust {
+  id: string;
+  adjustNo: string;
+  period: string;               // 实收归属期间 YYYY-MM
+  employeeId?: string;
+  deptId?: string;
+  deptName?: string;
+  contractNo?: string;
+  orderNo?: string;
+  /** 业务类型（一手房/房产金融/二手房等，号源显示用 resolveBizNo） */
+  bizType?: string;
+  targetAmount?: number;        // 调整后实收合计
+  originalAmount?: number;      // 调整前实收合计
+  convertedOriginalAmount?: number;
+  convertedTargetAmount?: number;
+  reason: string;
+  status: string;               // SUBMITTED/APPROVED/REJECTED/CANCELLED/EXECUTED
+  applicantId?: string;
+  approverId?: string;
+  approveTime?: string;
+  operatorId?: string;
+  executeTime?: string;
+  createTime: string;
+}
+
+export interface ReceivedAdjustQuery extends PageQuery {
+  period?: string;
+  status?: string;
+  employeeId?: string;
+  deptId?: string;
+  bizType?: string;
+  keyword?: string;
+}
+
+/** 实收调整发起表单：后端按实收明细等比分摊并快照 payload，无需传明细行 */
+export interface ReceivedAdjustCreateForm {
+  period: string;               // 实收期间 YYYY-MM
+  contractNo: string;
+  orderNo?: string;
+  targetAmount?: number;        // 调整后实收合计（正=多收，负=少收）
+  reason?: string;
+}
+
+export const receivedAdjustApi = {
+  // 实收调整单分页列表
+  list: (params: ReceivedAdjustQuery) =>
+    panjiaRequest.get<PageResult<ReceivedAdjust>>('/perf/received-adjust/list', params),
+  // 列表「业务类型」下拉（数据范围与列表一致）
+  listBizTypes: (params: { period?: string; deptId?: string; employeeId?: string }) =>
+    panjiaRequest.get<string[]>('/perf/received-adjust/biz-types', params),
+  // 完整详情（含合同信息 + 受影响实收明细与分摊预演）
+  getDetail: (id: string | number) =>
+    panjiaRequest.get<AdjustDetailVO>(`/perf/received-adjust/${id}/detail`),
+  // 发起实收调整并启动审批（flowCode=perf_received_adjust）
+  create: (data: ReceivedAdjustCreateForm) =>
+    panjiaRequest.post<string>('/perf/received-adjust', data),
+  // 申请人撤回
+  withdraw: (id: string | number) =>
+    panjiaRequest.post<void>(`/perf/received-adjust/${id}/withdraw`),
+  // 预检：该合同该实收期间是否存在审批中的实收调整单
+  checkInFlight: (contractNo: string, period: string) =>
+    panjiaRequest.get<boolean>('/perf/received-adjust/in-flight-check', { contractNo, period }),
+};

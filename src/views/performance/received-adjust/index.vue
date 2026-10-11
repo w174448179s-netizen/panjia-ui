@@ -175,7 +175,7 @@
       append-to-body
       destroy-on-close
     >
-      <AdjustDetailPanel v-if="detailDialog.visible" :business-id="detailDialog.businessId" />
+      <AdjustDetailPanel v-if="detailDialog.visible" kind="received" :business-id="detailDialog.businessId" />
       <template #footer>
         <el-button @click="detailDialog.visible = false">关 闭</el-button>
       </template>
@@ -187,8 +187,8 @@
 </template>
 
 <script setup lang="ts">
-import { performanceApi } from '@/api/panjia/performance';
-import type { PerformanceAdjust, AdjustQuery } from '@/api/panjia/performance';
+import { receivedAdjustApi } from '@/api/panjia/performance';
+import type { ReceivedAdjust, ReceivedAdjustQuery } from '@/api/panjia/performance';
 import AdjustDetailPanel from '../adjust/components/AdjustDetailPanel.vue';
 import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
@@ -221,7 +221,7 @@ const handleWithdraw = async (row: any) => {
     return;
   }
   try {
-    await performanceApi.withdrawAdjust(row.id);
+    await receivedAdjustApi.withdraw(row.id);
     modal.msgSuccess('已撤回');
     getList();
   } catch {
@@ -254,12 +254,11 @@ const statusTagType = (status: string): TagType => {
 // ==================== 部门口径（全系统统一：所有用户查本部门及以下） ====================
 const { deptLocked, defaultDeptId } = useDeptScope();
 
-// ==================== 筛选 & 分页（调整类型固定实收调整） ====================
-const queryParams = reactive<AdjustQuery & { pageNum: number; pageSize: number }>({
+// ==================== 筛选 & 分页（实收调整独立表，无需再传 adjustType） ====================
+const queryParams = reactive<ReceivedAdjustQuery & { pageNum: number; pageSize: number }>({
   pageNum: 1,
   pageSize: 20,
   period: undefined,
-  adjustType: 'RECEIVED_AMOUNT' as string | undefined,
   status: undefined,
   employeeId: undefined,
   deptId: defaultDeptId(),
@@ -267,11 +266,11 @@ const queryParams = reactive<AdjustQuery & { pageNum: number; pageSize: number }
   keyword: undefined as string | undefined
 });
 
-// ==================== 业务类型下拉（数据范围与列表一致；随期间/部门/员工变化刷新） ====================
+// ==================== 业务类型下拉（实收调整表内去重，数据范围与列表一致） ====================
 const bizTypeOptions = ref<string[]>([]);
 const loadBizTypes = async () => {
   try {
-    const res = await performanceApi.listSearchBizTypes({
+    const res = await receivedAdjustApi.listBizTypes({
       period: queryParams.period,
       deptId: queryParams.deptId,
       employeeId: queryParams.employeeId
@@ -293,14 +292,14 @@ watch(
 );
 
 // ==================== 列表 ====================
-const adjustList = ref<PerformanceAdjust[]>([]);
+const adjustList = ref<ReceivedAdjust[]>([]);
 const total = ref(0);
 const loading = ref(false);
 
 const getList = async () => {
   loading.value = true;
   try {
-    const res = await performanceApi.listAdjusts({ ...queryParams });
+    const res = await receivedAdjustApi.list({ ...queryParams });
     adjustList.value = res.rows ?? [];
     total.value = Number(res.total ?? 0);
   } catch {
@@ -343,7 +342,7 @@ const detailDialog = reactive<{ visible: boolean; businessId: string | number | 
   visible: false,
   businessId: null
 });
-const handleDetail = (row: PerformanceAdjust) => {
+const handleDetail = (row: ReceivedAdjust) => {
   detailDialog.businessId = row.id;
   detailDialog.visible = true;
 };

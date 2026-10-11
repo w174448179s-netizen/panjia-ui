@@ -126,6 +126,7 @@ const TAG_TYPE_MAP: Record<string, string> = {
   commission_apply: 'primary',
   commission_adjust: 'warning',
   perf_adjust: 'warning',
+  perf_received_adjust: 'danger',
   perf_received: 'success',
   bonus_apply: 'info',
   payroll_batch: 'danger'

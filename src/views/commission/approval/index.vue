@@ -242,7 +242,7 @@
       <div v-if="batchApproveLoading" class="batch-waiting">
         <el-icon class="is-loading" :size="32"><Loading /></el-icon>
         <p class="waiting-text">正在批量审批，请耐心等待...</p>
-        <p class="waiting-sub">共 {{ batchApproveForm.parsedCount }} 个合同号，逐单处理中</p>
+        <p class="waiting-sub">共 {{ batchApproveForm.parsedCount }} 个合同号/订单号，逐单处理中</p>
       </div>
 
       <div v-else-if="batchApproveResult" class="batch-result">
@@ -275,7 +275,7 @@
               style="width: 100%"
             />
           </el-form-item>
-          <el-form-item label="合同号" required>
+          <el-form-item label="合同号/订单号" required>
             <el-input
               v-model="batchApproveForm.contractNosText"
               type="textarea"
@@ -283,7 +283,7 @@
               placeholder="每行一个合同号/订单号（以列表展示的编号为准），或用逗号/空格分隔"
             />
           </el-form-item>
-          <div class="batch-hint">将逐单审批当前节点，非您审批范围内的单据会跳过。</div>
+          <div class="batch-hint">录入合同号将自动审批该合同下全部订单的结佣单；录入订单号仅审批该订单。将逐单审批当前节点，非您审批范围内的单据会跳过。</div>
         </el-form>
       </template>
 
@@ -522,7 +522,7 @@ const doBatchApprove = async () => {
     .map((s) => s.trim())
     .filter(Boolean);
   if (contractNos.length === 0) {
-    ElMessage.warning('请输入至少一个合同号');
+    ElMessage.warning('请输入至少一个合同号或订单号');
     return;
   }
   batchApproveForm.parsedCount = contractNos.length;

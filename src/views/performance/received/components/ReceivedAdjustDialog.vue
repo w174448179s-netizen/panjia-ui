@@ -111,7 +111,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue';
 import { ElMessage } from 'element-plus';
-import { performanceApi } from '@/api/panjia/performance';
+import { performanceApi, receivedAdjustApi } from '@/api/panjia/performance';
 import type { PerformanceManageRow } from '@/api/panjia/performance';
 
 const emit = defineEmits<{ (e: 'submitted'): void }>();
@@ -228,12 +228,9 @@ async function submit() {
   }
   submitting.value = true;
   try {
-    await performanceApi.createAdjust({
-      adjustType: 'RECEIVED_AMOUNT',
-      adjustScope: 'CONTRACT',
+    await receivedAdjustApi.create({
       contractNo: info.value.contractNo,
       orderNo: info.value.orderNo,
-      factType: 'PERF_REAL',
       period: formData.period,
       targetAmount: targetAmount.value,
       reason: reason.value.trim() || '实收调整',

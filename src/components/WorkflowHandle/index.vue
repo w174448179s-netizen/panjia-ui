@@ -76,6 +76,7 @@ const DETAIL_LOADERS: Record<string, () => Promise<any>> = {
   commission_apply: () => import('./details/CommissionApplyDetail.vue'),
   commission_adjust: () => import('./details/CommissionAdjustDetail.vue'),
   perf_adjust: () => import('./details/PerfAdjustDetail.vue'),
+  perf_received_adjust: () => import('./details/ReceivedAdjustDetail.vue'),
   bonus_apply: () => import('./details/BonusDetail.vue'),
   payroll_batch: () => import('./details/PayrollBatchDetail.vue'),
   attendance_approval: () => import('./details/AttendanceApprovalDetail.vue'),
