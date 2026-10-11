@@ -53,6 +53,10 @@ export interface PerformanceAdjust {
   adjustTypeName?: string;
   adjustScope?: string;      // CONTRACT / DETAIL
   contractNo?: string;
+  /** 订单号（一手房/房产金融等同合同号多订单场景的精确业务键） */
+  orderNo?: string;
+  /** 业务类型（一手房/房产金融/二手房等，列表回填；号源显示用 resolveBizNo） */
+  bizType?: string;
   originalAmount?: number;    // 调整前原始金额（创建时快照）
   targetAmount?: number;      // 调整后目标金额（用户录入的最终金额）
   convertedOriginalAmount?: number; // 折算后原始金额（originalAmount × factor）

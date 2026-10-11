@@ -117,7 +117,7 @@
             <template #default="scope">
               <template v-if="scope.row.adjustScope === 'CONTRACT'">
                 <el-button link type="primary" class="adjust-object-link" @click="handleDetail(scope.row)">
-                  {{ scope.row.contractNo || '—' }}
+                  {{ adjustObjectNo(scope.row) }}
                 </el-button>
               </template>
               <template v-else>
@@ -141,7 +141,6 @@
             <template #default="scope">
               <span class="origin-amount">{{ formatOrigin(scope.row.originalAmount) }}</span>
               <div v-if="scope.row.adjustType === 'ADD_MEMBER'" class="cell-sub">合同总额</div>
-              <div v-else-if="scope.row.adjustType === 'RECEIVED_AMOUNT'" class="cell-sub">实收口径</div>
             </template>
           </el-table-column>
           <el-table-column label="折算后" align="right" width="130">
@@ -376,6 +375,7 @@ import { checkPermi } from '@/utils/permission';
 import { useDeptScope } from '@/hooks/useDeptScope';
 import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
 import { useUserStore } from '@/store/modules/user';
+import { resolveBizNo } from '@/utils/panjiaBiz';
 
 const route = useRoute();
 const userStore = useUserStore();
@@ -405,11 +405,11 @@ const handleWithdraw = async (row: any) => {
 };
 
 // ==================== 枚举 ====================
+// 新签调整菜单只管新签类调整；RECEIVED_AMOUNT（实收调整）归「实收调整」菜单，后端默认亦排除
 const adjustTypeMap: Record<string, string> = {
   AMOUNT: '金额调整',
   ADD_MEMBER: '增加角色人',
-  MANUAL_OFFSET: '业绩冲正',
-  RECEIVED_AMOUNT: '实收调整'
+  MANUAL_OFFSET: '业绩冲正'
 };
 const adjustTypeOptions = Object.entries(adjustTypeMap).map(([value, label]) => ({ value, label }));
 
@@ -520,6 +520,13 @@ const resetQuery = () => {
 };
 
 // ==================== 工具方法 ====================
+/**
+ * 合同级调整对象号源：与「新签明细」同口径（resolveBizNo）——
+ * 一手房/房产金融显订单号（空回退合同号），其它业务类型显合同号（空回退订单号）。
+ */
+const adjustObjectNo = (row: PerformanceAdjust): string =>
+  resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—';
+
 /** 普通金额格式化：两位小数，无 ¥ 前缀 */
 const formatNumber = (val: number | string | undefined | null): string => {
   if (val === undefined || val === null || val === '') return '0.00';

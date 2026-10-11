@@ -93,7 +93,7 @@
           <el-table-column label="调整对象" align="center" min-width="160" show-overflow-tooltip>
             <template #default="scope">
               <el-button link type="primary" class="adjust-object-link" @click="handleDetail(scope.row)">
-                {{ scope.row.contractNo || '—' }}
+                {{ resolveBizNo(scope.row.bizType, scope.row.contractNo, scope.row.orderNo) || '—' }}
               </el-button>
             </template>
           </el-table-column>
@@ -200,6 +200,7 @@ import { checkPermi } from '@/utils/permission';
 import { useDeptScope } from '@/hooks/useDeptScope';
 import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
 import { useUserStore } from '@/store/modules/user';
+import { resolveBizNo } from '@/utils/panjiaBiz';
 
 const route = useRoute();
 const userStore = useUserStore();
