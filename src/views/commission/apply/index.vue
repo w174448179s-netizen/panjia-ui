@@ -199,9 +199,9 @@
     </el-dialog>
 
     <!-- 单个发起：选择结佣期间（月份选择框，YYYY-MM） -->
-    <el-dialog v-model="singleApplyForm.visible" title="发起结佣" width="420px" append-to-body @close="resetSingleApply">
-      <el-form label-width="92px" @submit.prevent>
-        <el-form-item label="合同号">
+    <el-dialog v-model="singleApplyForm.visible" title="发起结佣" width="500px" append-to-body @close="resetSingleApply">
+      <el-form label-width="110px" @submit.prevent>
+        <el-form-item label="合同号/订单号">
           <span class="single-contract-no">{{ singleApplyForm.bizNo }}</span>
         </el-form-item>
         <el-form-item label="结佣期间" required>
