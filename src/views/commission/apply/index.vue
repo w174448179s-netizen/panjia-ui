@@ -520,7 +520,8 @@ const doSingleApply = async () => {
     await commissionApi.createApplication({ period: singleApplyForm.period, contractNo: no });
     ElMessage.success('发起成功');
     singleApplyForm.visible = false;
-    await getList();
+    // 刷新不阻塞弹窗关闭（P0：列表查询数百 ms，用户感知「点了没反应」的主要来源）
+    getList();
   } catch { /* 拦截器处理 */ } finally {
     submittingMap[no] = false;
     singleApplyForm.submitting = false;
