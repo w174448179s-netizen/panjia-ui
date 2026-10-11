@@ -147,7 +147,6 @@
               :disabled="pendingBlocked"
               placeholder="不改"
               style="width: 120px"
-              @change="() => normalizeRatio(row as EditRow)"
             />
             <div class="cell-sub">{{ ratioText(row as EditRow) }}</div>
           </template>
@@ -518,10 +517,10 @@ async function submit() {
     ElMessage.warning('每行需填写调整后业绩金额');
     return;
   }
-  // 角色占比：填了就必须大于 0（清空=不修改/不设置）
-  const invalidRatioRow = editRows.value.find(r => r.ratioPct != null && num(r.ratioPct) <= 0);
+  // 占比合法区间 [0,100]：0 是有效值（金额全扣时比例同步归零），空才表示不修改
+  const invalidRatioRow = editRows.value.find(r => r.ratioPct != null && num(r.ratioPct) < 0);
   if (invalidRatioRow) {
-    ElMessage.warning(`「${invalidRatioRow.employeeName || '新角色人'}」的角色占比须大于 0，不需要调整请清空输入框`);
+    ElMessage.warning(`「${invalidRatioRow.employeeName || '新角色人'}」的角色占比不能为负`);
     return;
   }
 
@@ -590,7 +589,8 @@ async function submit() {
         employeeId: nr.employeeId!,
         roleType: nr.roleType?.trim() || '合作人',
         amount: round2(num(nr.targetAmount)),
-        shareRatio: nr.ratioPct != null && num(nr.ratioPct) > 0
+        // 占比 0 为合法值（金额全扣→比例归零）；仅 undefined 表示不设置
+        shareRatio: nr.ratioPct != null
           ? round6(num(nr.ratioPct) / 100) : undefined,
       })),
     });
