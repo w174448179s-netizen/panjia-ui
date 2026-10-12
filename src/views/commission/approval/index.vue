@@ -76,12 +76,13 @@
         </div>
         <div class="summary-right">
           <span class="summary-amount">结佣合计：<b>{{ formatAmount(summary.totalAmount) }}</b></span>
-          <el-button v-if="checkPermi(['commission:apply:batch'])" type="success" plain icon="DocumentChecked" @click="showBatchApprove = true">批量审批</el-button>
+          <el-button v-if="checkPermi(['commission:apply:batch'])" type="success" plain icon="DocumentChecked" :disabled="selectedRows.length === 0" @click="showBatchApprove = true">批量审批{{ selectedRows.length > 0 ? `(${selectedRows.length})` : '' }}</el-button>
         </div>
       </div>
 
       <!-- 合同维度表格 -->
-      <el-table border class="data-table" :data="contractList" :empty-text="emptyText">
+      <el-table border class="data-table" :data="contractList" :empty-text="emptyText" @selection-change="onSelectionChange">
+        <el-table-column type="selection" width="50" :selectable="(row: CommissionContractVO) => row.status === 'SUBMITTED'" />
         <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="{ row }">
             <!-- 点击打开结佣申请详情 -->
@@ -237,12 +238,12 @@
       @adjust-closed="adjustApplicationId = null"
     />
 
-    <!-- 批量审批弹窗：录入合同号 → 等待处理完成 → 展示结果 -->
-    <el-dialog v-model="showBatchApprove" title="批量审批" width="560px" @close="resetBatchApproveDialog">
+    <!-- 批量审批弹窗：勾选确认 → 等待处理完成 → 展示结果 -->
+    <el-dialog v-model="showBatchApprove" title="批量审批" width="600px" @close="resetBatchApproveDialog">
       <div v-if="batchApproveLoading" class="batch-waiting">
         <el-icon class="is-loading" :size="32"><Loading /></el-icon>
         <p class="waiting-text">正在批量审批，请耐心等待...</p>
-        <p class="waiting-sub">共 {{ batchApproveForm.parsedCount }} 个合同号/订单号，逐单处理中</p>
+        <p class="waiting-sub">共 {{ selectedRows.length }} 张单据，逐单处理中</p>
       </div>
 
       <div v-else-if="batchApproveResult" class="batch-result">
@@ -265,26 +266,19 @@
       </div>
 
       <template v-else>
-        <el-form label-width="80px">
-          <el-form-item label="结算月" required>
-            <el-date-picker
-              v-model="batchApproveForm.period"
-              type="month"
-              value-format="YYYY-MM"
-              placeholder="请选择月份"
-              style="width: 100%"
-            />
-          </el-form-item>
-          <el-form-item label="合同号/订单号" required>
-            <el-input
-              v-model="batchApproveForm.contractNosText"
-              type="textarea"
-              :rows="10"
-              placeholder="每行一个合同号/订单号（以列表展示的编号为准），或用逗号/空格分隔"
-            />
-          </el-form-item>
+        <div class="batch-confirm">
+          <p class="confirm-text">将批量审批以下 <b>{{ selectedRows.length }}</b> 张待审批单据：</p>
+          <el-table :data="selectedRows" border max-height="320" size="small">
+            <el-table-column label="合同号/订单号" align="center" min-width="160" show-overflow-tooltip>
+              <template #default="{ row }">{{ contractOrOrderNo(row as CommissionContractVO) }}</template>
+            </el-table-column>
+            <el-table-column label="期间" align="center" width="90" prop="period" />
+            <el-table-column label="结佣业绩" align="right" width="120">
+              <template #default="{ row }">{{ formatAmount(row.amount) }}</template>
+            </el-table-column>
+          </el-table>
           <div class="batch-hint">录入合同号将自动审批该合同下全部订单的结佣单；录入订单号仅审批该订单。将逐单审批当前节点，非您审批范围内的单据会跳过。</div>
-        </el-form>
+        </div>
       </template>
 
       <template #footer>
@@ -490,20 +484,18 @@ const nodeLabel = (node?: string) => node === 'DIRECTOR' ? '总监审批' : node
 const showBatchApprove = ref(false);
 const batchApproveLoading = ref(false);
 const batchApproveResult = ref<BatchResultDTO | null>(null);
-const batchApproveForm = reactive({
-  period: '' as string,
-  contractNosText: '',
-  parsedCount: 0,
-});
+const selectedRows = ref<CommissionContractVO[]>([]);
+
+const onSelectionChange = (rows: CommissionContractVO[]) => {
+  selectedRows.value = rows;
+};
+
 const batchApproveSummary = computed(() => {
   const r = batchApproveResult.value;
   if (!r) return '';
   return `成功 ${r.success} 个，跳过 ${r.skipped} 个，失败 ${r.failed} 个`;
 });
 const resetBatchApproveDialog = () => {
-  batchApproveForm.period = '';
-  batchApproveForm.contractNosText = '';
-  batchApproveForm.parsedCount = 0;
   batchApproveLoading.value = false;
   batchApproveResult.value = null;
 };
@@ -513,22 +505,32 @@ const closeBatchApprove = () => {
   getList();
 };
 const doBatchApprove = async () => {
-  if (!batchApproveForm.period) {
-    ElMessage.warning('请选择结算月');
+  if (selectedRows.value.length === 0) {
+    ElMessage.warning('请至少勾选一张待审批单据');
     return;
   }
-  const contractNos = batchApproveForm.contractNosText
-    .split(/[\n,，\s]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // 跨期间校验：批量审批接口按期间处理，不允许跨期间
+  const periods = [...new Set(selectedRows.value.map((r) => r.period).filter(Boolean))];
+  if (periods.length > 1) {
+    ElMessage.warning(`所选单据跨多个期间（${periods.join('、')}），请按期间分别批量审批`);
+    return;
+  }
+  const period = periods[0];
+  if (!period) {
+    ElMessage.warning('所选单据无有效期间');
+    return;
+  }
+  // 提取合同号/订单号：优先订单号（精确），无订单号用合同号（展开全部订单）
+  const contractNos = selectedRows.value
+    .map((row) => row.orderNo || row.contractNo)
+    .filter(Boolean) as string[];
   if (contractNos.length === 0) {
-    ElMessage.warning('请输入至少一个合同号或订单号');
+    ElMessage.warning('所选单据无有效合同号/订单号');
     return;
   }
-  batchApproveForm.parsedCount = contractNos.length;
   batchApproveLoading.value = true;
   try {
-    const res: any = await commissionApi.batchApproveByContract(batchApproveForm.period, contractNos);
+    const res: any = await commissionApi.batchApproveByContract(period, contractNos);
     batchApproveResult.value = res.data;
   } catch { /* 拦截器处理 */ } finally {
     batchApproveLoading.value = false;

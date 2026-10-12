@@ -131,12 +131,12 @@
               <span v-else class="amount-ink">{{ formatMoney(row.expectConvertedAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="实收业绩" align="right" width="130">
+          <el-table-column v-if="canSeeRealAmount" label="实收业绩" align="right" width="130">
             <template #default="{ row }">
               <span class="amount-red">{{ formatMoney(row.realAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="折算后" align="right" width="120">
+          <el-table-column v-if="canSeeRealAmount" label="折算后" align="right" width="120">
             <template #default="{ row }">
               <span class="amount-ink">{{ formatMoney(row.realConvertedAmount) }}</span>
             </template>
@@ -237,7 +237,7 @@
             <span class="amount-ink">{{ formatMoney(detailDialog.row.expectConvertedAmount) }}</span>
           </span>
         </el-descriptions-item>
-        <el-descriptions-item label="实收业绩">
+        <el-descriptions-item v-if="canSeeRealAmount" label="实收业绩">
           <span class="amount-red">{{ formatMoney(detailDialog.row.realAmount) }}</span>
           <span class="amount-gray" style="margin-left: 8px">折算后 {{ formatMoney(detailDialog.row.realConvertedAmount) }}</span>
         </el-descriptions-item>
@@ -290,9 +290,11 @@
             <span class="summary-sep">|</span>
             折算后：<b class="amount-ink">{{ formatMoney(detailSummary.totalExpectConverted) }}</b>
           </template>
-          <span class="summary-sep">|</span>
-          实收合计：<b class="amount-red">{{ formatMoney(detailSummary.totalReal) }}</b>
-          <span class="amount-gray" style="margin-left: 4px">折算后 {{ formatMoney(detailSummary.totalRealConverted) }}</span>
+          <span v-if="canSeeRealAmount" class="summary-sep">|</span>
+          <template v-if="canSeeRealAmount">
+            实收合计：<b class="amount-red">{{ formatMoney(detailSummary.totalReal) }}</b>
+            <span class="amount-gray" style="margin-left: 4px">折算后 {{ formatMoney(detailSummary.totalRealConverted) }}</span>
+          </template>
         </span>
       </div>
 
@@ -339,13 +341,13 @@
             <span v-else class="amount-ink">{{ formatMoney(row.expectConvertedAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="实收业绩" align="right" width="130">
+        <el-table-column v-if="canSeeRealAmount" label="实收业绩" align="right" width="130">
           <template #default="{ row }">
             <span :class="row.realAmount < 0 ? 'amount-red' : 'amount-ink'">{{ formatMoney(row.realAmount) }}</span>
             <el-tag v-if="row.realAmount < 0" type="danger" size="small" effect="plain" class="adjust-tag">红冲</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="折算后" align="right" width="120">
+        <el-table-column v-if="canSeeRealAmount" label="折算后" align="right" width="120">
           <template #default="{ row }">
             <span :class="row.realAmount < 0 ? 'amount-red' : 'amount-ink'">{{ formatMoney(row.realConvertedAmount) }}</span>
           </template>
@@ -385,6 +387,10 @@ defineOptions({ name: 'PerformanceSearch' });
 const userStore = useUserStore();
 /** 经纪人：本人口径（后端强制按本人 employeeId 过滤），不展示门店/组别筛选 */
 const isAgent = computed(() => userStore.roles.includes('agent'));
+/** 实收金额可见：总监/管理员/财务可见，经纪人/店长不可见 */
+const canSeeRealAmount = computed(() =>
+  userStore.roles.some((r: string) => ['superadmin', 'admin', 'director', 'finance', 'finance_supervisor'].includes(r))
+);
 
 const tableMaxHeight = ref(580);
 

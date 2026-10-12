@@ -60,14 +60,15 @@
         </div>
         <div class="summary-right">
           <span class="summary-amount">结佣合计：<b>{{ formatAmount(summary.totalAmount) }}</b></span>
-          <el-button v-if="checkPermi(['commission:apply:add'])" type="primary" icon="Plus" @click="openBatchApply">
-            批量发起
+          <el-button v-if="checkPermi(['commission:apply:add'])" type="primary" icon="Plus" :disabled="selectedRows.length === 0" @click="openBatchApply">
+            批量发起{{ selectedRows.length > 0 ? `(${selectedRows.length})` : '' }}
           </el-button>
         </div>
       </div>
 
       <!-- 合同维度表格 -->
-      <el-table border class="data-table" :data="contractList" :empty-text="emptyText">
+      <el-table border class="data-table" :data="contractList" :empty-text="emptyText" @selection-change="onSelectionChange">
+        <el-table-column type="selection" width="50" />
         <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="{ row }">
             <el-button type="primary" link class="contract-link" @click="openDetail(row as CommissionContractVO)">
@@ -139,12 +140,12 @@
       </div>
     </el-card>
 
-    <!-- 批量发起弹窗：录入合同号 → 等待处理完成 → 展示结果 -->
-    <el-dialog v-model="showBatchApply" title="批量发起结佣" width="560px" @close="resetBatchApply">
+    <!-- 批量发起弹窗：勾选确认 + 选择结佣期间 → 等待处理完成 → 展示结果 -->
+    <el-dialog v-model="showBatchApply" title="批量发起结佣" width="600px" @close="resetBatchApply">
       <div v-if="batchApplyLoading" class="batch-waiting">
         <el-icon class="is-loading" :size="32"><Loading /></el-icon>
         <p class="waiting-text">正在批量发起，请耐心等待...</p>
-        <p class="waiting-sub">共 {{ batchApplyForm.parsedCount }} 个合同号，逐张处理中</p>
+        <p class="waiting-sub">共 {{ selectedRows.length }} 张单据，逐张处理中</p>
       </div>
 
       <div v-else-if="batchApplyResult" class="batch-result">
@@ -167,28 +168,31 @@
       </div>
 
       <template v-else>
-        <el-form label-width="80px">
-          <el-form-item label="结佣期间" required>
-            <el-date-picker
-              v-model="batchApplyForm.period"
-              type="month"
-              value-format="YYYY-MM"
-              placeholder="请选择结佣月份"
-              style="width: 200px"
-            />
-          </el-form-item>
-          <el-form-item label="合同号/订单号" required>
-            <el-input
-              v-model="batchApplyForm.contractNosText"
-              type="textarea"
-              :rows="10"
-              placeholder="每行一个合同号/订单号（以列表展示的编号为准），或用逗号/空格分隔"
-            />
-          </el-form-item>
+        <div class="batch-confirm">
+          <p class="confirm-text">将批量发起以下 <b>{{ selectedRows.length }}</b> 张单据：</p>
+          <el-table :data="selectedRows" border max-height="280" size="small">
+            <el-table-column label="合同号/订单号" align="center" min-width="160" show-overflow-tooltip>
+              <template #default="{ row }">{{ contractOrOrderNo(row as CommissionContractVO) }}</template>
+            </el-table-column>
+            <el-table-column label="结佣业绩" align="right" width="120">
+              <template #default="{ row }">{{ formatAmount(row.amount) }}</template>
+            </el-table-column>
+          </el-table>
+          <el-form label-width="90px" style="margin-top: 16px">
+            <el-form-item label="结佣期间" required>
+              <el-date-picker
+                v-model="batchApplyForm.period"
+                type="month"
+                value-format="YYYY-MM"
+                placeholder="请选择结佣月份"
+                style="width: 200px"
+              />
+            </el-form-item>
+          </el-form>
           <div class="batch-hint">
-            将按所选结佣期间逐张发起结佣申请并提交审批（结佣期间不按实收日期，历史实收审批通过且未结佣的均可发起）。<b>录入合同号时自动展开该合同下全部订单分别发起；录入订单号则仅发起该订单。</b>已有未完结单的订单会跳过。
+            将按所选结佣期间逐张发起结佣申请并提交审批。<b>已有未完结单的订单会跳过。</b>
           </div>
-        </el-form>
+        </div>
       </template>
 
       <template #footer>
@@ -431,17 +435,21 @@ const currentPeriod = (): string => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
-// 批量发起（按合同号）
+// 批量发起（勾选）
 const showBatchApply = ref(false);
 const batchApplyLoading = ref(false);
 const batchApplyResult = ref<BatchResultDTO | null>(null);
+const selectedRows = ref<CommissionContractVO[]>([]);
+
+const onSelectionChange = (rows: CommissionContractVO[]) => {
+  selectedRows.value = rows;
+};
+
 const batchApplyForm = reactive({
   period: '',
-  contractNosText: '',
-  parsedCount: 0,
 });
+
 const openBatchApply = () => {
-  // 每次打开默认当前月，用户可改选；结果态关闭后也重置
   resetBatchApply();
   batchApplyForm.period = currentPeriod();
   showBatchApply.value = true;
@@ -453,8 +461,6 @@ const batchApplySummary = computed(() => {
 });
 const resetBatchApply = () => {
   batchApplyForm.period = '';
-  batchApplyForm.contractNosText = '';
-  batchApplyForm.parsedCount = 0;
   batchApplyLoading.value = false;
   batchApplyResult.value = null;
 };
@@ -464,19 +470,22 @@ const closeBatchApply = () => {
   getList();
 };
 const doBatchApply = async () => {
+  if (selectedRows.value.length === 0) {
+    ElMessage.warning('请至少勾选一张单据');
+    return;
+  }
   if (!batchApplyForm.period) {
     ElMessage.warning('请选择结佣期间');
     return;
   }
-  const contractNos = batchApplyForm.contractNosText
-    .split(/[\n,，\s]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // 提取合同号/订单号：优先订单号（精确），无订单号用合同号（展开全部订单）
+  const contractNos = selectedRows.value
+    .map((row) => row.orderNo || row.contractNo)
+    .filter(Boolean) as string[];
   if (contractNos.length === 0) {
-    ElMessage.warning('请输入至少一个合同号/订单号');
+    ElMessage.warning('所选单据无有效合同号/订单号');
     return;
   }
-  batchApplyForm.parsedCount = contractNos.length;
   batchApplyLoading.value = true;
   try {
     // 传发起人选择的结佣期间；实收事实跨期查找，不按实收月归属
