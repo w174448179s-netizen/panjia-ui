@@ -362,57 +362,15 @@
       </el-table>
       <template #footer>
         <div class="detail-dialog-footer">
-          <span class="footer-tip">在合同下增加一个新角色人，合同总额不变，从既有角色人身上扣除分摊</span>
-          <span>
-            <el-button type="primary" @click="openAddMemberDialog">
-              <el-icon><UserFilled /></el-icon>增加角色人
-            </el-button>
-            <el-button @click="detailDialog.visible = false">关 闭</el-button>
-          </span>
+          <el-button @click="detailDialog.visible = false">关 闭</el-button>
         </div>
-      </template>
-    </el-dialog>
-
-    <!-- 增加角色人（ADD_MEMBER，合同级）：合同总额不变，从既有角色人身上等比扣除分摊给新人 -->
-    <el-dialog v-model="addMemberDialog.visible" title="增加角色人" width="560px" destroy-on-close>
-      <el-form ref="addMemberFormRef" :model="addMemberForm" :rules="addMemberRules" label-width="90px">
-        <el-form-item label="合同">
-          <span>{{ addMemberDialog.contractNo }}</span>
-          <span class="amount-gray" style="margin-left: 8px">当前业绩合计 ¥{{ formatMoney(addMemberDialog.maxAmount) }}</span>
-        </el-form-item>
-        <el-form-item label="新角色人" prop="newEmployeeId">
-          <EmployeeSelect v-model="addMemberForm.newEmployeeId" />
-        </el-form-item>
-        <el-form-item label="角色类型" prop="newRoleType">
-          <el-input v-model="addMemberForm.newRoleType" placeholder="如 合作人 / 推荐人 / 经纪人" maxlength="30" />
-        </el-form-item>
-        <el-form-item label="业绩金额" prop="newAmount">
-          <el-input-number
-            v-model="addMemberForm.newAmount"
-            :precision="2"
-            :min="0.01"
-            :max="addMemberDialog.maxAmount"
-            style="width: 100%"
-          />
-          <div class="footer-tip" style="width: 100%">合同总额不变，将从既有角色人身上扣除 ¥{{ formatMoney(addMemberForm.newAmount ?? 0) }} 分摊给新角色人</div>
-        </el-form-item>
-        <el-form-item label="归属部门" prop="newDeptId">
-          <PanjiaDeptSelect v-model="addMemberForm.newDeptId" :clearable="false" placeholder="默认取员工档案部门" />
-        </el-form-item>
-        <el-form-item label="调整原因" prop="reason">
-          <el-input v-model="addMemberForm.reason" type="textarea" :rows="2" maxlength="200" show-word-limit placeholder="请输入调整原因" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="addMemberDialog.visible = false">取 消</el-button>
-        <el-button type="primary" :loading="addMemberSubmitting" @click="submitAddMember">提交审批</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Search, Refresh, UserFilled } from '@element-plus/icons-vue';
+import { Search, Refresh } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceFactSearch, PerformanceSearchDetailRow } from '@/api/panjia/performance';
@@ -682,86 +640,6 @@ const openDetail = async (row: PerformanceFactSearch) => {
     detailList.value = [];
   } finally {
     detailLoading.value = false;
-  }
-};
-
-// ==================== 增加角色人（ADD_MEMBER，合同级） ====================
-const addMemberDialog = reactive({ visible: false, contractNo: '', period: '', maxAmount: 0 });
-const addMemberFormRef = ref();
-const addMemberSubmitting = ref(false);
-const addMemberForm = reactive({
-  newEmployeeId: undefined as string | undefined,
-  newRoleType: '',
-  newAmount: undefined as number | undefined,
-  newDeptId: undefined as string | undefined,
-  reason: '',
-});
-const addMemberRules = {
-  newEmployeeId: [
-    { required: true, message: '请选择新角色人', trigger: 'change' },
-  ],
-  newRoleType: [
-    { required: true, message: '请输入角色类型', trigger: 'blur' },
-  ],
-  newAmount: [
-    {
-      validator: (_rule: unknown, value: number | undefined, callback: (err?: Error) => void) => {
-        if (value === undefined || value === null) {
-          callback(new Error('请输入业绩金额'));
-        } else if (value <= 0) {
-          callback(new Error('业绩金额须大于 0'));
-        } else if (value > addMemberDialog.maxAmount) {
-          callback(new Error('业绩金额不能超过合同当前业绩合计'));
-        } else {
-          callback();
-        }
-      },
-      trigger: 'blur',
-    },
-  ],
-  reason: [
-    { required: true, message: '请输入调整原因', trigger: 'blur' },
-  ],
-};
-const resetAddMemberForm = () => {
-  addMemberForm.newEmployeeId = undefined;
-  addMemberForm.newRoleType = '';
-  addMemberForm.newAmount = undefined;
-  addMemberForm.newDeptId = undefined;
-  addMemberForm.reason = '';
-};
-const openAddMemberDialog = () => {
-  const row = detailDialog.row;
-  if (!row) return;
-  addMemberDialog.contractNo = resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '';
-  addMemberDialog.period = row.period || '';
-  addMemberDialog.maxAmount = detailSummary.value.totalExpect ?? 0;
-  resetAddMemberForm();
-  addMemberDialog.visible = true;
-};
-const submitAddMember = async () => {
-  await addMemberFormRef.value?.validate();
-  addMemberSubmitting.value = true;
-  try {
-    await performanceApi.createAdjust({
-      period: addMemberDialog.period,
-      adjustType: 'ADD_MEMBER',
-      adjustScope: 'CONTRACT',
-      contractNo: addMemberDialog.contractNo,
-      factType: 'PERF_EXPECT',
-      newEmployeeId: addMemberForm.newEmployeeId,
-      newRoleType: addMemberForm.newRoleType.trim(),
-      newAmount: Number(addMemberForm.newAmount!.toFixed(2)),
-      newDeptId: addMemberForm.newDeptId,
-      reason: addMemberForm.reason.trim(),
-    });
-    ElMessage.success('增加角色人调整单已提交审批');
-    addMemberDialog.visible = false;
-    getList(); // 主列表刷新调整单状态
-  } catch (e) {
-    // 错误已由拦截器提示
-  } finally {
-    addMemberSubmitting.value = false;
   }
 };
 
