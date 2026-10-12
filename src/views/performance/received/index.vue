@@ -74,7 +74,7 @@
           </span>
         </div>
         <div class="summary-right">
-          <el-button v-if="checkPermi(['perf:received:batch'])" type="success" plain icon="DocumentChecked" :disabled="selectedRows.length === 0" @click="showBatchApprove = true">批量审批{{ selectedRows.length > 0 ? `(${selectedRows.length})` : '' }}</el-button>
+          <el-button v-if="checkPermi(['perf:received:batch'])" type="success" plain icon="DocumentChecked" @click="openBatchApprove">批量审批{{ selectedRows.length > 0 ? `(${selectedRows.length})` : '' }}</el-button>
         </div>
       </div>
 
@@ -281,13 +281,13 @@
       </template>
     </el-dialog>
 
-    <!-- 批量审批弹窗：勾选确认 → 等待处理完成 → 展示结果 -->
+    <!-- 批量审批弹窗：勾选/录入合同号 → 等待处理完成 → 展示结果 -->
     <el-dialog v-model="showBatchApprove" title="批量审批" width="600px" @close="resetBatchApprove">
       <!-- 等待视图 -->
       <div v-if="batchApproveLoading" class="batch-waiting">
         <el-icon class="is-loading" :size="32"><Loading /></el-icon>
         <p class="waiting-text">正在批量审批，请耐心等待...</p>
-        <p class="waiting-sub">共 {{ selectedRows.length }} 张单据，逐单处理中</p>
+        <p class="waiting-sub">共 {{ batchWaitingCount }} 张单据，逐单处理中</p>
       </div>
 
       <!-- 结果视图 -->
@@ -310,19 +310,49 @@
         </div>
       </div>
 
-      <!-- 确认视图 -->
+      <!-- 确认视图：勾选单据 / 录入合同号 两种模式 -->
       <template v-else>
         <div class="batch-confirm">
-          <p class="confirm-text">将批量审批以下 <b>{{ selectedRows.length }}</b> 张待审批单据：</p>
-          <el-table :data="selectedRows" border max-height="320" size="small">
-            <el-table-column label="合同号/订单号" align="center" min-width="160" show-overflow-tooltip>
-              <template #default="{ row }">{{ contractOrOrderNo(row) }}</template>
-            </el-table-column>
-            <el-table-column label="期间" align="center" width="90" prop="period" />
-            <el-table-column label="实收业绩" align="right" width="120">
-              <template #default="{ row }">{{ formatAmount(row.receivedAmount) }}</template>
-            </el-table-column>
-          </el-table>
+          <el-radio-group v-model="batchMode" class="batch-mode-switch">
+            <el-radio-button value="select">勾选单据{{ selectedRows.length > 0 ? `（${selectedRows.length}）` : '' }}</el-radio-button>
+            <el-radio-button value="manual">录入合同号</el-radio-button>
+          </el-radio-group>
+
+          <!-- 勾选模式 -->
+          <template v-if="batchMode === 'select'">
+            <p class="confirm-text">将批量审批以下 <b>{{ selectedRows.length }}</b> 张待审批单据：</p>
+            <el-table :data="selectedRows" border max-height="320" size="small">
+              <el-table-column label="合同号/订单号" align="center" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">{{ contractOrOrderNo(row) }}</template>
+              </el-table-column>
+              <el-table-column label="期间" align="center" width="90" prop="period" />
+              <el-table-column label="实收业绩" align="right" width="120">
+                <template #default="{ row }">{{ formatAmount(row.receivedAmount) }}</template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-if="selectedRows.length === 0" description="请先在列表勾选待审批单据，或切换到「录入合同号」" :image-size="60" />
+          </template>
+
+          <!-- 录入模式 -->
+          <el-form v-else label-width="80px">
+            <el-form-item label="结算月" required>
+              <el-date-picker
+                v-model="manualForm.period"
+                type="month"
+                value-format="YYYY-MM"
+                placeholder="请选择月份"
+                style="width: 100%"
+              />
+            </el-form-item>
+            <el-form-item label="合同号" required>
+              <el-input
+                v-model="manualForm.contractNosText"
+                type="textarea"
+                :rows="8"
+                placeholder="每行一个合同号/订单号（以列表展示的编号为准），或用逗号/空格分隔"
+              />
+            </el-form-item>
+          </el-form>
           <div class="batch-hint">将逐单审批当前节点，非您审批范围内的单据会跳过并提示原因。</div>
         </div>
       </template>
@@ -632,7 +662,7 @@ const resubmit = async (row: ReceivedApply) => {
   } catch { /* 拦截器处理 */ }
 };
 
-// 批量审批：勾选 → 确认 → 等待 → 展示结果
+// 批量审批：勾选/录入合同号 → 确认 → 等待 → 展示结果
 const showBatchApprove = ref(false);
 const batchApproveLoading = ref(false);
 const batchApproveResult = ref<BatchApproveResult | null>(null);
@@ -640,6 +670,22 @@ const selectedRows = ref<ReceivedApply[]>([]);
 
 const onSelectionChange = (rows: ReceivedApply[]) => {
   selectedRows.value = rows;
+};
+
+/** 批量方式：select=勾选列表单据；manual=手工录入合同号/订单号 */
+const batchMode = ref<'select' | 'manual'>('select');
+/** 录入模式表单 */
+const manualForm = reactive({
+  period: '' as string,
+  contractNosText: '',
+});
+/** 等待视图展示的单据数（勾选=勾选数，录入=解析后的号码数） */
+const batchWaitingCount = ref(0);
+
+const openBatchApprove = () => {
+  batchMode.value = selectedRows.value.length > 0 ? 'select' : 'manual';
+  if (!manualForm.period) manualForm.period = queryParams.period || '';
+  showBatchApprove.value = true;
 };
 
 const batchResultSummary = computed(() => {
@@ -651,6 +697,7 @@ const batchResultSummary = computed(() => {
 const resetBatchApprove = () => {
   batchApproveLoading.value = false;
   batchApproveResult.value = null;
+  batchWaitingCount.value = 0;
 };
 
 const closeBatchResult = () => {
@@ -660,29 +707,48 @@ const closeBatchResult = () => {
 };
 
 const doBatchApprove = async () => {
-  if (selectedRows.value.length === 0) {
-    ElMessage.warning('请至少勾选一张待审批单据');
-    return;
+  let period = '';
+  let contractNos: string[] = [];
+  if (batchMode.value === 'select') {
+    if (selectedRows.value.length === 0) {
+      ElMessage.warning('请至少勾选一张待审批单据');
+      return;
+    }
+    // 跨期间校验：批量审批接口按期间处理，不允许跨期间
+    const periods = [...new Set(selectedRows.value.map((r) => r.period).filter(Boolean))];
+    if (periods.length > 1) {
+      ElMessage.warning(`所选单据跨多个期间（${periods.join('、')}），请按期间分别批量审批`);
+      return;
+    }
+    period = periods[0] ?? '';
+    if (!period) {
+      ElMessage.warning('所选单据无有效期间');
+      return;
+    }
+    // 提取合同号/订单号：优先订单号（精确），无订单号用合同号（展开全部订单）
+    contractNos = selectedRows.value
+      .map((row) => row.orderNo || row.contractNo)
+      .filter(Boolean);
+    if (contractNos.length === 0) {
+      ElMessage.warning('所选单据无有效合同号/订单号');
+      return;
+    }
+  } else {
+    if (!manualForm.period) {
+      ElMessage.warning('请选择结算月');
+      return;
+    }
+    contractNos = manualForm.contractNosText
+      .split(/[\n,，\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (contractNos.length === 0) {
+      ElMessage.warning('请输入至少一个合同号');
+      return;
+    }
+    period = manualForm.period;
   }
-  // 跨期间校验：批量审批接口按期间处理，不允许跨期间
-  const periods = [...new Set(selectedRows.value.map((r) => r.period).filter(Boolean))];
-  if (periods.length > 1) {
-    ElMessage.warning(`所选单据跨多个期间（${periods.join('、')}），请按期间分别批量审批`);
-    return;
-  }
-  const period = periods[0];
-  if (!period) {
-    ElMessage.warning('所选单据无有效期间');
-    return;
-  }
-  // 提取合同号/订单号：优先订单号（精确），无订单号用合同号（展开全部订单）
-  const contractNos = selectedRows.value
-    .map((row) => row.orderNo || row.contractNo)
-    .filter(Boolean);
-  if (contractNos.length === 0) {
-    ElMessage.warning('所选单据无有效合同号/订单号');
-    return;
-  }
+  batchWaitingCount.value = contractNos.length;
   batchApproveLoading.value = true;
   try {
     const res: any = await receivedApi.batchApproveByContractAsync(period, contractNos);
@@ -860,8 +926,21 @@ onMounted(async () => {
   font-size: 12px;
   color: #909399;
   line-height: 1.5;
-  margin-top: 4px;
-  padding-left: 80px;
+  margin-top: 8px;
+}
+
+.batch-mode-switch {
+  margin-bottom: 12px;
+}
+
+.confirm-text {
+  font-size: 13px;
+  color: #606266;
+  margin: 0 0 8px;
+
+  b {
+    color: #303133;
+  }
 }
 
 .batch-waiting {

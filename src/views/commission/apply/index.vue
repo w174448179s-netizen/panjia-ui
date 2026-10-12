@@ -60,7 +60,7 @@
         </div>
         <div class="summary-right">
           <span class="summary-amount">结佣合计：<b>{{ formatAmount(summary.totalAmount) }}</b></span>
-          <el-button v-if="checkPermi(['commission:apply:add'])" type="primary" icon="Plus" :disabled="selectedRows.length === 0" @click="openBatchApply">
+          <el-button v-if="checkPermi(['commission:apply:add'])" type="primary" icon="Plus" @click="openBatchApply">
             批量发起{{ selectedRows.length > 0 ? `(${selectedRows.length})` : '' }}
           </el-button>
         </div>
@@ -145,7 +145,7 @@
       <div v-if="batchApplyLoading" class="batch-waiting">
         <el-icon class="is-loading" :size="32"><Loading /></el-icon>
         <p class="waiting-text">正在批量发起，请耐心等待...</p>
-        <p class="waiting-sub">共 {{ selectedRows.length }} 张单据，逐张处理中</p>
+        <p class="waiting-sub">共 {{ batchWaitingCount }} 张单据，逐张处理中</p>
       </div>
 
       <div v-else-if="batchApplyResult" class="batch-result">
@@ -167,17 +167,39 @@
         </div>
       </div>
 
+      <!-- 确认视图：勾选单据 / 录入合同号 两种模式 -->
       <template v-else>
         <div class="batch-confirm">
-          <p class="confirm-text">将批量发起以下 <b>{{ selectedRows.length }}</b> 张单据：</p>
-          <el-table :data="selectedRows" border max-height="280" size="small">
-            <el-table-column label="合同号/订单号" align="center" min-width="160" show-overflow-tooltip>
-              <template #default="{ row }">{{ contractOrOrderNo(row as CommissionContractVO) }}</template>
-            </el-table-column>
-            <el-table-column label="结佣业绩" align="right" width="120">
-              <template #default="{ row }">{{ formatAmount(row.amount) }}</template>
-            </el-table-column>
-          </el-table>
+          <el-radio-group v-model="batchMode" class="batch-mode-switch">
+            <el-radio-button value="select">勾选单据{{ selectedRows.length > 0 ? `（${selectedRows.length}）` : '' }}</el-radio-button>
+            <el-radio-button value="manual">录入合同号</el-radio-button>
+          </el-radio-group>
+
+          <!-- 勾选模式 -->
+          <template v-if="batchMode === 'select'">
+            <p class="confirm-text">将批量发起以下 <b>{{ selectedRows.length }}</b> 张单据：</p>
+            <el-table :data="selectedRows" border max-height="240" size="small">
+              <el-table-column label="合同号/订单号" align="center" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">{{ contractOrOrderNo(row as CommissionContractVO) }}</template>
+              </el-table-column>
+              <el-table-column label="结佣业绩" align="right" width="120">
+                <template #default="{ row }">{{ formatAmount(row.amount) }}</template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-if="selectedRows.length === 0" description="请先在列表勾选可发起合同，或切换到「录入合同号」" :image-size="60" />
+          </template>
+
+          <!-- 录入模式 -->
+          <template v-else>
+            <p class="confirm-text">录入合同号/订单号（<b>必填</b>）：</p>
+            <el-input
+              v-model="batchApplyForm.contractNosText"
+              type="textarea"
+              :rows="8"
+              placeholder="每行一个合同号/订单号（以列表展示的编号为准），或用逗号/空格分隔"
+            />
+          </template>
+
           <el-form label-width="90px" style="margin-top: 16px">
             <el-form-item label="结佣期间" required>
               <el-date-picker
@@ -435,7 +457,7 @@ const currentPeriod = (): string => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
-// 批量发起（勾选）
+// 批量发起：勾选/录入合同号 → 确认 → 等待 → 展示结果
 const showBatchApply = ref(false);
 const batchApplyLoading = ref(false);
 const batchApplyResult = ref<BatchResultDTO | null>(null);
@@ -445,12 +467,19 @@ const onSelectionChange = (rows: CommissionContractVO[]) => {
   selectedRows.value = rows;
 };
 
+/** 批量方式：select=勾选列表单据；manual=手工录入合同号/订单号 */
+const batchMode = ref<'select' | 'manual'>('select');
+/** 等待视图展示的单据数（勾选=勾选数，录入=解析后的号码数） */
+const batchWaitingCount = ref(0);
+
 const batchApplyForm = reactive({
   period: '',
+  contractNosText: '',
 });
 
 const openBatchApply = () => {
   resetBatchApply();
+  batchMode.value = selectedRows.value.length > 0 ? 'select' : 'manual';
   batchApplyForm.period = currentPeriod();
   showBatchApply.value = true;
 };
@@ -461,8 +490,10 @@ const batchApplySummary = computed(() => {
 });
 const resetBatchApply = () => {
   batchApplyForm.period = '';
+  batchApplyForm.contractNosText = '';
   batchApplyLoading.value = false;
   batchApplyResult.value = null;
+  batchWaitingCount.value = 0;
 };
 const closeBatchApply = () => {
   showBatchApply.value = false;
@@ -470,22 +501,35 @@ const closeBatchApply = () => {
   getList();
 };
 const doBatchApply = async () => {
-  if (selectedRows.value.length === 0) {
-    ElMessage.warning('请至少勾选一张单据');
-    return;
-  }
   if (!batchApplyForm.period) {
     ElMessage.warning('请选择结佣期间');
     return;
   }
-  // 提取合同号/订单号：优先订单号（精确），无订单号用合同号（展开全部订单）
-  const contractNos = selectedRows.value
-    .map((row) => row.orderNo || row.contractNo)
-    .filter(Boolean) as string[];
-  if (contractNos.length === 0) {
-    ElMessage.warning('所选单据无有效合同号/订单号');
-    return;
+  let contractNos: string[] = [];
+  if (batchMode.value === 'select') {
+    if (selectedRows.value.length === 0) {
+      ElMessage.warning('请至少勾选一张单据');
+      return;
+    }
+    // 提取合同号/订单号：优先订单号（精确），无订单号用合同号（展开全部订单）
+    contractNos = selectedRows.value
+      .map((row) => row.orderNo || row.contractNo)
+      .filter(Boolean) as string[];
+    if (contractNos.length === 0) {
+      ElMessage.warning('所选单据无有效合同号/订单号');
+      return;
+    }
+  } else {
+    contractNos = batchApplyForm.contractNosText
+      .split(/[\n,，\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (contractNos.length === 0) {
+      ElMessage.warning('请输入至少一个合同号');
+      return;
+    }
   }
+  batchWaitingCount.value = contractNos.length;
   batchApplyLoading.value = true;
   try {
     // 传发起人选择的结佣期间；实收事实跨期查找，不按实收月归属
@@ -709,8 +753,21 @@ onMounted(() => {
   font-size: 12px;
   color: #909399;
   line-height: 1.5;
-  margin-top: 4px;
-  padding-left: 80px;
+  margin-top: 8px;
+}
+
+.batch-mode-switch {
+  margin-bottom: 12px;
+}
+
+.confirm-text {
+  font-size: 13px;
+  color: #606266;
+  margin: 0 0 8px;
+
+  b {
+    color: #303133;
+  }
 }
 
 .single-contract-no {
