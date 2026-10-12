@@ -73,7 +73,8 @@ export interface EmployeeQuery extends PageQuery {
   employeeName?: string;
   deptId?: string;
   postName?: string;
-  status?: string;
+  /** 状态集合（多选：ACTIVE/PARTTIME/LEFT/PENDING） */
+  status?: string[];
 }
 
 /** 新增员工表单 */

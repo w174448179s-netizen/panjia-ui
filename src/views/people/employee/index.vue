@@ -35,7 +35,15 @@
           </el-select>
         </el-form-item>
         <el-form-item label="状态" prop="status">
-          <el-select v-model="queryParams.status" placeholder="请选择状态" clearable style="width: 140px">
+          <el-select
+            v-model="queryParams.status"
+            placeholder="请选择状态"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            clearable
+            style="width: 180px"
+          >
             <el-option
               v-for="dict in panjia_employee_status"
               :key="dict.value"
@@ -630,7 +638,7 @@ const queryParams = reactive({
   employeeName: '',
   deptId: undefined as string | undefined,
   postName: '',
-  status: ''
+  status: [] as string[]
 });
 
 const getList = async () => {
@@ -653,6 +661,7 @@ const resetQuery = () => {
   queryFormRef.value?.resetFields();
   queryParams.deptId = undefined;
   queryParams.postName = '';
+  queryParams.status = [];
   handleQuery();
 };
 
