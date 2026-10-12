@@ -85,7 +85,7 @@
             <el-button type="primary" link class="contract-link" @click="viewDetail(row)">{{ contractOrOrderNo(row) }}</el-button>
           </template>
         </el-table-column>
-        <el-table-column label="实收业绩" align="right" width="200">
+        <el-table-column label="实收业绩" align="right" width="220">
                   <template #default="{ row }">
                     <template v-if="isReceivedAdjusted(row)">
                       <span class="amount-strike">¥{{ formatAmount(row.originalReceivedAmount) }}</span>
@@ -93,6 +93,11 @@
                       <span class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
                     </template>
                     <span v-else class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
+                    <div v-if="row.adjustPending" class="cell-sub">
+                      <el-tag type="warning" size="small" effect="plain" class="adjust-tag">
+                        调整审批中 ¥{{ formatAmount(row.adjustPendingAmount) }}
+                      </el-tag>
+                    </div>
                   </template>
                 </el-table-column>
         <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值 -->
@@ -140,6 +145,7 @@
               <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
               <el-button v-if="row.status === 'SUBMITTED' && checkPermi(['perf:received:approve'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.id)">审批</el-button>
               <el-button v-if="!isAgent && row.status === 'APPROVED'" link type="warning" @click="openReceivedAdjust(row)">调整</el-button>
+              <el-button v-if="row.status === 'DRAFT' && checkPermi(['perf:fact:supplement'])" link type="success" @click="openExpectSupplement(row)">补录新签</el-button>
               <el-button v-if="row.status === 'REJECTED' || (row.status === 'DRAFT' && Number(row.expectedAmount) !== 0)" link type="warning" @click="resubmit(row)">重提</el-button>
               <el-button v-if="(row.status === 'DRAFT' || row.status === 'SUBMITTED') && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
             </div>
@@ -339,6 +345,8 @@
 
     <!-- 实收调整弹窗（RECEIVED_AMOUNT，合同级）：入口在实收明细页，审批通过的单据才可调整 -->
     <ReceivedAdjustDialog ref="receivedAdjustDialogRef" @submitted="getList" />
+    <!-- 新签补录弹窗（DRAFT 待补新签状态）：手工录入 PERF_EXPECT 事实并触发 DRAFT 单重评 -->
+    <ExpectSupplementDialog ref="expectSupplementDialogRef" @submitted="getList" />
   </div>
 </template>
 
@@ -360,6 +368,7 @@ import { resolveBizNo } from '@/utils/panjiaBiz';
 import { useUserStore } from '@/store/modules/user';
 import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
 import ReceivedAdjustDialog from './components/ReceivedAdjustDialog.vue';
+import ExpectSupplementDialog from './components/ExpectSupplementDialog.vue';
 
 const route = useRoute();
 const userStore = useUserStore();
@@ -382,6 +391,12 @@ const openReceivedAdjust = (row: ReceivedApply) => {
     propertyAddress: row.propertyAddress,
     period: row.period,
   });
+};
+
+// ==================== 新签补录（DRAFT 待补新签） ====================
+const expectSupplementDialogRef = ref();
+const openExpectSupplement = (row: ReceivedApply) => {
+  expectSupplementDialogRef.value?.open(row);
 };
 
 /** 业务明细直接审批：通过 businessId 查当前用户可办理任务，复用 WorkflowHandle 弹窗 */
@@ -936,5 +951,16 @@ onMounted(async () => {
   margin-left: 10px;
   font-size: 13px;
   color: #909399;
+}
+
+/* 金额下方的次级说明行（调整审批中标记等） */
+.cell-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.cell-sub .adjust-tag {
+  margin-left: 0;
 }
 </style>

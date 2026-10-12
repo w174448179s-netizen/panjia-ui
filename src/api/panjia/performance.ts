@@ -489,6 +489,38 @@ export function createManualOffset(data: {
   return panjiaRequest.post<number>('/perf/fact/manual-offset', data);
 }
 
+// ========== 新签补录（DRAFT 待补新签单据手工补录 PERF_EXPECT 事实） ==========
+
+/** 新签补录单条明细 */
+export interface ExpectSupplementItem {
+  employeeId: number;
+  employeeExternalCode?: string;
+  roleType: string;
+  roleName?: string;
+  deptId?: number;
+  shareRatio?: number;
+  amount: number;
+}
+
+/** 新签补录请求参数 */
+export interface ExpectSupplementBo {
+  period: string;               // 新签结算月
+  receivedPeriod: string;       // 实收月（查 DRAFT 单用）
+  contractNo?: string;
+  orderNo: string;
+  businessDate: string; // YYYY-MM-DD
+  bizType?: string;
+  propertyAddress?: string;
+  deptId?: number;
+  feeItem?: string;
+  items: ExpectSupplementItem[];
+}
+
+/** 新签补录 */
+export function supplementExpect(data: ExpectSupplementBo) {
+  return panjiaRequest.post<number>('/perf/fact/supplement-expect', data);
+}
+
 // ========== 实收调整（pj_perf_received_adjust，2026-10-12 与新签调整物理拆表） ==========
 
 /** 实收调整单（独立表，固定合同级 + PERF_REAL） */

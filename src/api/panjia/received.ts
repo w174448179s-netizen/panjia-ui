@@ -30,6 +30,10 @@ export interface ReceivedApply {
   originalReceivedAmount?: number;
   /** 调整前实收折算后金额（originalReceivedAmount × 同一折算因子） */
   originalReceivedConvertedAmount?: number;
+  /** 是否存在审批中的实收调整单（SUBMITTED/APPROVED） */
+  adjustPending?: boolean;
+  /** 审批中实收调整单的目标金额（调整后实收合计） */
+  adjustPendingAmount?: number;
   itemCount: number;
   /** 业务类型（建单时快照落库，列表直接读列；「类型」筛选已下推 SQL） */
   bizType?: string;
