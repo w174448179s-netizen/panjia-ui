@@ -26,14 +26,8 @@
           style="width: 200px"
         />
       </el-form-item>
-      <el-form-item label="签约日期" required>
-        <el-date-picker
-          v-model="form.businessDate"
-          type="date"
-          value-format="YYYY-MM-DD"
-          placeholder="选择签约日期"
-          style="width: 200px"
-        />
+      <el-form-item label="签约日期">
+        <span class="readonly-text">{{ form.businessDate || '—' }}</span>
       </el-form-item>
 
       <!-- 总额录入（与明细联动） -->
@@ -202,6 +196,8 @@ const open = async (row: ReceivedApply) => {
   form.period = row.period; // 默认新签结算月=实收月
   form.contractNo = row.contractNo || '';
   form.orderNo = row.orderNo || '';
+  // 签约日期继承实收行；实收单无签约日期时兜底为新签结算月 1 号
+  form.businessDate = row.businessDate || `${row.period}-01`;
   form.bizType = row.bizType || '';
   form.propertyAddress = row.propertyAddress || '';
   form.applyId = row.id;
@@ -310,10 +306,6 @@ function handleRowAmount(row: SupplementRow, v: number | null) {
 const submit = async () => {
   if (!form.period) {
     ElMessage.warning('请选择新签结算月');
-    return;
-  }
-  if (!form.businessDate) {
-    ElMessage.warning('请选择签约日期');
     return;
   }
   const validItems = form.items.filter((r) => r.amount != null && num(r.amount) > 0);
