@@ -328,11 +328,12 @@ const submit = async () => {
     }
   }
   const items: ExpectSupplementItem[] = validItems.map((r) => ({
-    employeeId: Number(r.employeeId),
+    // Long 型 ID 保持原始字符串透传，禁止 Number() 转换（JS 精度截断会改尾数）
+    employeeId: r.employeeId,
     employeeExternalCode: r.employeeExternalCode || undefined,
     roleType: r.roleType,
     roleName: r.roleName || undefined,
-    deptId: r.deptId ? Number(r.deptId) : form.deptId,
+    deptId: (r.deptId ?? form.deptId) as number | string | undefined,
     shareRatio: r.shareRatio ?? undefined,
     amount: num(r.amount),
   }));

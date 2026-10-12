@@ -300,8 +300,8 @@ const getList = async () => {
   loading.value = true;
   try {
     const res = await receivedAdjustApi.list({ ...queryParams });
-    adjustList.value = res.rows ?? [];
-    total.value = Number(res.total ?? 0);
+    adjustList.value = res.data?.rows ?? [];
+    total.value = Number(res.data?.total ?? 0);
   } catch {
     // 拦截器处理
   } finally {

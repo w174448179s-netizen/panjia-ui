@@ -493,11 +493,12 @@ export function createManualOffset(data: {
 
 /** 新签补录单条明细 */
 export interface ExpectSupplementItem {
-  employeeId: number;
+  /** 保持字符串透传防 Long 精度丢失（JS Number 只能精确表示 2^53 内整数） */
+  employeeId: number | string;
   employeeExternalCode?: string;
   roleType: string;
   roleName?: string;
-  deptId?: number;
+  deptId?: number | string;
   shareRatio?: number;
   amount: number;
 }
