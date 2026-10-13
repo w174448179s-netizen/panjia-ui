@@ -74,6 +74,19 @@
           </el-form-item>
         </el-form>
 
+        <!-- 汇总条：全量（同筛选口径、跨页）合计；按员工筛选时仅统计该员工命中明细，不按合同全量 -->
+        <div class="summary-bar">
+          <span class="summary-text">
+            共 <b>{{ summary.contractCount }}</b> 个合同 ·
+            新签合计 <b class="amount-red">{{ formatMoney(summary.totalExpectAmount) }}</b>
+            <span class="summary-sub">（折算后 {{ formatMoney(summary.totalExpectConvertedAmount) }}）</span>
+            <template v-if="canSeeRealAmount">
+              · 实收合计 <b class="amount-red">{{ formatMoney(summary.totalRealAmount) }}</b>
+              <span class="summary-sub">（折算后 {{ formatMoney(summary.totalRealConvertedAmount) }}）</span>
+            </template>
+          </span>
+        </div>
+
         <!-- 数据表格 -->
         <el-table
           v-loading="loading"
@@ -429,6 +442,15 @@ const clearEmployeeFilter = () => {
 const loading = ref(false);
 const tableData = ref<PerformanceFactSearch[]>([]);
 const total = ref(0);
+/** 汇总条：后端按过滤后全集返回（跨页全局，不随分页变化）；实收汇总无权限时后端不下发 */
+const emptySummary = () => ({
+  contractCount: 0,
+  totalExpectAmount: 0,
+  totalExpectConvertedAmount: 0,
+  totalRealAmount: 0,
+  totalRealConvertedAmount: 0,
+});
+const summary = ref(emptySummary());
 /** 类型下拉选项：随期间/部门数据范围实时变化（与列表同权限口径） */
 const bizTypeOptions = ref<string[]>([]);
 
@@ -467,10 +489,19 @@ const getList = async () => {
     });
     tableData.value = res.data?.rows ?? [];
     total.value = res.data?.total ?? 0;
+    const s = res.data?.summary;
+    summary.value = {
+      contractCount: num(s?.contractCount) || total.value,
+      totalExpectAmount: num(s?.totalExpectAmount),
+      totalExpectConvertedAmount: num(s?.totalExpectConvertedAmount),
+      totalRealAmount: num(s?.totalRealAmount),
+      totalRealConvertedAmount: num(s?.totalRealConvertedAmount),
+    };
   } catch (e) {
     console.error('[search] 查询失败', e);
     tableData.value = [];
     total.value = 0;
+    summary.value = emptySummary();
   } finally {
     loading.value = false;
   }
@@ -683,6 +714,31 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 0;
+}
+
+.summary-bar {
+  display: flex;
+  align-items: center;
+  padding: 4px 4px 0;
+
+  .summary-text {
+    font-size: 13px;
+    color: #606266;
+
+    b {
+      color: #303133;
+      margin: 0 2px;
+
+      &.amount-red {
+        color: #f56c6c;
+      }
+    }
+
+    .summary-sub {
+      color: #909399;
+      font-size: 12px;
+    }
+  }
 }
 
 .empty-wrap {

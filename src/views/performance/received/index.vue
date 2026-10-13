@@ -70,7 +70,8 @@
         <div class="summary-left">
           <span class="summary-text">
             共 <b>{{ total }}</b> 张实收审批单 ·
-            实收合计 <b class="amount-red">{{ formatAmount(summaryAmount) }}</b>
+            <!-- 按员工筛选时后端返回该员工明细合计（员工口径），否则为单据级实收合计 -->
+            {{ queryParams.employeeId ? '员工实收合计' : '实收合计' }} <b class="amount-red">{{ formatAmount(summaryAmount) }}</b>
           </span>
         </div>
         <div class="summary-right">
