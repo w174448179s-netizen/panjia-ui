@@ -165,8 +165,14 @@ service.interceptors.request.use(
       }
     }
     // FormData数据去请求头Content-Type
+    // 必须使用 AxiosHeaders.delete() 方法（忽略大小写匹配），否则属性名大小写不一致时
+    // delete 操作符无法真正移除，axios 默认的 application/json 会导致 FormData 被转成 JSON 字符串
     if (config.data instanceof FormData) {
-      delete config.headers['Content-Type'];
+      if (config.headers && typeof (config.headers as any).delete === 'function') {
+        (config.headers as any).delete('Content-Type');
+      } else {
+        delete config.headers['Content-Type'];
+      }
     }
     return config;
   },
