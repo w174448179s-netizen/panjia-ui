@@ -71,9 +71,9 @@
           <span class="summary-text">
             共 <b>{{ total }}</b> 张实收审批单 ·
             <!-- 按员工筛选时后端返回该员工明细合计（员工口径），否则为单据级实收合计 -->
-            {{ queryParams.employeeId ? '员工实收合计' : '实收合计' }} <b class="amount-red">{{ formatAmount(summaryAmount) }}</b>
+            {{ queryParams.employeeId ? '员工实收合计' : '实收合计' }}<span class="summary-month">（{{ summaryPeriodLabel }}）</span> <b class="amount-red">{{ formatAmount(summaryAmount) }}</b>
             <span class="summary-sep">｜</span>
-            新签合计 <b class="amount-expected">{{ formatAmount(summaryExpectedAmount) }}</b>
+            新签合计<span class="summary-month">（{{ summaryPeriodLabel }}）</span> <b class="amount-expected">{{ formatAmount(summaryExpectedAmount) }}</b>
             <span class="summary-sub">（折算后 {{ formatAmount(summaryExpectedConvertedAmount) }}）</span>
           </span>
         </div>
@@ -522,6 +522,8 @@ const summaryAmount = computed(() => {
 // 汇总条「新签合计」及折算后合计：后端全量汇总（同查询条件、跨页）；实收不做折算
 const summaryExpectedAmount = computed(() => num(pageSummary.value?.totalExpectedAmount));
 const summaryExpectedConvertedAmount = computed(() => num(pageSummary.value?.totalExpectedConvertedAmount));
+/** 汇总条月份标注：实收合计＝所选期间（实收月）单据合计；新签合计＝同条件下的应收合计；未选期间标注「全期间」 */
+const summaryPeriodLabel = computed(() => queryParams.period || '全期间');
 
 const STATUS_MAP: Record<string, string> = {
   DRAFT: '待补新签', SUBMITTED: '审批中', APPROVED: '已通过', REJECTED: '已驳回', CANCELLED: '已作废',
@@ -855,6 +857,10 @@ onMounted(async () => {
   }
   .summary-sub {
     color: #909399;
+    font-size: 12px;
+  }
+  .summary-month {
+    color: #409eff;
     font-size: 12px;
   }
 }

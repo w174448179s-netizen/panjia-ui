@@ -46,24 +46,6 @@
               <el-option label="Q4" :value="4" />
             </el-select>
           </el-form-item>
-          <el-form-item label="门店/组别" prop="deptId">
-            <PanjiaDeptSelect
-              v-model="queryParams.deptId"
-              :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
-              :clearable="!deptLocked"
-              width="200px"
-            />
-          </el-form-item>
-          <el-form-item label="业务类型" prop="bizType">
-            <el-input
-              v-model.trim="queryParams.bizType"
-              clearable
-              placeholder="业务类型"
-              style="width: 160px"
-              @keyup.enter="handleQuery"
-              @clear="handleQuery"
-            />
-          </el-form-item>
           <el-form-item>
             <el-button type="primary" :icon="Search" @click="handleQuery">查询</el-button>
             <el-button :icon="Refresh" @click="resetQuery">重置</el-button>
@@ -128,8 +110,6 @@
 import { Search, Refresh } from '@element-plus/icons-vue';
 import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceRankRow } from '@/api/panjia/performance';
-import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
-import { useDeptScope } from '@/hooks/useDeptScope';
 
 defineOptions({ name: 'PerformanceRank' });
 
@@ -141,9 +121,6 @@ const calcTableHeight = () => {
   });
 };
 
-// ==================== 部门口径（全系统统一：所有用户查本部门及以下） ====================
-const { deptLocked, defaultDeptId } = useDeptScope();
-
 // ==================== 筛选 & 分页 ====================
 const queryParams = reactive({
   pageNum: 1,
@@ -152,8 +129,6 @@ const queryParams = reactive({
   year: String(new Date().getFullYear()),
   quarter: undefined as number | undefined,
   month: undefined as number | undefined,
-  deptId: undefined as string | undefined,
-  bizType: undefined as string | undefined,
 });
 
 const loading = ref(false);
@@ -169,9 +144,6 @@ const getList = async () => {
       quarter: queryParams.periodType === 'QUARTER' ? queryParams.quarter : undefined,
       // 仅按月维度携带月份；为空（全部月份）时后端按整年聚合
       month: queryParams.periodType === 'MONTH' ? queryParams.month : undefined,
-      // 排行榜全员全量，部门仅作筛选
-      deptId: queryParams.deptId,
-      bizType: queryParams.bizType,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
     });
@@ -204,9 +176,6 @@ const resetQuery = () => {
   // 统计维度/年份保持
   queryParams.quarter = undefined;
   queryParams.month = undefined;
-  // 受限角色重置回本部门默认值，不能清空为"全部"
-  queryParams.deptId = defaultDeptId();
-  queryParams.bizType = undefined;
   handleQuery();
 };
 
@@ -220,8 +189,6 @@ const formatMoney = (val?: number | null): string => {
 onMounted(() => {
   calcTableHeight();
   window.addEventListener('resize', calcTableHeight);
-  // 受限角色（店长/总监）默认选中本部门，首屏即按本部门查询
-  queryParams.deptId = defaultDeptId();
   getList();
 });
 

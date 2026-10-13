@@ -468,6 +468,8 @@ const emptySummary = () => ({
   totalCommissionConvertedAmount: 0,
 });
 const summary = ref(emptySummary());
+/** 汇总条月份标注：三个合计均按所选期间（各自归属月）统计；未选期间时标注「全期间」 */
+const summaryPeriodLabel = computed(() => queryParams.period || '全期间');
 /** 类型下拉选项：随期间/部门数据范围实时变化（与列表同权限口径） */
 const bizTypeOptions = ref<string[]>([]);
 
@@ -755,6 +757,11 @@ onBeforeUnmount(() => {
 
     .summary-sub {
       color: #909399;
+      font-size: 12px;
+    }
+
+    .summary-month {
+      color: #409eff;
       font-size: 12px;
     }
 
