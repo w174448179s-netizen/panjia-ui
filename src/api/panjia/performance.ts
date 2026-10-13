@@ -255,6 +255,8 @@ export interface PerformanceManageSummary {
   detailCount: number;
   unsettledCount: number;
   totalAmount: number;
+  /** 折算后金额合计（按业务类型分组 × 类型系数累加，口径与行 convertedAmount 一致） */
+  totalConvertedAmount?: number;
 }
 
 /** 业绩管理人维度分页结果（rows=当前页签约人聚合行，明细懒加载） */
@@ -460,7 +462,7 @@ export const performanceApi = {
     panjiaRequest.get<PageResult<PerformanceSummaryRow>>('/perf/fact/summary', params),
 
   // 业绩排行（按员工聚合新签业绩金额降序，分页；rank 跨页连续）
-  listRank: (params: { periodType: string; year: string; quarter?: number; deptId?: string; bizType?: string; pageNum?: number; pageSize?: number }) =>
+  listRank: (params: { periodType: string; year: string; quarter?: number; month?: number; deptId?: string; bizType?: string; pageNum?: number; pageSize?: number }) =>
     panjiaRequest.get<PageResult<PerformanceRankRow>>('/perf/fact/rank', params),
 
   // 合同级作废：该订单该期间全部有效业绩一次性作废（不区分人员/角色）；orderNo 与合同号双键精确匹配

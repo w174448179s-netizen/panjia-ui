@@ -72,6 +72,9 @@
             共 <b>{{ total }}</b> 张实收审批单 ·
             <!-- 按员工筛选时后端返回该员工明细合计（员工口径），否则为单据级实收合计 -->
             {{ queryParams.employeeId ? '员工实收合计' : '实收合计' }} <b class="amount-red">{{ formatAmount(summaryAmount) }}</b>
+            <span class="summary-sep">｜</span>
+            新签合计 <b class="amount-expected">{{ formatAmount(summaryExpectedAmount) }}</b>
+            <span class="summary-sub">（折算后 {{ formatAmount(summaryExpectedConvertedAmount) }}）</span>
           </span>
         </div>
         <div class="summary-right">
@@ -516,6 +519,10 @@ const summaryAmount = computed(() => {
   return s != null && s !== '' ? Number(s) : applyList.value.reduce((s, r) => s + num(r.receivedAmount), 0);
 });
 
+// 汇总条「新签合计」及折算后合计：后端全量汇总（同查询条件、跨页）；实收不做折算
+const summaryExpectedAmount = computed(() => num(pageSummary.value?.totalExpectedAmount));
+const summaryExpectedConvertedAmount = computed(() => num(pageSummary.value?.totalExpectedConvertedAmount));
+
 const STATUS_MAP: Record<string, string> = {
   DRAFT: '待补新签', SUBMITTED: '审批中', APPROVED: '已通过', REJECTED: '已驳回', CANCELLED: '已作废',
 };
@@ -841,6 +848,14 @@ onMounted(async () => {
   }
   .amount-expected {
     color: #909399;
+  }
+  .summary-sep {
+    color: #dcdfe6;
+    margin: 0 6px;
+  }
+  .summary-sub {
+    color: #909399;
+    font-size: 12px;
   }
 }
 

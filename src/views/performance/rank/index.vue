@@ -5,7 +5,7 @@
         <!-- 筛选条件 -->
         <el-form class="filter-form" :inline="true" :model="queryParams" @submit.prevent>
           <el-form-item label="统计维度" prop="periodType">
-            <el-radio-group v-model="queryParams.periodType" @change="handleQuery">
+            <el-radio-group v-model="queryParams.periodType" @change="onPeriodTypeChange">
               <el-radio label="MONTH">按月</el-radio>
               <el-radio label="QUARTER">按季</el-radio>
               <el-radio label="YEAR">按年</el-radio>
@@ -18,7 +18,19 @@
               value-format="YYYY"
               placeholder="选择年份"
               style="width: 120px"
+              @change="handleQuery"
             />
+          </el-form-item>
+          <el-form-item v-if="queryParams.periodType === 'MONTH'" label="月份" prop="month">
+            <el-select
+              v-model="queryParams.month"
+              clearable
+              placeholder="全部月份"
+              style="width: 120px"
+              @change="handleQuery"
+            >
+              <el-option v-for="m in 12" :key="m" :label="`${m}月`" :value="m" />
+            </el-select>
           </el-form-item>
           <el-form-item v-if="queryParams.periodType === 'QUARTER'" label="季度" prop="quarter">
             <el-select
@@ -26,6 +38,7 @@
               clearable
               placeholder="全部季度"
               style="width: 120px"
+              @change="handleQuery"
             >
               <el-option label="Q1" :value="1" />
               <el-option label="Q2" :value="2" />
@@ -138,6 +151,7 @@ const queryParams = reactive({
   periodType: 'YEAR',
   year: String(new Date().getFullYear()),
   quarter: undefined as number | undefined,
+  month: undefined as number | undefined,
   deptId: undefined as string | undefined,
   bizType: undefined as string | undefined,
 });
@@ -152,7 +166,9 @@ const getList = async () => {
     const res = await performanceApi.listRank({
       periodType: queryParams.periodType,
       year: queryParams.year,
-      quarter: queryParams.quarter,
+      quarter: queryParams.periodType === 'QUARTER' ? queryParams.quarter : undefined,
+      // 仅按月维度携带月份；为空（全部月份）时后端按整年聚合
+      month: queryParams.periodType === 'MONTH' ? queryParams.month : undefined,
       // 排行榜全员全量，部门仅作筛选
       deptId: queryParams.deptId,
       bizType: queryParams.bizType,
@@ -175,9 +191,19 @@ const handleQuery = () => {
   getList();
 };
 
+// 切换统计维度：切到「按月」默认选中当前月，立即按月统计（用户可清空改查全年）；
+// 切到其他维度时清除月份选择，避免残留参数
+const onPeriodTypeChange = () => {
+  if (queryParams.periodType === 'MONTH' && queryParams.month == null) {
+    queryParams.month = new Date().getMonth() + 1;
+  }
+  handleQuery();
+};
+
 const resetQuery = () => {
   // 统计维度/年份保持
   queryParams.quarter = undefined;
+  queryParams.month = undefined;
   // 受限角色重置回本部门默认值，不能清空为"全部"
   queryParams.deptId = defaultDeptId();
   queryParams.bizType = undefined;

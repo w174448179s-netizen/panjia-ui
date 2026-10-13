@@ -14,6 +14,13 @@
               style="width: 160px"
               @change="handleScopeChange"
             />
+            <!-- 口径说明：与业绩汇总/业绩排行（严格按月）不同，本页为合同全周期口径 -->
+            <el-tooltip
+              placement="top"
+              content="选定月份后，列表为「该月有业绩的合同」，其新签/实收金额按合同全周期汇总（含其他月份签约的新签）。若需严格按当月统计，请查看业绩汇总 / 业绩排行。"
+            >
+              <el-icon class="field-hint"><QuestionFilled /></el-icon>
+            </el-tooltip>
           </el-form-item>
           <el-form-item v-if="!isAgent" label="门店/组别" prop="deptId">
             <PanjiaDeptSelect
@@ -78,12 +85,15 @@
         <div class="summary-bar">
           <span class="summary-text">
             共 <b>{{ summary.contractCount }}</b> 个合同 ·
-            新签合计 <b class="amount-red">{{ formatMoney(summary.totalExpectAmount) }}</b>
-            <span class="summary-sub">（折算后 {{ formatMoney(summary.totalExpectConvertedAmount) }}）</span>
+            新签合计 <b class="amount-red">{{ formatMoney(summary.totalExpectAmount) }}</b><span
+              class="summary-sub"
+            >（折算后 {{ formatMoney(summary.totalExpectConvertedAmount) }}）</span>
             <template v-if="canSeeRealAmount">
-              · 实收合计 <b class="amount-red">{{ formatMoney(summary.totalRealAmount) }}</b>
-              <span class="summary-sub">（折算后 {{ formatMoney(summary.totalRealConvertedAmount) }}）</span>
+               · 实收合计 <b class="amount-red">{{ formatMoney(summary.totalRealAmount) }}</b><span
+                class="summary-sub"
+              >（折算后 {{ formatMoney(summary.totalRealConvertedAmount) }}）</span>
             </template>
+            <span v-if="queryParams.period" class="summary-hint">｜含跨期：金额按合同全周期汇总</span>
           </span>
         </div>
 
@@ -385,7 +395,7 @@
 </template>
 
 <script setup lang="ts">
-import { Search, Refresh } from '@element-plus/icons-vue';
+import { Search, Refresh, QuestionFilled } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceFactSearch, PerformanceSearchDetailRow } from '@/api/panjia/performance';
@@ -738,7 +748,19 @@ onBeforeUnmount(() => {
       color: #909399;
       font-size: 12px;
     }
+
+    .summary-hint {
+      color: #e6a23c;
+      font-size: 12px;
+    }
   }
+}
+
+.field-hint {
+  margin-left: 6px;
+  color: #909399;
+  cursor: help;
+  vertical-align: middle;
 }
 
 .empty-wrap {

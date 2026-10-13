@@ -75,7 +75,13 @@
           </span>
         </div>
         <div class="summary-right">
-          <span class="summary-amount">结佣合计：<b>{{ formatAmount(summary.totalAmount) }}</b></span>
+          <span class="summary-amount">
+            结佣合计：<b>{{ formatAmount(summary.totalAmount) }}</b>
+            <span class="summary-sub">（折算后 {{ formatAmount(summary.totalConvertedAmount) }}）</span>
+            <span class="summary-sep">｜</span>
+            新签合计：<b>{{ formatAmount(summary.totalExpectedAmount) }}</b>
+            <span class="summary-sub">（折算后 {{ formatAmount(summary.totalExpectedConvertedAmount) }}）</span>
+          </span>
           <el-button v-if="checkPermi(['commission:apply:batch'])" type="success" plain icon="DocumentChecked" @click="openBatchApprove">批量审批{{ selectedRows.length > 0 ? `(${selectedRows.length})` : '' }}</el-button>
         </div>
       </div>
@@ -380,7 +386,7 @@ const queryParams = reactive({
 });
 
 // 汇总统计：后端按过滤后全集返回（跨页全局，不随分页变化）
-const emptySummary = () => ({ contractCount: 0, employeeCount: 0, detailCount: 0, totalAmount: 0 });
+const emptySummary = () => ({ contractCount: 0, employeeCount: 0, detailCount: 0, totalAmount: 0, totalConvertedAmount: 0, totalExpectedAmount: 0, totalExpectedConvertedAmount: 0 });
 const summary = ref(emptySummary());
 
 // 数字安全转换
@@ -482,6 +488,9 @@ const getList = async () => {
       employeeCount: num(data?.summary?.employeeCount),
       detailCount: num(data?.summary?.detailCount),
       totalAmount: num(data?.summary?.totalAmount),
+      totalConvertedAmount: num(data?.summary?.totalConvertedAmount),
+      totalExpectedAmount: num(data?.summary?.totalExpectedAmount),
+      totalExpectedConvertedAmount: num(data?.summary?.totalExpectedConvertedAmount),
     };
   } catch {
     contractList.value = [];
@@ -748,6 +757,16 @@ onMounted(async () => {
       color: #f56c6c;
       font-size: 15px;
       margin-left: 4px;
+    }
+
+    .summary-sub {
+      color: #909399;
+      font-size: 12px;
+    }
+
+    .summary-sep {
+      color: #dcdfe6;
+      margin: 0 6px;
     }
   }
 }

@@ -88,7 +88,10 @@
             :loading="batchSubmitting"
             @click="openBatchReceivedDialog"
           >批量提交实收（{{ selectedRows.length }}）</el-button>
-          <span class="summary-amount">金额合计：<b>{{ formatAmount(summary.totalAmount) }}</b></span>
+          <span class="summary-amount">
+            金额合计：<b>{{ formatAmount(summary.totalAmount) }}</b>
+            <span class="summary-sub">（折算后 {{ formatAmount(summary.totalConvertedAmount) }}）</span>
+          </span>
         </div>
       </div>
 
@@ -451,7 +454,7 @@ const totalContracts = ref(0);
 const pageNum = ref(1);
 const pageSize = ref(20);
 
-const emptySummary = () => ({ employeeCount: 0, contractCount: 0, detailCount: 0, totalAmount: 0 });
+const emptySummary = () => ({ employeeCount: 0, contractCount: 0, detailCount: 0, totalAmount: 0, totalConvertedAmount: 0 });
 const summary = ref(emptySummary());
 
 // ==================== 工具 ====================
@@ -951,6 +954,11 @@ onMounted(async () => {
       color: #f56c6c;
       font-size: 15px;
       margin-left: 4px;
+    }
+
+    .summary-sub {
+      color: #909399;
+      font-size: 12px;
     }
   }
 }
