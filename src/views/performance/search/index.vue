@@ -14,10 +14,10 @@
               style="width: 160px"
               @change="handleScopeChange"
             />
-            <!-- 口径说明：与业绩汇总/业绩排行（严格按月）不同，本页为合同全周期口径 -->
+            <!-- 口径说明：列表行为「合同全周期」，汇总条三个合计则各按自身归属月 -->
             <el-tooltip
               placement="top"
-              content="选定月份后，列表为「该月有业绩的合同」，其新签/实收金额按合同全周期汇总（含其他月份签约的新签）。若需严格按当月统计，请查看业绩汇总 / 业绩排行。"
+              content="列表展示「该月有业绩的合同」，其新签/实收按合同全周期汇总（含其他月份签约的新签）；而汇总条的新签/实收/结佣合计各按自身归属月（新签月/实收月/结佣月）统计。若需严格按当月排名，请查看业绩汇总 / 业绩排行。"
             >
               <el-icon class="field-hint"><QuestionFilled /></el-icon>
             </el-tooltip>
@@ -81,19 +81,23 @@
           </el-form-item>
         </el-form>
 
-        <!-- 汇总条：全量（同筛选口径、跨页）合计；按员工筛选时仅统计该员工命中明细，不按合同全量 -->
+        <!-- 汇总条：三个指标各按自身归属月统计（新签月/实收月/结佣月），跨页全量；
+             列表行为「合同全周期」口径，因此合计不等于当前页列表行之和 -->
         <div class="summary-bar">
           <span class="summary-text">
             共 <b>{{ summary.contractCount }}</b> 个合同 ·
-            新签合计 <b class="amount-red">{{ formatMoney(summary.totalExpectAmount) }}</b><span
+            新签合计<span class="summary-month">（{{ summaryPeriodLabel }}）</span> <b class="amount-red">{{ formatMoney(summary.totalExpectAmount) }}</b><span
               class="summary-sub"
             >（折算后 {{ formatMoney(summary.totalExpectConvertedAmount) }}）</span>
             <template v-if="canSeeRealAmount">
-               · 实收合计 <b class="amount-red">{{ formatMoney(summary.totalRealAmount) }}</b><span
+               · 实收合计<span class="summary-month">（{{ summaryPeriodLabel }}）</span> <b class="amount-red">{{ formatMoney(summary.totalRealAmount) }}</b><span
                 class="summary-sub"
               >（折算后 {{ formatMoney(summary.totalRealConvertedAmount) }}）</span>
             </template>
-            <span v-if="queryParams.period" class="summary-hint">｜含跨期：金额按合同全周期汇总</span>
+             · 结佣合计<span class="summary-month">（{{ summaryPeriodLabel }}）</span> <b class="amount-red">{{ formatMoney(summary.totalCommissionAmount) }}</b><span
+              class="summary-sub"
+            >（折算后 {{ formatMoney(summary.totalCommissionConvertedAmount) }}）</span>
+            <span class="summary-hint">｜合计按各指标归属月统计</span>
           </span>
         </div>
 
@@ -452,13 +456,16 @@ const clearEmployeeFilter = () => {
 const loading = ref(false);
 const tableData = ref<PerformanceFactSearch[]>([]);
 const total = ref(0);
-/** 汇总条：后端按过滤后全集返回（跨页全局，不随分页变化）；实收汇总无权限时后端不下发 */
+/** 汇总条：后端按过滤后全集返回（跨页全局，不随分页变化）；实收汇总无权限时后端不下发。
+ *  三个指标各按自身归属月统计（新签＝新签月、实收＝实收月、结佣＝结佣月） */
 const emptySummary = () => ({
   contractCount: 0,
   totalExpectAmount: 0,
   totalExpectConvertedAmount: 0,
   totalRealAmount: 0,
   totalRealConvertedAmount: 0,
+  totalCommissionAmount: 0,
+  totalCommissionConvertedAmount: 0,
 });
 const summary = ref(emptySummary());
 /** 类型下拉选项：随期间/部门数据范围实时变化（与列表同权限口径） */
@@ -506,6 +513,8 @@ const getList = async () => {
       totalExpectConvertedAmount: num(s?.totalExpectConvertedAmount),
       totalRealAmount: num(s?.totalRealAmount),
       totalRealConvertedAmount: num(s?.totalRealConvertedAmount),
+      totalCommissionAmount: num(s?.totalCommissionAmount),
+      totalCommissionConvertedAmount: num(s?.totalCommissionConvertedAmount),
     };
   } catch (e) {
     console.error('[search] 查询失败', e);
