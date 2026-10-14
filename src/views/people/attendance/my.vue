@@ -25,37 +25,8 @@
     <el-card shadow="hover" class="table-panel">
       <el-tabs v-model="activeTab">
         <el-tab-pane label="考勤查询" name="attendance">
-          <p class="tab-tip">仅展示本人的月度考勤汇总；如有异议可点「申请修改」提交人事审批。</p>
-          <el-table v-loading="loading" border class="data-table" :data="attendanceList" @expand-change="handleExpandChange">
-            <el-table-column type="expand">
-              <template #default="{ row }">
-                <div class="detail-expand">
-                  <el-table
-                    :data="detailMap[row.attendMonth?.slice(0, 7)] || []"
-                    size="small"
-                    border
-                    v-loading="detailLoadingMap[row.attendMonth?.slice(0, 7)]"
-                    max-height="300"
-                  >
-                    <el-table-column label="考勤日期" align="center" prop="attendDate" width="140" />
-                    <el-table-column label="考勤状态" align="center" prop="status" min-width="120">
-                      <template #default="{ row: r }">
-                        <el-tag
-                          v-if="r.status"
-                          :type="attendStatusTagType(r.status)"
-                          effect="plain"
-                          size="small"
-                        >{{ r.status }}</el-tag>
-                        <span v-else>—</span>
-                      </template>
-                    </el-table-column>
-                    <template #empty>
-                      <span>该月无每日考勤明细</span>
-                    </template>
-                  </el-table>
-                </div>
-              </template>
-            </el-table-column>
+          <p class="tab-tip">仅展示本人的月度考勤汇总；点「详情」查看每日考勤明细，如有异议可点「申请修改」提交人事审批。</p>
+          <el-table v-loading="loading" border class="data-table" :data="attendanceList">
             <el-table-column label="考勤月份" align="center" width="120">
               <template #default="{ row }">{{ row.attendMonth?.slice(0, 7) ?? '—' }}</template>
             </el-table-column>
@@ -67,9 +38,12 @@
             <el-table-column label="旷工(天)" align="center" prop="absentDays" width="90" />
             <el-table-column label="请假(天)" align="center" prop="leaveDays" width="90" />
             <el-table-column label="备注" align="center" prop="remark" min-width="120" show-overflow-tooltip />
-            <el-table-column label="操作" align="center" width="110" fixed="right">
+            <el-table-column label="操作" align="center" width="200" fixed="right">
               <template #default="{ row }">
-                <el-button type="primary" link icon="EditPen" @click="openApply(row)">申请修改</el-button>
+                <div class="op-btns">
+                  <el-button type="primary" link icon="View" @click="openDetail(row)">详情</el-button>
+                  <el-button type="primary" link icon="EditPen" @click="openApply(row)">申请修改</el-button>
+                </div>
               </template>
             </el-table-column>
             <template #empty>
@@ -92,20 +66,23 @@
         <el-tab-pane label="我的修改申请" name="rectify">
           <p class="tab-tip">本人提交的考勤修改记录（含截图与说明），审批通过后考勤数据自动更新。</p>
           <el-table v-loading="rectifyLoading" border class="data-table" :data="rectifyList">
-            <el-table-column label="考勤月份" align="center" width="100">
+            <el-table-column label="考勤期间" align="center" width="100">
               <template #default="{ row }">{{ row.attendMonth?.slice(0, 7) ?? '—' }}</template>
             </el-table-column>
-            <el-table-column label="状态" align="center" width="100">
+            <el-table-column label="状态" align="center" width="90">
               <template #default="{ row }">
                 <el-tag :type="rectifyStatusTag(row.status)" size="small">{{ rectifyStatusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="修改项" align="left" min-width="220" show-overflow-tooltip>
+            <el-table-column label="修改项" align="left" min-width="200" show-overflow-tooltip>
               <template #default="{ row }">{{ changeSummary(row) }}</template>
             </el-table-column>
-            <el-table-column label="修改说明" align="center" prop="reason" min-width="140" show-overflow-tooltip />
+            <el-table-column label="修改说明" align="center" prop="reason" min-width="130" show-overflow-tooltip />
             <el-table-column label="提交时间" align="center" prop="submitTime" width="160" />
-            <el-table-column label="操作" align="center" width="90" fixed="right">
+            <el-table-column label="审批时间" align="center" width="160">
+              <template #default="{ row }">{{ row.approveTime || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="操作" align="center" width="100" fixed="right">
               <template #default="{ row }">
                 <el-button type="primary" link icon="View" @click="openRectifyDetail(row)">详情</el-button>
               </template>
@@ -188,53 +165,12 @@
       </template>
     </el-dialog>
 
-    <!-- 申请详情弹窗 -->
-    <el-dialog v-model="rectifyDetailVisible" title="修改申请详情" width="760px" append-to-body destroy-on-close>
-      <template v-if="currentRectify">
-        <el-descriptions :column="3" border size="small">
-          <el-descriptions-item label="考勤月份">{{ currentRectify.attendMonth?.slice(0, 7) ?? '—' }}</el-descriptions-item>
-          <el-descriptions-item label="状态">
-            <el-tag :type="rectifyStatusTag(currentRectify.status)" size="small">{{ rectifyStatusLabel(currentRectify.status) }}</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="提交时间">{{ currentRectify.submitTime || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="审批时间">{{ currentRectify.approveTime || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="涉及日期" :span="2">{{ currentRectify.involveDates || '—' }}</el-descriptions-item>
-          <el-descriptions-item v-if="currentRectify.status === 'REJECTED'" label="驳回原因" :span="3">
-            <span class="reject-reason">{{ currentRectify.rejectReason || '—' }}</span>
-          </el-descriptions-item>
-        </el-descriptions>
+    <!-- 考勤每日明细（本人） -->
+    <AttendanceDetailDialog v-model="detailVisible" mode="my" :attend-month="detailMonth" />
 
-        <div class="detail-section-title">修改明细</div>
-        <el-table :data="currentRectify.changes || []" border size="small">
-          <el-table-column label="字段" align="center" prop="fieldName" width="140" />
-          <el-table-column label="原值" align="center" min-width="120">
-            <template #default="{ row }">{{ row.oldValue === '' || row.oldValue == null ? '—' : row.oldValue }}</template>
-          </el-table-column>
-          <el-table-column label="新值" align="center" min-width="120">
-            <template #default="{ row }">
-              <span class="new-value">{{ row.newValue === '' || row.newValue == null ? '（清空）' : row.newValue }}</span>
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <div class="detail-section-title">修改说明</div>
-        <div class="reason-text">{{ currentRectify.reason || '—' }}</div>
-
-        <div class="detail-section-title">截图凭证</div>
-        <div v-if="rectifyImageUrls.length" class="image-list">
-          <el-image
-            v-for="(url, idx) in rectifyImageUrls"
-            :key="idx"
-            :src="url"
-            :preview-src-list="rectifyImageUrls"
-            :initial-index="idx"
-            fit="cover"
-            preview-teleported
-            class="rectify-image"
-          />
-        </div>
-        <span v-else>—</span>
-      </template>
+    <!-- 申请详情弹窗（复用工作流审批详情组件，与人事端「考勤管理→修改记录」保持一致） -->
+    <el-dialog v-model="rectifyDetailVisible" title="考勤修改申请详情" width="860px" append-to-body destroy-on-close>
+      <AttendanceRectifyDetail v-if="rectifyDetailId" :business-id="rectifyDetailId" />
     </el-dialog>
   </div>
 </template>
@@ -243,14 +179,15 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { attendanceApi } from '@/api/panjia/attendance';
 import type {
-  AttendanceDetail,
   AttendanceQuery,
   AttendanceRecord,
   AttendanceRectify,
   AttendanceRectifyQuery,
   AttendanceRectifyStatus
 } from '@/api/panjia/types';
+import AttendanceDetailDialog from '@/components/AttendanceDetailDialog/index.vue';
 import ImageUpload from '@/components/ImageUpload/index.vue';
+import AttendanceRectifyDetail from '@/components/WorkflowHandle/details/AttendanceRectifyDetail.vue';
 import modal from '@/plugins/modal';
 
 const loading = ref(false);
@@ -260,37 +197,13 @@ const monthRange = ref<[string, string] | []>([]);
 /** 当前 Tab：attendance 考勤查询 / rectify 我的修改申请 */
 const activeTab = ref('attendance');
 
-/** 每日明细缓存：attendMonth(yyyy-MM) → details 列表 */
-const detailMap = ref<Record<string, AttendanceDetail[]>>({});
-/** 每日明细加载中标记 */
-const detailLoadingMap = ref<Record<string, boolean>>({});
+/** 每日明细弹窗（复用共享组件，与考勤管理「考勤汇总→详情」一致） */
+const detailVisible = ref(false);
+const detailMonth = ref('');
 
-/** 展开行时加载每日明细 */
-const handleExpandChange = async (row: AttendanceRecord, expanded: any) => {
-  const month = row.attendMonth?.slice(0, 7);
-  if (!month) return;
-  const isExpanded = Array.isArray(expanded)
-    ? expanded.some((r: AttendanceRecord) => r.attendMonth?.slice(0, 7) === month)
-    : Boolean(expanded);
-  if (!isExpanded || detailMap.value[month]) return;
-  detailLoadingMap.value[month] = true;
-  try {
-    const res = await attendanceApi.myDetails(month);
-    detailMap.value[month] = res.data ?? [];
-  } catch (e) {
-    console.error('加载考勤每日明细失败', e);
-    detailMap.value[month] = [];
-  } finally {
-    detailLoadingMap.value[month] = false;
-  }
-};
-
-/** 考勤状态标签颜色 */
-const attendStatusTagType = (status: string): 'success' | 'warning' | 'danger' | 'info' => {
-  if (status.includes('正常')) return 'success';
-  if (status.includes('迟到') || status.includes('缺卡')) return 'warning';
-  if (status.includes('旷工')) return 'danger';
-  return 'info';
+const openDetail = (row: AttendanceRecord) => {
+  detailMonth.value = row.attendMonth || '';
+  detailVisible.value = true;
 };
 
 const queryParams = reactive<AttendanceQuery>({
@@ -472,18 +385,13 @@ const changeSummary = (row: AttendanceRectify) => {
   return items.map((c) => `${c.fieldName} ${c.oldValue === '' || c.oldValue == null ? '—' : c.oldValue}→${c.newValue === '' ? '（清空）' : c.newValue}`).join('；');
 };
 
-// ==================== 申请详情 ====================
+// ==================== 申请详情（复用工作流审批详情组件，与人事端保持一致） ====================
 
 const rectifyDetailVisible = ref(false);
-const currentRectify = ref<AttendanceRectify | null>(null);
-
-const rectifyImageUrls = computed(() => {
-  const urls = currentRectify.value?.ossUrls || '';
-  return urls.split(',').map((u) => u.trim()).filter(Boolean);
-});
+const rectifyDetailId = ref('');
 
 const openRectifyDetail = (row: AttendanceRectify) => {
-  currentRectify.value = row;
+  rectifyDetailId.value = row.id;
   rectifyDetailVisible.value = true;
 };
 
@@ -505,8 +413,26 @@ onMounted(() => {
     color: var(--el-text-color-secondary);
   }
 
-  .detail-expand {
-    padding: 8px 12px 4px 48px;
+  /* 全局 .data-table .el-button.is-link 把 link 按钮压成 28px 图标按钮（相邻仅 4px !important），
+     本页操作列用文字按钮，需覆盖回自适应宽度/自适应留白并统一间距，避免文字被压缩后互相重叠 */
+  .data-table {
+    :deep(.el-button.is-link) {
+      width: auto !important;
+      min-width: 0 !important;
+      padding: 0 6px !important;
+      background: transparent !important;
+    }
+
+    :deep(.el-button.is-link + .el-button.is-link) {
+      margin-left: 0 !important;
+    }
+  }
+
+  .op-btns {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
   }
 
   .pagination-wrap {
@@ -520,41 +446,6 @@ onMounted(() => {
 
   .apply-upload {
     width: 100%;
-  }
-
-  .detail-section-title {
-    margin: 14px 0 8px;
-    font-weight: 600;
-    font-size: 13px;
-  }
-
-  .reason-text {
-    white-space: pre-wrap;
-    word-break: break-all;
-    color: var(--el-text-color-regular);
-  }
-
-  .reject-reason {
-    color: var(--el-color-danger);
-  }
-
-  .new-value {
-    color: var(--el-color-primary);
-    font-weight: 600;
-  }
-
-  .image-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .rectify-image {
-    width: 120px;
-    height: 120px;
-    border-radius: 6px;
-    border: 1px solid var(--el-border-color-lighter);
-    cursor: pointer;
   }
 }
 </style>

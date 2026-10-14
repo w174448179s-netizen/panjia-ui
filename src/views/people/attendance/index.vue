@@ -119,8 +119,11 @@
         <el-table-column label="旷工(天)" align="center" prop="absentDays" width="80" />
         <el-table-column label="请假(天)" align="center" prop="leaveDays" width="80" />
         <el-table-column label="备注" align="center" prop="remark" min-width="120" show-overflow-tooltip />
-        <el-table-column label="操作" align="center" width="120" fixed="right">
+        <el-table-column label="操作" align="center" width="200" fixed="right">
           <template #default="scope">
+           <el-tooltip content="详情" placement="top">
+            <el-button type="primary" link icon="View" @click="openDetail(scope.row as AttendanceRecord)"></el-button>
+           </el-tooltip>
             <!-- 期间已提交审批（SUBMITTED/APPROVED）的行锁定：隐藏修改/删除 -->
             <template v-if="scope.row.locked">
               <el-tooltip content="该期间考勤已提交审批（或已通过），数据锁定" placement="top">
@@ -286,6 +289,15 @@
       <AttendanceApprovalDetail v-if="approvalDetailId" :business-id="approvalDetailId" />
     </el-dialog>
 
+    <!-- 考勤每日明细（按员工查询，与「考勤查询→详情」共用组件） -->
+    <AttendanceDetailDialog
+      v-model="detailVisible"
+      mode="manage"
+      :employee-id="detailEmployeeId"
+      :employee-name="detailEmployeeName"
+      :attend-month="detailMonth"
+    />
+
     <!-- 修改申请详情（复用工作流审批详情组件，含修改明细/说明/截图预览） -->
     <el-dialog v-model="rectifyDetailVisible" title="考勤修改申请详情" width="860px" append-to-body destroy-on-close>
       <AttendanceRectifyDetail v-if="rectifyDetailId" :business-id="rectifyDetailId" />
@@ -315,6 +327,7 @@ import type {
 import type { PerformanceEmployeeOption } from '@/api/panjia/performance';
 import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
+import AttendanceDetailDialog from '@/components/AttendanceDetailDialog/index.vue';
 import modal from '@/plugins/modal';
 import { Lock } from '@element-plus/icons-vue';
 import AttendanceApprovalDetail from '@/components/WorkflowHandle/details/AttendanceApprovalDetail.vue';
@@ -558,6 +571,19 @@ const openFromWorkflow = () => {
   approvalDetailVisible.value = true;
 };
 useWorkflowRouteOpen('/people/attendance', openFromWorkflow);
+
+// ==================== 考勤每日明细（复用共享弹窗） ====================
+const detailVisible = ref(false);
+const detailMonth = ref('');
+const detailEmployeeId = ref<string | number>('');
+const detailEmployeeName = ref('');
+
+const openDetail = (row: AttendanceRecord) => {
+  detailMonth.value = row.attendMonth || '';
+  detailEmployeeId.value = row.employeeId ?? '';
+  detailEmployeeName.value = row.employeeName ?? '';
+  detailVisible.value = true;
+};
 
 // ==================== 修改记录（人事审计视角） ====================
 /** 当前 Tab：summary 考勤汇总 / rectify 修改记录 */

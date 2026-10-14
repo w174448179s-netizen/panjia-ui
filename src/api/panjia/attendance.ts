@@ -51,6 +51,10 @@ export const attendanceApi = {
   myDetails(attendMonth: string) {
     return panjiaRequest.get<AttendanceDetail[]>('/people/attendance/my/details', { attendMonth });
   },
+  /** 管理端考勤每日明细（考勤管理「考勤汇总→详情」，按员工查询；人事/总监） */
+  detailsByEmployee(employeeId: string | number, attendMonth: string) {
+    return panjiaRequest.get<AttendanceDetail[]>('/people/attendance/details', { employeeId, attendMonth });
+  },
   // ==================== 考勤审批 ====================
   /** 查询期间审批状态 */
   getApproval(period: string) {
