@@ -4,6 +4,9 @@ import type {
   AttendanceDetail,
   AttendanceQuery,
   AttendanceRecord,
+  AttendanceRectify,
+  AttendanceRectifyQuery,
+  AttendanceRectifySubmitForm,
   AttendanceSaveForm,
   PageResult
 } from './types';
@@ -60,5 +63,18 @@ export const attendanceApi = {
   /** 提交当月考勤审批（人事，发起 warm-flow 考勤月度审批流程） */
   submitApproval(period: string) {
     return panjiaRequest.post<string>('/people/attendance/approval/submit', { period });
+  },
+  // ==================== 考勤修改申请 ====================
+  /** 本人修改申请分页（仅月份/状态条件生效，服务端强制本人数据） */
+  rectifyMyPage(params: AttendanceRectifyQuery) {
+    return panjiaRequest.get<PageResult<AttendanceRectify>>('/people/attendance/rectify/my/page', params);
+  },
+  /** 提交考勤修改申请（发起人事审批流程） */
+  rectifySubmit(data: AttendanceRectifySubmitForm) {
+    return panjiaRequest.post<string>('/people/attendance/rectify/my/submit', data);
+  },
+  /** 申请单详情（人事/总监，工作流审批弹窗用） */
+  rectifyGetById(id: string | number) {
+    return panjiaRequest.get<AttendanceRectify>(`/people/attendance/rectify/${id}`);
   }
 };

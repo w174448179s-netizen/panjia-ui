@@ -477,6 +477,61 @@ export interface AttendanceApproval {
   abnormalRows?: AttendanceAbnormalRow[];
 }
 
+// ==================== 考勤修改申请（经纪人发起 → 人事审批） ====================
+
+/** 考勤修改申请单状态 */
+export type AttendanceRectifyStatus = 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'CANCELED';
+
+/** 考勤修改明细项（月汇总指标单项调整，field 限定白名单） */
+export interface RectifyChangeItem {
+  field: string;
+  fieldName?: string;
+  oldValue?: string;
+  newValue?: string;
+}
+
+/** 考勤修改申请提交表单 */
+export interface AttendanceRectifySubmitForm {
+  /** 考勤月份（yyyy-MM-dd，当月 1 日） */
+  attendMonth: string;
+  changes: RectifyChangeItem[];
+  /** 涉及日期（逗号分隔 yyyy-MM-dd） */
+  involveDates?: string;
+  reason: string;
+  /** 截图 ossId 列表（逗号分隔，≥1 张） */
+  ossIds: string;
+}
+
+/** 考勤修改申请单（本人记录 / 人事审批详情共用） */
+export interface AttendanceRectify {
+  id: string;
+  employeeId: string;
+  employeeCode?: string;
+  employeeName?: string;
+  attendMonth: string;
+  changes?: RectifyChangeItem[];
+  involveDates?: string;
+  reason?: string;
+  /** 截图 ossId 列表（逗号分隔） */
+  ossIds?: string;
+  /** 截图访问地址（逗号分隔，与 ossIds 一一对应） */
+  ossUrls?: string;
+  status?: AttendanceRectifyStatus;
+  submitBy?: string;
+  submitTime?: string;
+  approveBy?: string;
+  approveTime?: string;
+  rejectReason?: string;
+  createTime?: string;
+}
+
+/** 考勤修改申请查询（本人） */
+export interface AttendanceRectifyQuery extends PageQuery {
+  monthStart?: string;
+  monthEnd?: string;
+  status?: string;
+}
+
 // 积分（员工域 pj_people_performance_score，一员工一月一行，来自积分日报导入）
 export interface ScoreRecord {
   id: string;

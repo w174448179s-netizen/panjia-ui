@@ -73,7 +73,8 @@
             <!-- 按员工筛选时后端返回该员工明细合计（员工口径），否则为单据级实收合计 -->
             {{ queryParams.employeeId ? '员工实收合计' : '实收合计' }}<span class="summary-month">（{{ summaryPeriodLabel }}）</span> <b class="amount-red">{{ formatAmount(summaryAmount) }}</b>
             <span class="summary-sep">｜</span>
-            新签合计<span class="summary-month">（{{ summaryPeriodLabel }}）</span> <b class="amount-expected">{{ formatAmount(summaryExpectedAmount) }}</b>
+            <!-- 按员工筛选时后端返回该员工应收份额合计（员工口径），否则为单据级应收合计 -->
+            {{ queryParams.employeeId ? '员工新签合计' : '新签合计' }}<span class="summary-month">（{{ summaryPeriodLabel }}）</span> <b class="amount-expected">{{ formatAmount(summaryExpectedAmount) }}</b>
             <span class="summary-sub">（折算后 {{ formatAmount(summaryExpectedConvertedAmount) }}）</span>
           </span>
         </div>

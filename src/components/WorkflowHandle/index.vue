@@ -82,6 +82,7 @@ const DETAIL_LOADERS: Record<string, () => Promise<any>> = {
   attendance_approval: () => import('./details/AttendanceApprovalDetail.vue'),
   score_approval: () => import('./details/ScoreApprovalDetail.vue'),
   rate_adjust_approval: () => import('./details/RateAdjustApprovalDetail.vue'),
+  attendance_rectify: () => import('./details/AttendanceRectifyDetail.vue'),
 };
 
 const visible = ref(false);
