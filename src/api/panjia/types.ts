@@ -525,11 +525,12 @@ export interface AttendanceRectify {
   createTime?: string;
 }
 
-/** 考勤修改申请查询（本人） */
+/** 考勤修改申请查询（本人仅用月份/状态；管理端额外支持姓名模糊） */
 export interface AttendanceRectifyQuery extends PageQuery {
   monthStart?: string;
   monthEnd?: string;
   status?: string;
+  employeeName?: string;
 }
 
 // 积分（员工域 pj_people_performance_score，一员工一月一行，来自积分日报导入）

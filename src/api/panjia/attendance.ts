@@ -76,5 +76,9 @@ export const attendanceApi = {
   /** 申请单详情（人事/总监，工作流审批弹窗用） */
   rectifyGetById(id: string | number) {
     return panjiaRequest.get<AttendanceRectify>(`/people/attendance/rectify/${id}`);
+  },
+  /** 管理端申请分页（人事/总监，考勤管理「修改记录」Tab 用） */
+  rectifyPage(params: AttendanceRectifyQuery) {
+    return panjiaRequest.get<PageResult<AttendanceRectify>>('/people/attendance/rectify/page', params);
   }
 };

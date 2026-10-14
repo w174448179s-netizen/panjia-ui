@@ -102,7 +102,9 @@
         </div>
       </template>
 
-      <el-table v-loading="loading" border class="data-table" :data="attendanceList">
+      <el-tabs v-model="activeTab">
+        <el-tab-pane label="考勤汇总" name="summary">
+          <el-table v-loading="loading" border class="data-table" :data="attendanceList">
         <el-table-column label="考勤期间" align="center" prop="attendMonth" width="110">
           <template #default="{ row }">{{ row.attendMonth?.slice(0, 7) ?? '—' }}</template>
         </el-table-column>
@@ -159,6 +161,73 @@
         class="pagination-wrap"
         @pagination="getList"
       />
+        </el-tab-pane>
+
+        <!-- 修改记录：人事审计视角，考勤期间与上方筛选卡联动 -->
+        <el-tab-pane label="修改记录" name="rectify">
+          <el-form :inline="true" class="rectify-filter">
+            <el-form-item label="姓名">
+              <el-input
+                v-model="rectifyQuery.employeeName"
+                placeholder="请输入姓名"
+                clearable
+                style="width: 140px"
+                @keyup.enter="handleRectifyQuery"
+              />
+            </el-form-item>
+            <el-form-item label="状态">
+              <el-select v-model="rectifyQuery.status" placeholder="全部" clearable style="width: 130px">
+                <el-option label="待审批" value="SUBMITTED" />
+                <el-option label="已通过" value="APPROVED" />
+                <el-option label="已驳回" value="REJECTED" />
+                <el-option label="已取消" value="CANCELED" />
+              </el-select>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" icon="Search" @click="handleRectifyQuery">搜索</el-button>
+              <el-button icon="Refresh" @click="resetRectifyQuery">重置</el-button>
+            </el-form-item>
+          </el-form>
+
+          <el-table v-loading="rectifyLoading" border class="data-table" :data="rectifyList">
+            <el-table-column label="考勤期间" align="center" width="100">
+              <template #default="{ row }">{{ row.attendMonth?.slice(0, 7) ?? '—' }}</template>
+            </el-table-column>
+            <el-table-column label="工号" align="center" prop="employeeCode" width="100" />
+            <el-table-column label="姓名" align="center" prop="employeeName" width="90" />
+            <el-table-column label="状态" align="center" width="90">
+              <template #default="{ row }">
+                <el-tag :type="rectifyStatusTag(row.status)" size="small">{{ rectifyStatusLabel(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="修改项" align="left" min-width="200" show-overflow-tooltip>
+              <template #default="{ row }">{{ rectifyChangeSummary(row) }}</template>
+            </el-table-column>
+            <el-table-column label="修改说明" align="center" prop="reason" min-width="130" show-overflow-tooltip />
+            <el-table-column label="提交时间" align="center" prop="submitTime" width="160" />
+            <el-table-column label="审批时间" align="center" width="160">
+              <template #default="{ row }">{{ row.approveTime || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="操作" align="center" width="90" fixed="right">
+              <template #default="{ row }">
+                <el-button type="primary" link icon="View" @click="openRectifyDetail(row)">详情</el-button>
+              </template>
+            </el-table-column>
+            <template #empty>
+              <el-empty description="该期间暂无修改申请记录" />
+            </template>
+          </el-table>
+
+          <pagination
+            v-show="rectifyTotal > 0"
+            v-model:page="rectifyQuery.pageNum"
+            v-model:limit="rectifyQuery.pageSize"
+            :total="rectifyTotal"
+            class="pagination-wrap"
+            @pagination="getRectifyList"
+          />
+        </el-tab-pane>
+      </el-tabs>
     </el-card>
 
     <!-- 新增/编辑弹窗 -->
@@ -217,6 +286,11 @@
       <AttendanceApprovalDetail v-if="approvalDetailId" :business-id="approvalDetailId" />
     </el-dialog>
 
+    <!-- 修改申请详情（复用工作流审批详情组件，含修改明细/说明/截图预览） -->
+    <el-dialog v-model="rectifyDetailVisible" title="考勤修改申请详情" width="860px" append-to-body destroy-on-close>
+      <AttendanceRectifyDetail v-if="rectifyDetailId" :business-id="rectifyDetailId" />
+    </el-dialog>
+
     <!-- 考勤导入入口：整体复用导入页组件（自带归属月/上传/批次管理），关闭后刷新汇总列表 -->
     <el-dialog v-model="importOpen" title="考勤数据导入" width="1080px" append-to-body destroy-on-close @closed="getList">
       <ImportAttendancePage />
@@ -233,6 +307,9 @@ import type {
   AttendanceApproval,
   AttendanceQuery,
   AttendanceRecord,
+  AttendanceRectify,
+  AttendanceRectifyQuery,
+  AttendanceRectifyStatus,
   AttendanceSaveForm,
 } from '@/api/panjia/types';
 import type { PerformanceEmployeeOption } from '@/api/panjia/performance';
@@ -241,6 +318,7 @@ import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import modal from '@/plugins/modal';
 import { Lock } from '@element-plus/icons-vue';
 import AttendanceApprovalDetail from '@/components/WorkflowHandle/details/AttendanceApprovalDetail.vue';
+import AttendanceRectifyDetail from '@/components/WorkflowHandle/details/AttendanceRectifyDetail.vue';
 import ImportAttendancePage from '@/views/import/attendance/index.vue';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { useDeptScope } from '@/hooks/useDeptScope';
@@ -293,11 +371,13 @@ const getList = async () => {
   }
 };
 
-/** 切换期间：列表与审批状态联动刷新 */
+/** 切换期间：列表与审批状态联动刷新（修改记录 Tab 同期间联动） */
 const handlePeriodChange = () => {
   queryParams.pageNum = 1;
   getList();
   loadApproval();
+  rectifyQuery.pageNum = 1;
+  getRectifyList();
 };
 
 const handleQuery = () => {
@@ -479,9 +559,81 @@ const openFromWorkflow = () => {
 };
 useWorkflowRouteOpen('/people/attendance', openFromWorkflow);
 
+// ==================== 修改记录（人事审计视角） ====================
+/** 当前 Tab：summary 考勤汇总 / rectify 修改记录 */
+const activeTab = ref('summary');
+const rectifyLoading = ref(false);
+const rectifyList = ref<AttendanceRectify[]>([]);
+const rectifyTotal = ref(0);
+const rectifyQuery = reactive<AttendanceRectifyQuery>({ pageNum: 1, pageSize: 10, employeeName: '', status: undefined });
+
+const getRectifyList = async () => {
+  rectifyLoading.value = true;
+  try {
+    // 与汇总共用筛选卡的单月期间
+    const monthFirst = `${period.value}-01`;
+    const res = await attendanceApi.rectifyPage({
+      pageNum: rectifyQuery.pageNum,
+      pageSize: rectifyQuery.pageSize,
+      monthStart: monthFirst,
+      monthEnd: monthFirst,
+      employeeName: rectifyQuery.employeeName?.trim() || undefined,
+      status: rectifyQuery.status || undefined
+    });
+    rectifyList.value = res.data?.rows ?? [];
+    rectifyTotal.value = res.data?.total ?? 0;
+  } catch (e: any) {
+    modal.msgError(e?.message || '查询修改记录失败');
+  } finally {
+    rectifyLoading.value = false;
+  }
+};
+
+const handleRectifyQuery = () => {
+  rectifyQuery.pageNum = 1;
+  getRectifyList();
+};
+
+const resetRectifyQuery = () => {
+  rectifyQuery.employeeName = '';
+  rectifyQuery.status = undefined;
+  handleRectifyQuery();
+};
+
+const RECTIFY_STATUS_LABEL: Record<string, string> = {
+  SUBMITTED: '待审批',
+  APPROVED: '已通过',
+  REJECTED: '已驳回',
+  CANCELED: '已取消'
+};
+const RECTIFY_STATUS_TAG: Record<string, 'warning' | 'success' | 'danger' | 'info'> = {
+  SUBMITTED: 'warning',
+  APPROVED: 'success',
+  REJECTED: 'danger',
+  CANCELED: 'info'
+};
+const rectifyStatusLabel = (s?: AttendanceRectifyStatus | string) => RECTIFY_STATUS_LABEL[s || ''] || s || '—';
+const rectifyStatusTag = (s?: AttendanceRectifyStatus | string) => RECTIFY_STATUS_TAG[s || ''] || 'info';
+
+/** 修改项摘要：字段 原值→新值；...（与 my.vue 同口径） */
+const rectifyChangeSummary = (row: AttendanceRectify) => {
+  const items = row.changes || [];
+  if (!items.length) return '—';
+  return items.map((c) => `${c.fieldName} ${c.oldValue === '' || c.oldValue == null ? '—' : c.oldValue}→${c.newValue === '' ? '（清空）' : c.newValue}`).join('；');
+};
+
+// 详情弹窗（复用工作流审批详情组件）
+const rectifyDetailVisible = ref(false);
+const rectifyDetailId = ref<string>('');
+const openRectifyDetail = (row: AttendanceRectify) => {
+  rectifyDetailId.value = row.id;
+  rectifyDetailVisible.value = true;
+};
+
 onMounted(() => {
   getList();
   loadApproval();
+  getRectifyList();
 });
 </script>
 
@@ -533,6 +685,14 @@ onMounted(() => {
     gap: 4px;
     font-size: 12px;
     color: var(--el-text-color-secondary);
+  }
+
+  .rectify-filter {
+    margin-bottom: 4px;
+
+    :deep(.el-form-item) {
+      margin-bottom: 10px;
+    }
   }
 
   .pagination-wrap {
