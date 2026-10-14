@@ -35,12 +35,6 @@ export default defineConfig(({ mode, command }) => {
           changeOrigin: true,
           ws: true,
           rewrite: path => path.replace(new RegExp('^' + env.VITE_APP_BASE_API), '')
-        },
-        // MinIO 对象存储同源代理：图片回显 URL 域名填 panjia.icu:3000/minio（sys_oss_config.domain_url）
-        '/minio': {
-          target: 'http://localhost:9000',
-          changeOrigin: true,
-          rewrite: path => path.replace(/^\/minio/, '')
         }
       }
     },
