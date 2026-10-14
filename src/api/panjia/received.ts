@@ -22,14 +22,10 @@ export interface ReceivedApply {
   expectedConvertedAmount?: number;
   /** 调整前新签业绩的折算后金额（originalExpectedAmount × 同一折算因子） */
   originalExpectedConvertedAmount?: number;
-  /** 实收业绩折算后金额（receivedAmount × 当前生效折算因子） */
-  receivedConvertedAmount?: number;
   /** 实收（结佣调整）已被调整：当前 ACTIVE PERF_REAL 合计 ≠ 事实链最早值 */
   receivedAdjusted?: boolean;
   /** 调整前实收合计（事实链最早 PERF_REAL 金额合计；仅 receivedAdjusted=true 时有值） */
   originalReceivedAmount?: number;
-  /** 调整前实收折算后金额（originalReceivedAmount × 同一折算因子） */
-  originalReceivedConvertedAmount?: number;
   /** 是否存在审批中的实收调整单（SUBMITTED/APPROVED） */
   adjustPending?: boolean;
   /** 审批中实收调整单的目标金额（调整后实收合计） */
@@ -80,10 +76,6 @@ export interface ReceivedFact {
   expectedConvertedAmount?: number;
   /** 新签业绩原值折算后金额（originalExpectedAmount × 同一折算因子） */
   originalConvertedAmount?: number;
-  /** 实收业绩折算后金额（amount × 当前生效折算因子） */
-  convertedAmount?: number;
-  /** 实收原值折算后金额（originalAmount × 同一折算因子） */
-  originalReceivedConvertedAmount?: number;
 }
 
 export interface ReceivedQuery extends PageQuery {

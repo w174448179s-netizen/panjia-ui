@@ -25,7 +25,7 @@
         <el-descriptions-item :label="isReceivedAdjust ? '实收业绩(调整前)' : (isAddMember ? '合同业绩总额(调整前)' : '新签业绩')">
           {{ formatYuan(detail.originalAmount) }}
         </el-descriptions-item>
-        <el-descriptions-item label="折算后业绩">
+        <el-descriptions-item v-if="!isReceivedAdjust" label="折算后业绩">
           <span class="amount-ink">{{ formatYuan(detail.convertedOriginalAmount) }}</span>
         </el-descriptions-item>
         <template v-if="detail.adjustType === 'AMOUNT'">
@@ -55,7 +55,7 @@
         <el-descriptions-item v-else :label="isReceivedAdjust ? '实收业绩(调整后)' : '调整后业绩'">
           <span class="amount-red">{{ formatYuan(detail.targetAmount) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item v-if="!isAddMember" label="折算后业绩">
+        <el-descriptions-item v-if="!isAddMember && !isReceivedAdjust" label="折算后业绩">
           <span class="amount-ink">{{ formatYuan(detail.convertedTargetAmount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="申请人">{{ detail.applicantName || '—' }}</el-descriptions-item>
@@ -76,7 +76,7 @@
           <el-descriptions-item :label="isReceivedAdjust ? '实收业绩(调整前)' : (isAddMember ? '合同业绩总额(调整前)' : '新签业绩')">
             <span class="amount">{{ formatYuan(detail.originalAmount) }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="折算后业绩">
+          <el-descriptions-item v-if="!isReceivedAdjust" label="折算后业绩">
             <span class="amount amount-ink">{{ formatYuan(detail.convertedOriginalAmount) }}</span>
           </el-descriptions-item>
           <template v-if="detail.adjustType === 'AMOUNT'">
@@ -106,7 +106,7 @@
           <el-descriptions-item v-else :label="isReceivedAdjust ? '实收业绩(调整后)' : '调整后业绩'">
             <span class="amount amount-red">{{ formatYuan(detail.targetAmount) }}</span>
           </el-descriptions-item>
-          <el-descriptions-item v-if="!isAddMember" label="折算后业绩">
+          <el-descriptions-item v-if="!isAddMember && !isReceivedAdjust" label="折算后业绩">
             <span class="amount amount-ink">{{ formatYuan(detail.convertedTargetAmount) }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="房源地址" :span="2">{{ detail.propertyAddress || '—' }}</el-descriptions-item>
@@ -156,7 +156,7 @@
                 <span class="amount amount-expected">{{ formatNumber(scope.row.amount) }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="折算后" width="110" align="right">
+            <el-table-column v-if="!isReceivedAdjust" label="折算后" width="110" align="right">
               <template #default="scope">
                 <span class="amount amount-ink">{{ formatNumber(scope.row.convertedAmount) }}</span>
               </template>
@@ -173,7 +173,7 @@
                 </span>
               </template>
             </el-table-column>
-            <el-table-column label="折算后" width="110" align="right">
+            <el-table-column v-if="!isReceivedAdjust" label="折算后" width="110" align="right">
               <template #default="scope">
                 <span class="amount amount-ink" :class="getAmountClass(scope.row.deltaAmount)">
                   {{ formatNumber(scope.row.convertedAfterAmount) }}

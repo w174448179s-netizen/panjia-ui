@@ -321,8 +321,6 @@ export interface PerformanceFactSearch {
   expectConvertedAmount: number;
   /** 调整前新签业绩折算后金额（expectOriginalAmount × 当前生效折算因子） */
   originalExpectConvertedAmount: number;
-  /** 实收业绩折算后金额（realAmount × 当前生效折算因子） */
-  realConvertedAmount: number;
   /** 结佣业绩折算后金额（commissionAmount × 当前生效折算因子） */
   commissionConvertedAmount?: number;
   adjustStatus?: string;     // 调整单状态
@@ -393,8 +391,6 @@ export interface PerformanceSearchDetailRow {
   /** 调整前新签业绩折算后金额（originalExpectAmount × 当前生效折算因子） */
   originalExpectConvertedAmount: number;
   realAmount: number;         // 实收业绩（按 source_key 配对，无实收为 0）
-  /** 实收业绩折算后金额（realAmount × 当前生效折算因子） */
-  realConvertedAmount?: number;
   settled?: boolean;           // 是否已结算
   settleDate?: string;        // 结算日期
   manualAdjust?: boolean;     // 增加角色人（ADD_MEMBER）调整产生的新签行，展示「新签调整」标记

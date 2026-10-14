@@ -90,9 +90,7 @@
               class="summary-sub"
             >（折算后 {{ formatMoney(summary.totalExpectConvertedAmount) }}）</span>
             <template v-if="canSeeRealAmount">
-               · 实收合计<span class="summary-month">（{{ summaryPeriodLabel }}）</span> <b class="amount-red">{{ formatMoney(summary.totalRealAmount) }}</b><span
-                class="summary-sub"
-              >（折算后 {{ formatMoney(summary.totalRealConvertedAmount) }}）</span>
+               · 实收合计<span class="summary-month">（{{ summaryPeriodLabel }}）</span> <b class="amount-red">{{ formatMoney(summary.totalRealAmount) }}</b>
             </template>
              · 结佣合计<span class="summary-month">（{{ summaryPeriodLabel }}）</span> <b class="amount-red">{{ formatMoney(summary.totalCommissionAmount) }}</b><span
               class="summary-sub"
@@ -161,11 +159,6 @@
           <el-table-column v-if="canSeeRealAmount" label="实收业绩" align="right" width="130">
             <template #default="{ row }">
               <span class="amount-red">{{ formatMoney(row.realAmount) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column v-if="canSeeRealAmount" label="折算后" align="right" width="120">
-            <template #default="{ row }">
-              <span class="amount-ink">{{ formatMoney(row.realConvertedAmount) }}</span>
             </template>
           </el-table-column>
 
@@ -266,7 +259,6 @@
         </el-descriptions-item>
         <el-descriptions-item v-if="canSeeRealAmount" label="实收业绩">
           <span class="amount-red">{{ formatMoney(detailDialog.row.realAmount) }}</span>
-          <span class="amount-gray" style="margin-left: 8px">折算后 {{ formatMoney(detailDialog.row.realConvertedAmount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="调整单状态">
           <el-tag v-if="detailDialog.row.adjustStatus" :type="adjustStatusTagType(detailDialog.row.adjustStatus)" size="small">
@@ -320,7 +312,6 @@
           <span v-if="canSeeRealAmount" class="summary-sep">|</span>
           <template v-if="canSeeRealAmount">
             实收合计：<b class="amount-red">{{ formatMoney(detailSummary.totalReal) }}</b>
-            <span class="amount-gray" style="margin-left: 4px">折算后 {{ formatMoney(detailSummary.totalRealConverted) }}</span>
           </template>
         </span>
       </div>
@@ -372,11 +363,6 @@
           <template #default="{ row }">
             <span :class="row.realAmount < 0 ? 'amount-red' : 'amount-ink'">{{ formatMoney(row.realAmount) }}</span>
             <el-tag v-if="row.realAmount < 0" type="danger" size="small" effect="plain" class="adjust-tag">红冲</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column v-if="canSeeRealAmount" label="折算后" align="right" width="120">
-          <template #default="{ row }">
-            <span :class="row.realAmount < 0 ? 'amount-red' : 'amount-ink'">{{ formatMoney(row.realConvertedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="结算" align="center" width="120">
@@ -463,7 +449,6 @@ const emptySummary = () => ({
   totalExpectAmount: 0,
   totalExpectConvertedAmount: 0,
   totalRealAmount: 0,
-  totalRealConvertedAmount: 0,
   totalCommissionAmount: 0,
   totalCommissionConvertedAmount: 0,
 });
@@ -514,7 +499,6 @@ const getList = async () => {
       totalExpectAmount: num(s?.totalExpectAmount),
       totalExpectConvertedAmount: num(s?.totalExpectConvertedAmount),
       totalRealAmount: num(s?.totalRealAmount),
-      totalRealConvertedAmount: num(s?.totalRealConvertedAmount),
       totalCommissionAmount: num(s?.totalCommissionAmount),
       totalCommissionConvertedAmount: num(s?.totalCommissionConvertedAmount),
     };
@@ -676,7 +660,6 @@ const detailSummary = computed(() => {
     totalExpectConverted: list.reduce((s, r) => s + num(r.expectConvertedAmount), 0),
     hasAdjustRow: list.some((r) => isRowAdjusted(r)),
     totalReal: list.reduce((s, r) => s + num(r.realAmount), 0),
-    totalRealConverted: list.reduce((s, r) => s + num(r.realConvertedAmount), 0),
   };
 });
 
