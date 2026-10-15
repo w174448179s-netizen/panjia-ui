@@ -117,6 +117,7 @@ export interface RankRule {
   personalRate: number | null;
   ruleContent: string;
   effectiveFrom: string;
+  effectiveTo?: string | null;
 }
 
 export interface PolicyRule {

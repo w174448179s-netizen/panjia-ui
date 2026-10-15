@@ -4,10 +4,10 @@
       <!-- ==================== 职级/提成规则 ==================== -->
       <el-tab-pane label="职级/提成规则" name="rank">
         <div class="policy-toolbar">
-          <span class="policy-title">职级来源：字典 panjia_employee_level（新增职级请先在字典管理添加）</span>
+          <span class="policy-title">职级来源：字典 panjia_employee_level；同一职级可按生效区间配置多版规则</span>
           <el-button type="primary" plain icon="Plus" @click="addRank">新增职级规则</el-button>
         </div>
-        <el-table :data="rankList" stripe border>
+        <el-table :data="sortedRankList" stripe border :row-class-name="rankRowClass">
           <el-table-column label="职级" width="90" align="center">
             <template #default="{ row }">
               <dict-tag :options="panjia_employee_level" :value="row.levelCode" />
@@ -39,7 +39,18 @@
               <span v-else>—</span>
             </template>
           </el-table-column>
-          <el-table-column label="生效日" prop="effectiveFrom" width="110" />
+          <el-table-column label="生效区间" width="200" align="center">
+            <template #default="{ row }">
+              {{ row.effectiveFrom }} ~ {{ isOpenEnd(row.effectiveTo) ? '至今' : row.effectiveTo }}
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="80" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="isExpired(row as RankRule)" type="info" size="small">已失效</el-tag>
+              <el-tag v-else-if="isFuture(row as RankRule)" type="warning" size="small">待生效</el-tag>
+              <el-tag v-else type="success" size="small">生效中</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="操作" width="80" fixed="right">
             <template #default="{ row }">
               <el-tooltip content="编辑" placement="top">
@@ -333,7 +344,7 @@
             />
           </el-select>
           <div class="form-tip" v-if="!rankDialog.form.id">
-            仅显示尚未配置规则的职级；更多职级请先在「字典管理 → panjia_employee_level」添加
+            同一职级可配置多版规则，用生效区间区分（如 A1：1~9 月 55%，10 月起 60%）
           </div>
         </el-form-item>
         <el-form-item label="生效日">
@@ -342,6 +353,16 @@
             type="date"
             value-format="YYYY-MM-DD"
             placeholder="选择生效日期"
+            style="width:100%"
+          />
+        </el-form-item>
+        <el-form-item label="失效日">
+          <el-date-picker
+            v-model="rankDialog.form.effectiveTo"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="留空 = 长期有效"
+            clearable
             style="width:100%"
           />
         </el-form-item>
@@ -362,9 +383,6 @@
         <el-form-item label="个人提点">
           <el-input-number v-model="rankDialog.form.personalRate" :min="0" :max="1" :precision="4" :step="0.01" :controls="false" style="width:100%" />
           <div class="form-tip" v-if="rankDialog.form.personalRate != null">当前值：{{ fmtPct(rankDialog.form.personalRate) }}</div>
-        </el-form-item>
-        <el-form-item label="生效日">
-          <el-date-picker v-model="rankDialog.form.effectiveFrom" type="date" value-format="YYYY-MM-DD" style="width:100%" />
         </el-form-item>
 
         <el-divider content-position="left">招聘奖励</el-divider>
@@ -491,13 +509,29 @@ const rankJson = reactive({
 
 const parseRank = (row: RankRule) => safeParse(row.ruleContent);
 
-// 可选职级：新增时只显示字典中尚未配置规则的职级；编辑时显示全部（下拉禁用）
-const availableLevelOptions = computed(() => {
-  const all = (panjia_employee_level.value ?? []) as Array<{ value: string; label: string }>;
-  if (rankDialog.value.form?.id) return all;
-  const used = new Set(rankList.value.map((r) => r.levelCode));
-  return all.filter((d) => !used.has(d.value));
-});
+// ==================== 生效区间工具 ====================
+const OPEN_END = '9999-12-31';
+const today = () => new Date().toISOString().slice(0, 10);
+const isOpenEnd = (d?: string | null) => !d || d >= OPEN_END;
+const isExpired = (row: RankRule) => !isOpenEnd(row.effectiveTo) && row.effectiveTo! < today();
+const isFuture = (row: RankRule) => row.effectiveFrom > today();
+
+// 列表排序：职级 → 生效日，同职级多版规则按时间排列
+const sortedRankList = computed(() =>
+  [...rankList.value].sort((a, b) =>
+    a.levelCode === b.levelCode
+      ? a.effectiveFrom.localeCompare(b.effectiveFrom)
+      : a.levelCode.localeCompare(b.levelCode),
+  ),
+);
+
+// 已失效行置灰
+const rankRowClass = ({ row }: { row: RankRule }) => (isExpired(row) ? 'rank-row-expired' : '');
+
+// 可选职级：字典全部职级（同一职级允许配置多版规则，按生效区间区分）
+const availableLevelOptions = computed(
+  () => (panjia_employee_level.value ?? []) as Array<{ value: string; label: string }>,
+);
 
 const addRank = () => {
   rankDialog.value = {
@@ -512,6 +546,7 @@ const addRank = () => {
       personalRate: null,
       ruleContent: '{}',
       effectiveFrom: new Date().toISOString().slice(0, 10),
+      effectiveTo: null,
     } as RankRule,
   };
   rankJson.mentorBonusMode = 'RATE_ADD';
@@ -522,7 +557,9 @@ const addRank = () => {
 };
 
 const editRank = (row: RankRule) => {
-  rankDialog.value = { show: true, form: { ...row } };
+  // 长期有效（9999-12-31）在弹窗里显示为空
+  const form = { ...row, effectiveTo: isOpenEnd(row.effectiveTo) ? null : row.effectiveTo };
+  rankDialog.value = { show: true, form };
   const j = safeParse(row.ruleContent);
   rankJson.mentorBonusMode = j.mentorBonusMode || '';
   rankJson.mentorBonusRateAdd = j.mentorBonusRateAdd ?? 0;
@@ -538,6 +575,27 @@ const saveRank = async () => {
   }
   if (!rankDialog.value.form.effectiveFrom) {
     ElMessage.warning('请选择生效日');
+    return;
+  }
+  const form = rankDialog.value.form;
+  // 失效日留空 = 长期有效
+  form.effectiveTo = form.effectiveTo || OPEN_END;
+  if (form.effectiveTo < form.effectiveFrom) {
+    ElMessage.warning('失效日不能早于生效日');
+    return;
+  }
+  // 同职级生效区间不允许重叠（算薪按日期命中唯一版本）
+  const overlap = rankList.value.find(
+    (r) =>
+      r.levelCode === form.levelCode &&
+      r.id !== form.id &&
+      r.effectiveFrom <= form.effectiveTo! &&
+      (isOpenEnd(r.effectiveTo) ? OPEN_END : r.effectiveTo!) >= form.effectiveFrom,
+  );
+  if (overlap) {
+    ElMessage.warning(
+      `与已有规则生效区间重叠（${overlap.effectiveFrom} ~ ${isOpenEnd(overlap.effectiveTo) ? '至今' : overlap.effectiveTo}），请调整日期`,
+    );
     return;
   }
   // 序列化结构化字段回 ruleContent
@@ -821,5 +879,10 @@ onMounted(load);
   width: 48px;
   font-size: 12px;
   color: #409eff;
+}
+/* 已失效的历史版本规则置灰 */
+:deep(.rank-row-expired) {
+  color: #a8abb2;
+  background: #fafafa;
 }
 </style>
