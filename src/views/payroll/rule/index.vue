@@ -135,22 +135,60 @@
               </el-form-item>
             </el-col>
             <el-col :span="12">
-              <el-form-item label="旷工罚款">
+              <el-form-item label="旷工罚款（无底薪）">
                 <el-input-number v-model="policyJson.attendance.absentNoBaseFee" :min="0" :precision="2" :controls="false" style="width:100%" />
-                <span class="form-tip" style="margin-left:8px">元/天</span>
+                <span class="form-tip" style="margin-left:8px">元/天；实际扣 = 该值 × 旷工倍数</span>
               </el-form-item>
             </el-col>
             <el-col :span="12">
               <el-form-item label="旷工倍数">
                 <el-input-number v-model="policyJson.attendance.absentWithBaseTimes" :min="0" :precision="1" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">有底薪 = 日工资 × 倍数；无底薪 = 无底薪罚款 × 倍数</span>
               </el-form-item>
             </el-col>
             <el-col :span="12">
-              <el-form-item label="月计薪天数">
-                <el-input-number v-model="policyJson.attendance.workDaysPerMonth" :min="0" :precision="2" :controls="false" style="width:100%" />
+              <el-form-item label="事假扣款">
+                <el-input-number v-model="policyJson.attendance.personalLeaveFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">元/天；有底薪另加扣一天日工资</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="事假加扣日工资">
+                <el-checkbox v-model="policyJson.attendance.personalLeaveDeductDailyWage">有底薪员工按天加扣日工资</el-checkbox>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="病假诊所·有底薪">
+                <el-input-number v-model="policyJson.attendance.sickClinicWithBaseFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">元/天（诊所类证明）</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="病假诊所·无底薪">
+                <el-input-number v-model="policyJson.attendance.sickClinicNoBaseFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">元/天（诊所类证明）</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="病假二甲·有底薪">
+                <el-input-number v-model="policyJson.attendance.sickHospitalWithBaseFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">元/天（二甲医院以上）</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="病假二甲·无底薪">
+                <el-input-number v-model="policyJson.attendance.sickHospitalNoBaseFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">元/天；0 = 不扣</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="旧版请假兜底">
+                <el-input-number v-model="policyJson.attendance.leaveFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">元/天；仅历史数据无三类请假分项时生效</span>
               </el-form-item>
             </el-col>
           </el-row>
+          <p class="section-tip">日工资 = 满月底薪 ÷ 当月自然天数（按算薪归属月自动计算，不再使用固定的月计薪天数 21.75）。</p>
 
           <el-divider content-position="left">积分考核规则</el-divider>
           <el-row :gutter="20">
@@ -554,7 +592,7 @@ const isFuture = (row: RankRule) => row.effectiveFrom > today();
 
 // 列表排序：职级 → 生效日，同职级多版规则按时间排列
 const sortedRankList = computed(() =>
-  [...rankList.value].sort((a, b) =>
+  rankList.value.toSorted((a, b) =>
     a.levelCode === b.levelCode
       ? a.effectiveFrom.localeCompare(b.effectiveFrom)
       : a.levelCode.localeCompare(b.levelCode),
@@ -579,7 +617,7 @@ const noEffectiveLevels = computed(() => {
         !rs.some((r) => r.effectiveFrom <= t && (isOpenEnd(r.effectiveTo) || r.effectiveTo! >= t)),
     )
     .map(([lv]) => lv)
-    .sort();
+    .toSorted();
 });
 
 // 可选职级：字典全部职级（同一职级允许配置多版规则，按生效区间区分）
@@ -716,7 +754,13 @@ const policyJson = reactive({
   housingFund: 0,
   // 未买社保扣点（负=扣点，0=不扣），引擎 policy.noSocialDeduct，种子默认 -0.02
   noSocialDeduct: -0.02,
-  attendance: { lateFee: 0, absentNoBaseFee: 0, absentWithBaseTimes: 0, workDaysPerMonth: 0 },
+  attendance: {
+    lateFee: 0, absentNoBaseFee: 0, absentWithBaseTimes: 0,
+    personalLeaveFee: 50, personalLeaveDeductDailyWage: true,
+    sickClinicWithBaseFee: 30, sickClinicNoBaseFee: 20,
+    sickHospitalWithBaseFee: 20, sickHospitalNoBaseFee: 0,
+    leaveFee: 50,
+  },
   points: { penaltyFee: 0, gradeA: 0, gradeB: 0, deductA: 0, deductB: 0, deductC: 0 },
   commercialInsurance: 0,
   dormitoryFee: 0,
@@ -737,7 +781,19 @@ const loadPolicy = (row: PolicyRule) => {
   policyJson.parttimeExemptHousing = j.parttimeExemptHousing ?? true;
   policyJson.housingFund = j.housingFund ?? 0;
   policyJson.noSocialDeduct = j.noSocialDeduct ?? -0.02;
-  policyJson.attendance = { ...j.attendance };
+  // 考勤规则逐 key 兜底（历史 JSON 无新 key 时按引擎默认值回显）；workDaysPerMonth 已废弃不回显
+  policyJson.attendance = {
+    lateFee: j.attendance?.lateFee ?? 0,
+    absentNoBaseFee: j.attendance?.absentNoBaseFee ?? 0,
+    absentWithBaseTimes: j.attendance?.absentWithBaseTimes ?? 0,
+    personalLeaveFee: j.attendance?.personalLeaveFee ?? 50,
+    personalLeaveDeductDailyWage: j.attendance?.personalLeaveDeductDailyWage ?? true,
+    sickClinicWithBaseFee: j.attendance?.sickClinicWithBaseFee ?? 30,
+    sickClinicNoBaseFee: j.attendance?.sickClinicNoBaseFee ?? 20,
+    sickHospitalWithBaseFee: j.attendance?.sickHospitalWithBaseFee ?? 20,
+    sickHospitalNoBaseFee: j.attendance?.sickHospitalNoBaseFee ?? 0,
+    leaveFee: j.attendance?.leaveFee ?? 50,
+  };
   policyJson.points = { ...j.points };
   policyJson.commercialInsurance = j.commercialInsurance ?? 0;
   policyJson.dormitoryFee = j.dormitoryFee ?? 0;
@@ -954,6 +1010,11 @@ onMounted(load);
   color: #909399;
   font-size: 12px;
   margin-top: 2px;
+}
+.section-tip {
+  color: #909399;
+  font-size: 12px;
+  margin: 0 0 12px 4px;
 }
 .social-grid {
   display: grid;
