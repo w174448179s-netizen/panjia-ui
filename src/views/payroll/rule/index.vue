@@ -3,8 +3,16 @@
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <!-- ==================== 职级/提成规则 ==================== -->
       <el-tab-pane label="职级/提成规则" name="rank">
+        <div class="policy-toolbar">
+          <span class="policy-title">职级来源：字典 panjia_employee_level（新增职级请先在字典管理添加）</span>
+          <el-button type="primary" plain icon="Plus" @click="addRank">新增职级规则</el-button>
+        </div>
         <el-table :data="rankList" stripe border>
-          <el-table-column label="职级" prop="levelCode" width="80" align="center" />
+          <el-table-column label="职级" width="90" align="center">
+            <template #default="{ row }">
+              <dict-tag :options="panjia_employee_level" :value="row.levelCode" />
+            </template>
+          </el-table-column>
           <el-table-column label="底薪" width="100" align="right">
             <template #default="{ row }">{{ fmtMoney(row.baseSalary) }}</template>
           </el-table-column>
@@ -308,10 +316,34 @@
     </el-tabs>
 
     <!-- ==================== 职级编辑弹窗 ==================== -->
-    <el-dialog v-model="rankDialog.show" title="编辑职级规则" width="560px">
+    <el-dialog v-model="rankDialog.show" :title="rankDialog.form.id ? '编辑职级规则' : '新增职级规则'" width="560px">
       <el-form :model="rankDialog.form" label-width="100px">
         <el-form-item label="职级">
-          <el-input v-model="rankDialog.form.levelCode" />
+          <el-select
+            v-model="rankDialog.form.levelCode"
+            placeholder="请选择职级"
+            :disabled="!!rankDialog.form.id"
+            style="width:100%"
+          >
+            <el-option
+              v-for="dict in availableLevelOptions"
+              :key="dict.value"
+              :label="dict.label"
+              :value="dict.value"
+            />
+          </el-select>
+          <div class="form-tip" v-if="!rankDialog.form.id">
+            仅显示尚未配置规则的职级；更多职级请先在「字典管理 → panjia_employee_level」添加
+          </div>
+        </el-form-item>
+        <el-form-item label="生效日">
+          <el-date-picker
+            v-model="rankDialog.form.effectiveFrom"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="选择生效日期"
+            style="width:100%"
+          />
         </el-form-item>
         <el-form-item label="底薪">
           <el-input-number v-model="rankDialog.form.baseSalary" :min="0" :precision="2" :controls="false" style="width:100%" />
@@ -416,8 +448,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, toRefs, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
+import { useDict } from '@/utils/dict';
 import {
   payrollApi,
   type RankRule,
@@ -426,6 +459,9 @@ import {
   type StoreDept,
   type DeptMonthlyConfig,
 } from '@/api/panjia/payroll';
+
+// 职级字典：规则页职级下拉/展示的唯一出处
+const { panjia_employee_level } = toRefs<any>(useDict('panjia_employee_level'));
 
 const activeTab = ref('rank');
 const rankList = ref<RankRule[]>([]);
@@ -455,6 +491,36 @@ const rankJson = reactive({
 
 const parseRank = (row: RankRule) => safeParse(row.ruleContent);
 
+// 可选职级：新增时只显示字典中尚未配置规则的职级；编辑时显示全部（下拉禁用）
+const availableLevelOptions = computed(() => {
+  const all = (panjia_employee_level.value ?? []) as Array<{ value: string; label: string }>;
+  if (rankDialog.value.form?.id) return all;
+  const used = new Set(rankList.value.map((r) => r.levelCode));
+  return all.filter((d) => !used.has(d.value));
+});
+
+const addRank = () => {
+  rankDialog.value = {
+    show: true,
+    form: {
+      id: undefined as any,
+      levelCode: '',
+      baseSalary: 0,
+      baseRate: 0,
+      minSalary: 0,
+      teamRate: null,
+      personalRate: null,
+      ruleContent: '{}',
+      effectiveFrom: new Date().toISOString().slice(0, 10),
+    } as RankRule,
+  };
+  rankJson.mentorBonusMode = 'RATE_ADD';
+  rankJson.mentorBonusRateAdd = 0.02;
+  rankJson.mentorBonusRateCap = 0.10;
+  rankJson.mentorBonusAmountRatio = 0;
+  rankJson.brackets = [];
+};
+
 const editRank = (row: RankRule) => {
   rankDialog.value = { show: true, form: { ...row } };
   const j = safeParse(row.ruleContent);
@@ -466,6 +532,14 @@ const editRank = (row: RankRule) => {
 };
 
 const saveRank = async () => {
+  if (!rankDialog.value.form.levelCode) {
+    ElMessage.warning('请选择职级');
+    return;
+  }
+  if (!rankDialog.value.form.effectiveFrom) {
+    ElMessage.warning('请选择生效日');
+    return;
+  }
   // 序列化结构化字段回 ruleContent
   const j: any = { mentorBonusMode: rankJson.mentorBonusMode };
   if (rankJson.mentorBonusMode === 'RATE_ADD') {
