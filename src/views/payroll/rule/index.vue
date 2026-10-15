@@ -7,6 +7,14 @@
           <span class="policy-title">职级来源：字典 panjia_employee_level；同一职级可按生效区间配置多版规则</span>
           <el-button type="primary" plain icon="Plus" @click="addRank">新增职级规则</el-button>
         </div>
+        <el-alert
+          v-if="noEffectiveLevels.length > 0"
+          type="error"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 12px"
+          :title="`以下职级当前无生效规则：${noEffectiveLevels.join('、')}。算薪将按该职级最近一版规则兜底，请尽快补充新规则。`"
+        />
         <el-table :data="sortedRankList" stripe border :row-class-name="rankRowClass">
           <el-table-column label="职级" width="90" align="center">
             <template #default="{ row }">
@@ -30,11 +38,11 @@
           </el-table-column>
           <el-table-column label="招聘奖励" min-width="180">
             <template #default="{ row }">
-              <span v-if="parseRank(row).mentorBonusMode === 'RATE_ADD'">
-                加点 {{ fmtPct(parseRank(row).mentorBonusRateAdd) }} / 上限 {{ fmtPct(parseRank(row).mentorBonusRateCap) }}
+              <span v-if="parseRank(row as RankRule).mentorBonusMode === 'RATE_ADD'">
+                加点 {{ fmtPct(parseRank(row as RankRule).mentorBonusRateAdd) }} / 上限 {{ fmtPct(parseRank(row as RankRule).mentorBonusRateCap) }}
               </span>
-              <span v-else-if="parseRank(row).mentorBonusMode === 'AMOUNT_RATIO'">
-                徒弟结佣 × {{ fmtPct(parseRank(row).mentorBonusAmountRatio) }}
+              <span v-else-if="parseRank(row as RankRule).mentorBonusMode === 'AMOUNT_RATIO'">
+                徒弟结佣 × {{ fmtPct(parseRank(row as RankRule).mentorBonusAmountRatio) }}
               </span>
               <span v-else>—</span>
             </template>
@@ -86,13 +94,13 @@
             </el-col>
           </el-row>
 
-          <el-divider content-position="left">社保个人比例（按职级）</el-divider>
+          <el-divider content-position="left">社保个人比例（按职级，联动字典 panjia_employee_level）</el-divider>
           <el-form-item label="社保比例">
             <div class="social-grid">
-              <div v-for="(v, k) in policyJson.socialSettlementRatio" :key="k" class="social-item">
-                <span class="social-label">{{ k }}</span>
-                <el-input-number v-model="policyJson.socialSettlementRatio[k]" :min="0" :max="1" :precision="4" :step="0.01" :controls="false" />
-                <span class="social-pct">{{ fmtPct(policyJson.socialSettlementRatio[k]) }}</span>
+              <div v-for="lv in dictLevels" :key="lv" class="social-item">
+                <span class="social-label">{{ lv }}</span>
+                <el-input-number v-model="policyJson.socialSettlementRatio[lv]" :min="0" :max="1" :precision="4" :step="0.01" :controls="false" />
+                <span class="social-pct">{{ fmtPct(policyJson.socialSettlementRatio[lv]) }}</span>
               </div>
             </div>
           </el-form-item>
@@ -409,6 +417,27 @@
           </el-form-item>
         </template>
 
+        <el-divider content-position="left">晋升规则（算薪时自动判定，次月生效）</el-divider>
+        <el-form-item label="保护期月数">
+          <el-input-number v-model="rankJson.promotion.protectMonths" :min="0" :max="36" :controls="false" style="width:100%" placeholder="留空=不限制" />
+          <div class="form-tip">仅新人保护职级用（如 A0=3）：保护期最后一个月算薪时判定去向</div>
+        </el-form-item>
+        <el-form-item label="累计业绩阈值">
+          <el-input-number v-model="rankJson.promotion.threshold" :min="0" :precision="2" :controls="false" style="width:100%" placeholder="留空=不参与自动晋升" />
+          <div class="form-tip">该职级期间累计业绩（原始金额）达到此值 → 晋升「达标去向」</div>
+        </el-form-item>
+        <el-form-item label="达标去向">
+          <el-select v-model="rankJson.promotion.reachTo" clearable placeholder="累计达标后晋升到" style="width:100%">
+            <el-option v-for="d in availableLevelOptions" :key="d.value" :label="d.label" :value="d.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="未达标去向">
+          <el-select v-model="rankJson.promotion.belowTo" clearable placeholder="保护期满未达标转入" style="width:100%">
+            <el-option v-for="d in availableLevelOptions" :key="d.value" :label="d.label" :value="d.value" />
+          </el-select>
+          <div class="form-tip">仅配了保护期的职级用（如 A0 保护期满未达 1 万 → A1）</div>
+        </el-form-item>
+
         <!-- 总监门店提成阶梯 -->
         <template v-if="rankDialog.form.levelCode === 'D'">
           <el-divider content-position="left">门店提成阶梯（总监）</el-divider>
@@ -466,7 +495,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, toRefs, onMounted } from 'vue';
+import { ref, reactive, computed, toRefs, onMounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useDict } from '@/utils/dict';
 import {
@@ -505,6 +534,13 @@ const rankJson = reactive({
   mentorBonusRateCap: 0,
   mentorBonusAmountRatio: 0,
   brackets: [] as Array<{ min: number; max: number | null; rate: number }>,
+  // 晋升规则（对应 ruleContent.promotion，算薪时自动判定，次月生效）
+  promotion: {
+    protectMonths: null as number | null,
+    threshold: null as number | null,
+    belowTo: '' as string,
+    reachTo: '' as string,
+  },
 });
 
 const parseRank = (row: RankRule) => safeParse(row.ruleContent);
@@ -528,9 +564,43 @@ const sortedRankList = computed(() =>
 // 已失效行置灰
 const rankRowClass = ({ row }: { row: RankRule }) => (isExpired(row) ? 'rank-row-expired' : '');
 
+// 当前无任何生效版本的职级（规则页预警：算薪会按最近版本兜底）
+const noEffectiveLevels = computed(() => {
+  const t = today();
+  const byLevel = new Map<string, RankRule[]>();
+  rankList.value.forEach((r) => {
+    const arr = byLevel.get(r.levelCode) ?? [];
+    arr.push(r);
+    byLevel.set(r.levelCode, arr);
+  });
+  return Array.from(byLevel.entries())
+    .filter(
+      ([, rs]) =>
+        !rs.some((r) => r.effectiveFrom <= t && (isOpenEnd(r.effectiveTo) || r.effectiveTo! >= t)),
+    )
+    .map(([lv]) => lv)
+    .sort();
+});
+
 // 可选职级：字典全部职级（同一职级允许配置多版规则，按生效区间区分）
 const availableLevelOptions = computed(
   () => (panjia_employee_level.value ?? []) as Array<{ value: string; label: string }>,
+);
+
+// 字典职级清单（值数组）：社保比例等按职级配置以字典为准，新增字典项自动出现
+const dictLevels = computed(() => availableLevelOptions.value.map((d) => d.value));
+
+// 字典新增职级时，社保比例自动补一行（默认 0，由用户在政策页设置后保存）
+watch(
+  dictLevels,
+  (levels) => {
+    levels.forEach((lv) => {
+      if (policyJson.socialSettlementRatio[lv] == null) {
+        policyJson.socialSettlementRatio[lv] = 0;
+      }
+    });
+  },
+  { immediate: true },
 );
 
 const addRank = () => {
@@ -554,6 +624,7 @@ const addRank = () => {
   rankJson.mentorBonusRateCap = 0.10;
   rankJson.mentorBonusAmountRatio = 0;
   rankJson.brackets = [];
+  rankJson.promotion = { protectMonths: null, threshold: null, belowTo: '', reachTo: '' };
 };
 
 const editRank = (row: RankRule) => {
@@ -566,6 +637,12 @@ const editRank = (row: RankRule) => {
   rankJson.mentorBonusRateCap = j.mentorBonusRateCap ?? 0;
   rankJson.mentorBonusAmountRatio = j.mentorBonusAmountRatio ?? 0;
   rankJson.brackets = (j.brackets ?? []).map((b: any) => ({ ...b }));
+  rankJson.promotion = {
+    protectMonths: j.promotion?.protectMonths ?? null,
+    threshold: j.promotion?.threshold ?? null,
+    belowTo: j.promotion?.belowTo ?? '',
+    reachTo: j.promotion?.reachTo ?? '',
+  };
 };
 
 const saveRank = async () => {
@@ -609,6 +686,18 @@ const saveRank = async () => {
   if (rankDialog.value.form.levelCode === 'D') {
     j.brackets = rankJson.brackets;
   }
+  // 晋升规则：阈值或保护期任一配置才写入；全空则移除 promotion 节点（不参与自动晋升）
+  const p = rankJson.promotion;
+  if (p.threshold != null || p.protectMonths != null) {
+    const promotion: Record<string, any> = {};
+    if (p.protectMonths != null) promotion.protectMonths = p.protectMonths;
+    if (p.threshold != null) promotion.threshold = p.threshold;
+    if (p.reachTo) promotion.reachTo = p.reachTo;
+    if (p.belowTo) promotion.belowTo = p.belowTo;
+    j.promotion = promotion;
+  } else {
+    delete j.promotion;
+  }
   rankDialog.value.form.ruleContent = JSON.stringify(j);
   await payrollApi.saveRank(rankDialog.value.form);
   rankDialog.value.show = false;
@@ -638,6 +727,12 @@ const loadPolicy = (row: PolicyRule) => {
   Object.assign(policyForm, row);
   const j = safeParse(row.ruleContent);
   policyJson.socialSettlementRatio = { ...j.socialSettlementRatio };
+  // 字典中有但 JSON 里还没有的职级（新增职级），补默认值 0
+  dictLevels.value.forEach((lv) => {
+    if (policyJson.socialSettlementRatio[lv] == null) {
+      policyJson.socialSettlementRatio[lv] = 0;
+    }
+  });
   policyJson.parttimeExemptSocial = j.parttimeExemptSocial ?? true;
   policyJson.parttimeExemptHousing = j.parttimeExemptHousing ?? true;
   policyJson.housingFund = j.housingFund ?? 0;
@@ -656,8 +751,13 @@ const loadPolicy = (row: PolicyRule) => {
 const savePolicyInline = async () => {
   policySaving.value = true;
   try {
+    // 社保比例只保留字典中的职级（字典删减职级后，保存即自动清理多余键）
+    const ratio: Record<string, number> = {};
+    dictLevels.value.forEach((lv) => {
+      ratio[lv] = policyJson.socialSettlementRatio[lv] ?? 0;
+    });
     policyForm.ruleContent = JSON.stringify({
-      socialSettlementRatio: policyJson.socialSettlementRatio,
+      socialSettlementRatio: ratio,
       parttimeExemptSocial: policyJson.parttimeExemptSocial,
       parttimeExemptHousing: policyJson.parttimeExemptHousing,
       housingFund: policyJson.housingFund,
