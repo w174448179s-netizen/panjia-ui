@@ -159,7 +159,7 @@
         </el-form-item>
         <el-form-item label="调整类型">
           <el-select v-model="adjustForm.adjustType" style="width: 100%">
-            <el-option label="金额调整" value="AMOUNT" />
+            <el-option label="业绩调整" value="AMOUNT" />
           </el-select>
         </el-form-item>
         <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整后业绩" prop="targetAmount">

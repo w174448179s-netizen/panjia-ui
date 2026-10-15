@@ -31,6 +31,22 @@
               />
             </el-select>
           </el-form-item>
+          <el-form-item label="调整类型" prop="adjustType">
+            <el-select
+              v-model="queryParams.adjustType"
+              placeholder="全部类型"
+              clearable
+              style="width: 130px"
+              @change="handleQuery"
+            >
+              <el-option
+                v-for="opt in adjustTypeOptions"
+                :key="opt.value"
+                :label="opt.label"
+                :value="opt.value"
+              />
+            </el-select>
+          </el-form-item>
           <el-form-item label="员工" prop="employeeId">
             <EmployeeSelect
               v-model="queryParams.employeeId"
@@ -100,6 +116,13 @@
           <el-table-column label="门店/组别" align="center" min-width="150" show-overflow-tooltip>
             <template #default="scope">
               <span>{{ scope.row.deptName || '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="调整类型" align="center" width="100">
+            <template #default="scope">
+              <el-tag :type="adjustTypeTagType(scope.row.adjustType)" size="small" effect="plain">
+                {{ adjustTypeMap[scope.row.adjustType || 'AMOUNT'] ?? '业绩调整' }}
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column label="调整前实收" align="right" prop="originalAmount" width="130">
@@ -229,6 +252,22 @@ const statusMap: Record<string, string> = {
 };
 const statusOptions = Object.entries(statusMap).map(([value, label]) => ({ value, label }));
 
+/** 调整类型（2026-10-14 三类型重构；历史单 adjustType 为空按 AMOUNT=业绩调整展示） */
+const adjustTypeMap: Record<string, string> = {
+  AMOUNT: '业绩调整',
+  DEDUCT: '业绩扣减',
+  INCREASE: '业绩增加'
+};
+const adjustTypeOptions = Object.entries(adjustTypeMap).map(([value, label]) => ({ value, label }));
+const adjustTypeTagType = (t?: string): TagType => {
+  const map: Record<string, TagType> = {
+    AMOUNT: 'primary',
+    DEDUCT: 'danger',
+    INCREASE: 'success'
+  };
+  return map[t || 'AMOUNT'] ?? 'info';
+};
+
 type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger';
 const statusTagType = (status: string): TagType => {
   const map: Record<string, TagType> = {
@@ -250,6 +289,7 @@ const queryParams = reactive<ReceivedAdjustQuery & { pageNum: number; pageSize: 
   pageSize: 20,
   period: undefined,
   status: undefined,
+  adjustType: undefined,
   employeeId: undefined,
   deptId: defaultDeptId(),
   bizType: undefined as string | undefined,
@@ -312,6 +352,7 @@ const handleScopeChange = () => {
 const resetQuery = () => {
   queryParams.period = undefined;
   queryParams.status = undefined;
+  queryParams.adjustType = undefined;
   queryParams.employeeId = undefined;
   queryParams.deptId = defaultDeptId();
   queryParams.bizType = undefined;

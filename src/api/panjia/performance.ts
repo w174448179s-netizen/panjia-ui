@@ -49,7 +49,7 @@ export interface PerformanceAdjust {
   employeeName?: string;
   deptId: string;
   deptName?: string;
-  adjustType: string;         // AMOUNT / ADD_MEMBER
+  adjustType: string;         // AMOUNT / DEDUCT / INCREASE / ADD_MEMBER(历史) / MANUAL_OFFSET
   adjustTypeName?: string;
   adjustScope?: string;      // CONTRACT / DETAIL
   contractNo?: string;
@@ -61,7 +61,7 @@ export interface PerformanceAdjust {
   targetAmount?: number;      // 调整后目标金额（用户录入的最终金额）
   convertedOriginalAmount?: number; // 折算后原始金额（originalAmount × factor）
   convertedTargetAmount?: number;    // 折算后目标金额（targetAmount × factor）
-  /** ADD_MEMBER 调整后合同业绩合计（与 originalAmount 不等=同时调整了合同总额；旧单为空视为不变） */
+  /** 合同级调整后合同业绩合计（三类新单/历史 ADD_MEMBER 快照回填；与 originalAmount 不等=总额有变，旧单为空视为不变） */
   afterTotalAmount?: number;
   reason: string;
   status: string;             // SUBMITTED/APPROVED/REJECTED/CANCELLED/EXECUTED
@@ -122,7 +122,7 @@ export interface AdjustCreateForm {
   period: string;
   employeeId?: string;       // 明细级调整时必填（被调整事实所属员工）；合同级/ADD_MEMBER 不传
   deptId?: string;           // 同上，明细级必填
-  adjustType: string;        // AMOUNT / ADD_MEMBER / MANUAL_OFFSET / RECEIVED_AMOUNT
+  adjustType: string;        // AMOUNT / DEDUCT / INCREASE / ADD_MEMBER(历史) / MANUAL_OFFSET / RECEIVED_AMOUNT
   adjustScope?: string;      // CONTRACT / DETAIL
   contractNo?: string;       // 合同级调整时填
   orderNo?: string;          // 订单号（同合同号多订单时订单号优先精确匹配；为空后端退化按合同号）
@@ -291,7 +291,7 @@ export interface PerformanceManageContract {
 
 /** 合同明细懒加载查询参数（展开合同时按合同号查） */
 export interface ManageContractDetailQuery {
-  period: string;
+  period?: string;          // 归属期间（可空：实收跨期查询不传，后端不限定期间）
   factType: string;
   contractNos: string;       // 合同号，逗号分隔（单合同展开传 1 个）
   orderNos?: string;         // 订单号，逗号分隔（可空；非空时按订单号精确限定单订单明细）
@@ -534,6 +534,8 @@ export interface ReceivedAdjust {
   orderNo?: string;
   /** 业务类型（一手房/房产金融/二手房等，号源显示用 resolveBizNo） */
   bizType?: string;
+  /** 调整类型：AMOUNT=业绩调整(总额不变) / DEDUCT=业绩扣减 / INCREASE=业绩增加；历史单为空按 AMOUNT */
+  adjustType?: string;
   targetAmount?: number;        // 调整后实收合计
   originalAmount?: number;      // 调整前实收合计
   convertedOriginalAmount?: number;
@@ -554,16 +556,40 @@ export interface ReceivedAdjustQuery extends PageQuery {
   employeeId?: string;
   deptId?: string;
   bizType?: string;
+  /** 调整类型筛选 AMOUNT/DEDUCT/INCREASE */
+  adjustType?: string;
   keyword?: string;
 }
 
-/** 实收调整发起表单：后端按实收明细等比分摊并快照 payload，无需传明细行 */
+/** 实收调整明细指定值行（三类型可编辑表格，对齐新签调整） */
+export interface ReceivedAdjustDetailTarget {
+  factId: string;               // 实收明细 ID（pj_received_detail.id）
+  targetAmount: number;         // 该行调整后实收金额（≥0）
+  shareRatio?: number;          // 角色占比（小数；空=不修改）
+}
+
+/** 实收调整新角色人行（三类型均可加人） */
+export interface ReceivedAdjustNewMember {
+  employeeId: string;
+  roleType?: string;            // 默认"合作人"
+  amount: number;               // 实收金额（>0）
+  shareRatio?: number;          // 角色占比（小数；空=不设置）
+}
+
+/** 实收调整发起表单（2026-10-14 三类型重构，与新签调整同构） */
 export interface ReceivedAdjustCreateForm {
   period: string;               // 实收期间 YYYY-MM
   contractNo: string;
   orderNo?: string;
-  targetAmount?: number;        // 调整后实收合计（正=多收，负=少收）
+  /** 调整类型：AMOUNT=业绩调整 / DEDUCT=业绩扣减 / INCREASE=业绩增加（空默认 AMOUNT） */
+  adjustType?: 'AMOUNT' | 'DEDUCT' | 'INCREASE';
+  /** 调整后实收合计（明细指定值模式由后端回填，前端仍传 Σ行 供展示/校验） */
+  targetAmount?: number;
   reason?: string;
+  /** 明细指定值：既有行调整后金额/角色占比（三类型统一） */
+  detailTargets?: ReceivedAdjustDetailTarget[];
+  /** 新角色人清单（可空） */
+  newMembers?: ReceivedAdjustNewMember[];
 }
 
 export const receivedAdjustApi = {

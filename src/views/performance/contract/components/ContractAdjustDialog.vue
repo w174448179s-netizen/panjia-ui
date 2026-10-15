@@ -61,9 +61,10 @@
       <div class="adjust-summary-bar">
         <div class="summary-cell">
           <span class="summary-label">调整类型</span>
-          <el-select v-model="adjustType" style="width: 140px" :disabled="pendingBlocked" @change="handleTypeChange">
-            <el-option label="金额调整" value="AMOUNT" />
-            <el-option label="增加角色人" value="ADD_MEMBER" />
+          <el-select v-model="adjustType" style="width: 140px" :disabled="pendingBlocked">
+            <el-option label="业绩调整" value="AMOUNT" />
+            <el-option label="业绩扣减" value="DEDUCT" />
+            <el-option label="业绩增加" value="INCREASE" />
           </el-select>
         </div>
         <div class="summary-cell amount-cell">
@@ -104,11 +105,16 @@
           <span class="summary-arrow">→</span>
           <b>{{ formatAmount(targetConvertedTotal) }}</b>
         </div>
-        <div class="summary-cell tip-cell" v-if="adjustType === 'ADD_MEMBER'">
-          增加角色人后请手动调整各角色人金额，提交时若合同总额发生变化需二次确认
-        </div>
-        <div class="summary-cell tip-cell" v-else>
-          录入调整后合计 → 明细按业绩占比等比分摊；可再逐行微调（差额实时校验）；如需增加角色人，请将调整类型切换为「增加角色人」
+        <div class="summary-cell tip-cell">
+          <template v-if="adjustType === 'AMOUNT'">
+            业绩调整：修改后合同金额必须保持不变（可增加角色人重新分配）{{ receivedTotal > 0 ? '；该合同已有实收，将按「调整金额×实收÷新签」比例联动调整实收' : '' }}
+          </template>
+          <template v-else-if="adjustType === 'DEDUCT'">
+            业绩扣减：修改后合同金额必须小于原金额{{ receivedTotal > 0 ? '；该合同已有实收，业绩扣多少实收扣多少（逐人扣减额不能超过其实收）' : '' }}
+          </template>
+          <template v-else>
+            业绩增加：修改后合同金额必须大于原金额{{ receivedTotal > 0 ? '；该合同已有实收，业绩增加不联动实收，需另行调整' : '' }}
+          </template>
         </div>
       </div>
 
@@ -196,7 +202,7 @@
             <el-tag v-else type="info" size="small" effect="plain">待审批</el-tag>
           </template>
         </el-table-column>
-        <el-table-column v-if="adjustType === 'ADD_MEMBER'" label="操作" width="70" align="center">
+        <el-table-column label="操作" width="70" align="center">
           <template #default="{ row }">
             <el-button v-if="row.isNew" type="danger" link size="small" @click="removeRow(row as EditRow)">删除</el-button>
           </template>
@@ -206,10 +212,10 @@
         </template>
       </el-table>
 
-      <!-- 加人入口仅在「增加角色人」类型下展示：AMOUNT 语义为既有行总额调整，新人行不参与提交 -->
-      <div class="add-member-bar" v-if="adjustType === 'ADD_MEMBER'">
+      <!-- 三类型（业绩调整/扣减/增加）均可增加角色人：新增行选择员工并录入业绩，随下方一次提交审批 -->
+      <div class="add-member-bar">
         <el-button type="primary" plain size="small" icon="Plus" :disabled="pendingBlocked" @click="addMemberRow()">增加角色人</el-button>
-        <span class="add-tip">新增行选择员工并录入业绩，自动回填让出金额；全部修改随下方一次提交审批</span>
+        <span class="add-tip">新增行选择员工并录入业绩；全部修改随下方一次提交审批</span>
       </div>
 
       <el-input
@@ -295,10 +301,15 @@ interface EditRow {
   adjustPending: boolean;         // 该行已有审批中的调整单
 }
 const editRows = ref<EditRow[]>([]);
-const adjustType = ref<'AMOUNT' | 'ADD_MEMBER'>('AMOUNT');
+/** 调整类型（2026-10-14 重构）：业绩调整=总额不变 / 业绩扣减=总额须减少 / 业绩增加=总额须增加；三类型均可增加角色人 */
+const adjustType = ref<'AMOUNT' | 'DEDUCT' | 'INCREASE'>('AMOUNT');
 const totalInput = ref<number | null>(null);
 const deltaInput = ref<number | null>(null);
 const reason = ref('');
+/** 该合同实收业绩合计（无实收=0；用于类型提示与业绩增加提醒） */
+const receivedTotal = ref(0);
+/** 该合同各经纪人实收金额（employeeId → 实收金额；业绩扣减逐人扣减额校验用） */
+const receivedByEmp = ref<Map<string, number>>(new Map());
 let keySeq = 0;
 
 // ==================== 计算属性 ====================
@@ -324,15 +335,39 @@ async function open(payload: AdjustInfo) {
   editRows.value = [];
   pendingBlocked.value = false;
   pendingRows.value = [];
+  receivedTotal.value = 0;
+  receivedByEmp.value = new Map();
   visible.value = true;
   loading.value = true;
   try {
-    const res = await performanceApi.listManageContractDetails({
-      period: payload.period,
-      factType: 'PERF_EXPECT',
-      contractNos: payload.contractNo,
-      orderNos: payload.orderNo,
-    });
+    // 并行拉取：新签明细（编辑底表，限当期）+ 实收明细（跨期，period 可空；用于类型提示/扣减逐人校验/增加提醒）
+    const [res, realRes] = await Promise.all([
+      performanceApi.listManageContractDetails({
+        period: payload.period,
+        factType: 'PERF_EXPECT',
+        contractNos: payload.contractNo,
+        orderNos: payload.orderNo,
+      }),
+      performanceApi.listManageContractDetails({
+        factType: 'PERF_REAL',
+        contractNos: payload.contractNo,
+        orderNos: payload.orderNo,
+      }),
+    ]);
+    // 实收：按经纪人聚合（业绩扣减逐人校验用）+ 合计（业绩增加提醒用）
+    const byEmp = new Map<string, number>();
+    let rTotal = 0;
+    for (const r of (realRes.data ?? [])) {
+      if (r.factStatus === 'VOIDED') continue;
+      const amt = num(r.amount);
+      rTotal = round2(rTotal + amt);
+      if (r.employeeId != null) {
+        const k = String(r.employeeId);
+        byEmp.set(k, round2((byEmp.get(k) ?? 0) + amt));
+      }
+    }
+    receivedByEmp.value = byEmp;
+    receivedTotal.value = rTotal;
     const allRows: PerformanceManageRow[] = (res.data ?? [])
       .filter((r: PerformanceManageRow) => r.factStatus !== 'VOIDED');
     // 在途单逐人变化（保留 ADD_MEMBER 新人虚拟行 id=null，用于只读展示 0 → X）
@@ -378,22 +413,12 @@ async function open(payload: AdjustInfo) {
 }
 
 // ==================== 联动逻辑 ====================
-/**
- * 汇总行录入调整后合计。
- * AMOUNT：既有行按业绩占比等比分摊；
- * ADD_MEMBER：不自动分摊，仅更新合计数字（各角色人金额全手工调整）。
- */
+/** 汇总行录入调整后合计：既有行按业绩占比等比分摊（三类型统一；新人行金额全手工录入不参与分摊） */
 function handleTotalInput(v: number | null) {
   const target = v == null ? originalTotal.value : round2(v);
   const rows = existingRows.value;
   if (!rows.length) {
     totalInput.value = target;
-    return;
-  }
-  if (adjustType.value === 'ADD_MEMBER') {
-    // 加人模式不自动分摊：合计回显为行合计（输入框仅作展示，手动逐行调整为准）
-    totalInput.value = round2(targetTotal.value);
-    deltaInput.value = totalDelta.value;
     return;
   }
   const amounts = rows.map(r => num(r.amount));
@@ -427,21 +452,6 @@ function handleRowAmount(row: EditRow, v: number | null) {
 function handleRowDelta(row: EditRow, v: number | null) {
   const delta = v == null ? 0 : round2(v);
   handleRowAmount(row, round2(row.amount + delta));
-}
-
-/** 类型切换：统一重置既有行为原值（避免金额调整残留叠加），再按类型补新人行或重算合计 */
-function handleTypeChange() {
-  existingRows.value.forEach(r => { r.targetAmount = round2(r.amount); r.deltaInput = 0; });
-  if (adjustType.value === 'ADD_MEMBER') {
-    if (!newRows.value.length) {
-      addMemberRow();
-    }
-    totalInput.value = originalTotal.value;
-  } else {
-    editRows.value = editRows.value.filter(r => !r.isNew);
-    totalInput.value = round2(targetTotal.value);
-  }
-  deltaInput.value = totalDelta.value;
 }
 
 /** 增加角色人：表格末尾加一行，金额留空由用户手工录入（不自动扣减既有行） */
@@ -524,14 +534,90 @@ async function submit() {
     return;
   }
 
+  // 新角色人校验（三类型均可加人）：必选员工、金额大于 0、同一员工不重复添加
+  const nrs = newRows.value;
+  for (const nr of nrs) {
+    if (!nr.employeeId) {
+      ElMessage.warning('每个新角色人都需选择员工');
+      return;
+    }
+    if (nr.targetAmount == null || num(nr.targetAmount) <= 0) {
+      ElMessage.warning(`新角色人「${nr.employeeName || ''}」的业绩金额必须大于 0`);
+      return;
+    }
+  }
+  const pickedIds = new Set<string>();
+  for (const nr of nrs) {
+    if (pickedIds.has(nr.employeeId!)) {
+      ElMessage.warning(`员工「${nr.employeeName || ''}」不能重复添加为新角色人`);
+      return;
+    }
+    pickedIds.add(nr.employeeId!);
+  }
+  // 无任何变动（无新人、各行金额/占比均未改）时无需发起
+  const anyRowChange = existing.some(r => Math.abs(rowDelta(r)) >= 0.005 || !ratioUnchanged(r));
+  if (!nrs.length && !anyRowChange) {
+    ElMessage.warning('无任何业绩变动，无需调整');
+    return;
+  }
+
+  // 三类型总额规则：业绩调整=总额不变；业绩扣减=总额减少；业绩增加=总额增加
+  const delta = totalDelta.value;
+  if (adjustType.value === 'AMOUNT' && Math.abs(delta) >= 0.005) {
+    ElMessage.warning(`业绩调整必须保证修改后合同金额不变（当前变动 ${delta > 0 ? '+' : ''}${delta.toFixed(2)}），请调整明细金额`);
+    return;
+  }
+  if (adjustType.value === 'DEDUCT') {
+    if (delta >= 0) {
+      ElMessage.warning('业绩扣减要求修改后合同金额必须小于原金额');
+      return;
+    }
+    // 有实收时逐被扣经纪人校验：新签扣减额不能超过其实收金额（与后端创建校验口径一致）
+    const deductByEmp = new Map<string, number>();
+    for (const r of existing) {
+      const d = rowDelta(r);
+      if (d < 0 && r.employeeId != null) {
+        const k = String(r.employeeId);
+        deductByEmp.set(k, round2((deductByEmp.get(k) ?? 0) - d));
+      }
+    }
+    for (const [empId, dec] of deductByEmp) {
+      const recv = receivedByEmp.value.get(empId) ?? 0;
+      if (dec - recv > 0.004) {
+        const name = existing.find(r => String(r.employeeId) === empId)?.employeeName || empId;
+        ElMessage.warning(`员工「${name}」实收金额 ${formatAmount(recv)} 不足：新签扣减额 ${formatAmount(dec)} 不能超过其实收金额`);
+        return;
+      }
+    }
+  }
+  if (adjustType.value === 'INCREASE') {
+    if (delta <= 0) {
+      ElMessage.warning('业绩增加要求修改后合同金额必须大于原金额');
+      return;
+    }
+    // 业绩增加不联动实收：有实收时提交前弹窗提醒，需另行发起实收调整
+    if (receivedTotal.value > 0) {
+      try {
+        await ElMessageBox.confirm(
+          `该合同已有实收业绩 ${formatAmount(receivedTotal.value)} 元，业绩增加不会联动实收，请提交后另行发起实收调整。是否继续提交？`,
+          '实收不联动提醒',
+          { confirmButtonText: '继续提交', cancelButtonText: '再检查一下', type: 'warning' },
+        );
+      } catch {
+        return; // 用户取消
+      }
+    }
+  }
+
   const detailTargets = existing.map(r => ({
     factId: r.factId!,
     targetAmount: round2(num(r.targetAmount)),
     shareRatio: ratioUnchanged(r) ? undefined : round6(num(r.ratioPct) / 100),
   }));
 
+  // 三类型统一提交：detailTargets + targetAmount（=调整后合计），有新人时附 newMembers
   const form: AdjustCreateForm = {
-    adjustType: 'AMOUNT',
+    adjustType: adjustType.value,
     period: info.value.period,
     factType: 'PERF_EXPECT',
     adjustScope: 'CONTRACT',
@@ -539,70 +625,17 @@ async function submit() {
     orderNo: info.value.orderNo,
     reason: why,
     detailTargets,
+    targetAmount: round2(targetTotal.value),
   };
-
-  if (adjustType.value === 'ADD_MEMBER') {
-    const nrs = newRows.value;
-    if (!nrs.length) {
-      ElMessage.warning('请先增加角色人');
-      return;
-    }
-    // 逐人校验：必须选员工、金额大于 0
-    for (const nr of nrs) {
-      if (!nr.employeeId) {
-        ElMessage.warning('每个新角色人都需选择员工');
-        return;
-      }
-      if (nr.targetAmount == null || num(nr.targetAmount) <= 0) {
-        ElMessage.warning(`新角色人「${nr.employeeName || ''}」的业绩金额必须大于 0`);
-        return;
-      }
-    }
-    // 同一员工不允许重复添加
-    const pickedIds = new Set<string>();
-    for (const nr of nrs) {
-      if (pickedIds.has(nr.employeeId!)) {
-        ElMessage.warning(`员工「${nr.employeeName || ''}」不能重复添加为新角色人`);
-        return;
-      }
-      pickedIds.add(nr.employeeId!);
-    }
-    // 允许「增加角色人 + 合同金额调整」混合发起：总额发生变化时二次确认，不再拦截提交
-    const diff = totalDelta.value;
-    if (Math.abs(diff) > 0.004) {
-      const memberNames = nrs.map(nr => nr.employeeName || '未命名').join('、');
-      try {
-        await ElMessageBox.confirm(
-          `本次调整增加角色人「${memberNames}」共 ${nrs.length} 人，合同业绩总额将由 ${formatAmount(originalTotal.value)} `
-          + `调整为 ${formatAmount(targetTotal.value)}（${diff > 0 ? '+' : ''}${diff.toFixed(2)}）。是否确认提交审批？`,
-          '合同金额有调整',
-          { confirmButtonText: '确认提交', cancelButtonText: '再检查一下', type: 'warning' },
-        );
-      } catch {
-        return; // 用户取消
-      }
-    }
-    // 全部新人随单一调整单提交（后端以 newMembers 为权威列表）
-    Object.assign(form, {
-      adjustType: 'ADD_MEMBER',
-      newMembers: nrs.map(nr => ({
-        employeeId: nr.employeeId!,
-        roleType: nr.roleType?.trim() || '合作人',
-        amount: round2(num(nr.targetAmount)),
-        // 占比 0 为合法值（金额全扣→比例归零）；仅 undefined 表示不设置
-        shareRatio: nr.ratioPct != null
-          ? round6(num(nr.ratioPct) / 100) : undefined,
-      })),
-    });
-  } else {
-    if (totalInput.value == null) {
-      ElMessage.warning('请录入调整后业绩合计');
-      return;
-    }
-    Object.assign(form, {
-      adjustType: 'AMOUNT',
-      targetAmount: round2(num(totalInput.value)),
-    });
+  if (nrs.length) {
+    form.newMembers = nrs.map(nr => ({
+      employeeId: nr.employeeId!,
+      roleType: nr.roleType?.trim() || '合作人',
+      amount: round2(num(nr.targetAmount)),
+      // 占比 0 为合法值（金额全扣→比例归零）；仅 undefined 表示不设置
+      shareRatio: nr.ratioPct != null
+        ? round6(num(nr.ratioPct) / 100) : undefined,
+    }));
   }
 
   submitting.value = true;

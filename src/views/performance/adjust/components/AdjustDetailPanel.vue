@@ -22,26 +22,26 @@
         <el-descriptions-item label="门店/组别">
           <span>{{ detail.deptName || '—' }}</span>
         </el-descriptions-item>
-        <el-descriptions-item :label="isReceivedAdjust ? '实收业绩(调整前)' : (isAddMember ? '合同业绩总额(调整前)' : '新签业绩')">
+        <el-descriptions-item :label="isReceivedAdjust ? '实收业绩(调整前)' : (isAddMemberView ? '合同业绩总额(调整前)' : '新签业绩')">
           {{ formatYuan(detail.originalAmount) }}
         </el-descriptions-item>
         <el-descriptions-item v-if="!isReceivedAdjust" label="折算后业绩">
           <span class="amount-ink">{{ formatYuan(detail.convertedOriginalAmount) }}</span>
         </el-descriptions-item>
-        <template v-if="detail.adjustType === 'AMOUNT'">
+        <template v-if="['AMOUNT', 'DEDUCT', 'INCREASE'].includes(detail.adjustType ?? '')">
           <el-descriptions-item label="调整金额">
             <span :class="deltaAmountClass(detail.targetAmount, detail.originalAmount)">
               {{ deltaYuan(detail.targetAmount, detail.originalAmount) }}
             </span>
           </el-descriptions-item>
-          <el-descriptions-item label="调整金额（折算后）">
+          <el-descriptions-item v-if="!isReceivedAdjust" label="调整金额（折算后）">
             <span :class="deltaAmountClass(detail.convertedTargetAmount, detail.convertedOriginalAmount)">
               {{ deltaYuan(detail.convertedTargetAmount, detail.convertedOriginalAmount) }}
             </span>
           </el-descriptions-item>
         </template>
-        <template v-if="isAddMember">
-          <el-descriptions-item label="新增角色人业绩">
+        <template v-if="isAddMemberView">
+          <el-descriptions-item v-if="isAddMember" label="新增角色人业绩">
             <span class="amount-positive">+{{ formatYuan(detail.targetAmount) }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="调整后合同总额">
@@ -55,7 +55,7 @@
         <el-descriptions-item v-else :label="isReceivedAdjust ? '实收业绩(调整后)' : '调整后业绩'">
           <span class="amount-red">{{ formatYuan(detail.targetAmount) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item v-if="!isAddMember && !isReceivedAdjust" label="折算后业绩">
+        <el-descriptions-item v-if="!isAddMemberView && !isReceivedAdjust" label="折算后业绩">
           <span class="amount-ink">{{ formatYuan(detail.convertedTargetAmount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="申请人">{{ detail.applicantName || '—' }}</el-descriptions-item>
@@ -73,26 +73,26 @@
           <el-descriptions-item label="订单号">{{ detail.orderNo || '—' }}</el-descriptions-item>
           <el-descriptions-item label="签约/认购时间">{{ detail.businessDate || '—' }}</el-descriptions-item>
           <el-descriptions-item label="明细条数">{{ detail.detailCount ?? 0 }} 条</el-descriptions-item>
-          <el-descriptions-item :label="isReceivedAdjust ? '实收业绩(调整前)' : (isAddMember ? '合同业绩总额(调整前)' : '新签业绩')">
+          <el-descriptions-item :label="isReceivedAdjust ? '实收业绩(调整前)' : (isAddMemberView ? '合同业绩总额(调整前)' : '新签业绩')">
             <span class="amount">{{ formatYuan(detail.originalAmount) }}</span>
           </el-descriptions-item>
           <el-descriptions-item v-if="!isReceivedAdjust" label="折算后业绩">
             <span class="amount amount-ink">{{ formatYuan(detail.convertedOriginalAmount) }}</span>
           </el-descriptions-item>
-          <template v-if="detail.adjustType === 'AMOUNT'">
+          <template v-if="['AMOUNT', 'DEDUCT', 'INCREASE'].includes(detail.adjustType ?? '')">
             <el-descriptions-item label="调整金额">
               <span class="amount" :class="deltaAmountClass(detail.targetAmount, detail.originalAmount)">
                 {{ deltaYuan(detail.targetAmount, detail.originalAmount) }}
               </span>
             </el-descriptions-item>
-            <el-descriptions-item label="调整金额（折算后）">
+            <el-descriptions-item v-if="!isReceivedAdjust" label="调整金额（折算后）">
               <span class="amount" :class="deltaAmountClass(detail.convertedTargetAmount, detail.convertedOriginalAmount)">
                 {{ deltaYuan(detail.convertedTargetAmount, detail.convertedOriginalAmount) }}
               </span>
             </el-descriptions-item>
           </template>
-          <template v-if="isAddMember">
-            <el-descriptions-item label="新增角色人业绩">
+          <template v-if="isAddMemberView">
+            <el-descriptions-item v-if="isAddMember" label="新增角色人业绩">
               <span class="amount amount-positive">+{{ formatYuan(detail.targetAmount) }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="调整后合同总额">
@@ -106,7 +106,7 @@
           <el-descriptions-item v-else :label="isReceivedAdjust ? '实收业绩(调整后)' : '调整后业绩'">
             <span class="amount amount-red">{{ formatYuan(detail.targetAmount) }}</span>
           </el-descriptions-item>
-          <el-descriptions-item v-if="!isAddMember && !isReceivedAdjust" label="折算后业绩">
+          <el-descriptions-item v-if="!isAddMemberView && !isReceivedAdjust" label="折算后业绩">
             <span class="amount amount-ink">{{ formatYuan(detail.convertedTargetAmount) }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="房源地址" :span="2">{{ detail.propertyAddress || '—' }}</el-descriptions-item>
@@ -121,7 +121,7 @@
             <template v-if="isOffset">
               （审批通过后在冲正期间 {{ detail.period }} 生成以下记录；正数补录、负数冲正）
             </template>
-            <template v-else-if="isAddMember">
+            <template v-else-if="isAddMemberView">
               （增加角色人：既有角色人按快照扣减/调整后金额预演，新角色人调整前业绩为 0；{{
                 addMemberTotalChanged
                   ? `合同总额同步调整 ${totalChangedText}`
@@ -224,21 +224,35 @@ const detail = ref<AdjustDetailVO | null>(null);
 const { load: loadEmployees, name: employeeName } = useEmployeeMap();
 
 const ADJUST_TYPE_MAP: Record<string, string> = {
-  AMOUNT: '金额调整',
+  AMOUNT: '业绩调整',
+  DEDUCT: '业绩扣减',
+  INCREASE: '业绩增加',
   ADD_MEMBER: '增加角色人',
   MANUAL_OFFSET: '业绩冲正',
   RECEIVED_AMOUNT: '实收调整'
 };
 const adjustTypeLabel = (t: string) => ADJUST_TYPE_MAP[t] ?? t ?? '—';
 
-/** 增加角色人单：逐人展示 原值→调整后（新角色人为 —/0 → X） */
+/** 历史增加角色人单（2026-10-14 起禁止新建，仅历史展示） */
 const isAddMember = computed(() => detail.value?.adjustType === 'ADD_MEMBER');
+
+/** 明细行中是否含新增角色人行（在途虚拟行 amount=null / 已执行新人 amount=0 且正变动） */
+const hasMemberRows = computed(() =>
+  (detail.value?.details ?? []).some(r =>
+    r.target && (r.amount == null || (Number(r.amount) === 0 && (r.deltaAmount ?? 0) > 0))));
+
+/** 增加角色人视图：历史 ADD_MEMBER 单，或业绩调整/扣减/增加新单中含新增角色人行（三类均可加人） */
+const isAddMemberView = computed(() => isAddMember.value || hasMemberRows.value);
 
 /** 业绩冲正单：明细为待生成的冲正记录清单（正数补录/负数冲正） */
 const isOffset = computed(() => detail.value?.adjustType === 'MANUAL_OFFSET');
 
-/** 实收调整单：金额口径为实收（pj_received_detail），标签不得再用「新签业绩」 */
-const isReceivedAdjust = computed(() => detail.value?.adjustType === 'RECEIVED_AMOUNT');
+/**
+ * 实收调整单：金额口径为实收（pj_received_detail），标签不得再用「新签业绩」。
+ * 2026-10-14 三类型重构后实收单返回真实类型（AMOUNT/DEDUCT/INCREASE），
+ * 口径改由 kind 属性识别（组件数据源即实收单），不再依赖 adjustType === 'RECEIVED_AMOUNT'。
+ */
+const isReceivedAdjust = computed(() => props.kind === 'received');
 
 /** ADD_MEMBER 调整后合同总额：payload 回填 afterTotalAmount，旧单为空时回退原总额（总额不变） */
 const addMemberAfterTotal = computed(() => {
@@ -250,7 +264,7 @@ const addMemberAfterTotal = computed(() => {
 /** 是否同时调整了合同总额（afterTotalAmount 显式存在且与原总额不等） */
 const addMemberTotalChanged = computed(() => {
   const d = detail.value;
-  if (!d || d.adjustType !== 'ADD_MEMBER' || d.afterTotalAmount == null) return false;
+  if (!d || !isAddMemberView.value || d.afterTotalAmount == null) return false;
   const origin = Number(d.originalAmount ?? 0);
   return Math.abs(Number(d.afterTotalAmount) - origin) > 0.004;
 });
@@ -269,7 +283,7 @@ const isNewMemberRow = (row: {
   amount?: number | null;
   deltaAmount?: number | null;
 }): boolean => {
-  if (!isAddMember.value || !row.target) return false;
+  if (!isAddMemberView.value || !row.target) return false;
   if (row.amount === null || row.amount === undefined) return true;
   return Number(row.amount) === 0 && (row.deltaAmount ?? 0) > 0;
 };

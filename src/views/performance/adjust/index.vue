@@ -140,7 +140,7 @@
           <el-table-column label="调整前金额" align="right" prop="originalAmount" width="130">
             <template #default="scope">
               <span class="origin-amount">{{ formatOrigin(scope.row.originalAmount) }}</span>
-              <div v-if="scope.row.adjustType === 'ADD_MEMBER'" class="cell-sub">合同总额</div>
+              <div v-if="isContractPerfAdjust(scope.row)" class="cell-sub">合同总额</div>
             </template>
           </el-table-column>
           <el-table-column label="折算后" align="right" width="130">
@@ -235,7 +235,7 @@
         <el-form-item label="调整类型" prop="adjustType">
           <el-select v-model="formData.adjustType" placeholder="请选择调整类型" style="width: 100%">
             <el-option
-              v-for="opt in adjustTypeOptions"
+              v-for="opt in createTypeOptions"
               :key="opt.value"
               :label="opt.label"
               :value="opt.value"
@@ -407,11 +407,15 @@ const handleWithdraw = async (row: any) => {
 // ==================== 枚举 ====================
 // 新签调整菜单只管新签类调整；RECEIVED_AMOUNT（实收调整）归「实收调整」菜单，后端默认亦排除
 const adjustTypeMap: Record<string, string> = {
-  AMOUNT: '金额调整',
-  ADD_MEMBER: '增加角色人',
+  AMOUNT: '业绩调整',
+  DEDUCT: '业绩扣减',
+  INCREASE: '业绩增加',
+  ADD_MEMBER: '增加角色人', // 历史单保留展示/筛选；2026-10-14 起已并入三类，禁止新建
   MANUAL_OFFSET: '业绩冲正'
 };
 const adjustTypeOptions = Object.entries(adjustTypeMap).map(([value, label]) => ({ value, label }));
+/** 新建可选类型：本弹窗为明细级调整，仅支持业绩调整；合同级三类（含加人）请从合同业绩页发起 */
+const createTypeOptions = adjustTypeOptions.filter(o => o.value === 'AMOUNT');
 
 const statusMap: Record<string, string> = {
   SUBMITTED: '已提交',
@@ -556,6 +560,11 @@ const addMemberTotalChanged = (row: {
   const origin = row.originalAmount === undefined || row.originalAmount === null ? 0 : Number(row.originalAmount);
   return !Number.isNaN(after) && !Number.isNaN(origin) && Math.abs(after - origin) > 0.004;
 };
+
+/** 合同级新签类调整（业绩调整/扣减/增加/历史加人单）：调整前金额列展示的是合同总额，加「合同总额」角标 */
+const isContractPerfAdjust = (row: { adjustType?: string; adjustScope?: string }): boolean =>
+  row.adjustScope === 'CONTRACT'
+  && ['AMOUNT', 'DEDUCT', 'INCREASE', 'ADD_MEMBER'].includes(row.adjustType ?? '');
 
 // ==================== 新增 / 详情弹窗 ====================
 const formDialog = reactive({

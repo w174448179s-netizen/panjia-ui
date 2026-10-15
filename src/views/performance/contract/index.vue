@@ -297,7 +297,7 @@
               <!-- 增加角色人在途单：新角色人虚拟行当前业绩为空，按 0 展示（0 → X） -->
               <span>{{ scope.row.amount == null ? '0.00' : formatAmount(scope.row.amount) }}</span>
               <template
-                v-if="['AMOUNT', 'ADD_MEMBER'].includes(scope.row.adjustPendingType)
+                v-if="['AMOUNT', 'DEDUCT', 'INCREASE', 'ADD_MEMBER'].includes(scope.row.adjustPendingType)
                   && scope.row.adjustPendingAmount != null"
               >
                 <span class="amount-arrow">→</span>
@@ -360,7 +360,7 @@
         </el-form-item>
         <el-form-item label="调整类型">
           <el-select v-model="detailAdjustForm.adjustType" style="width: 100%">
-            <el-option label="金额调整" value="AMOUNT" />
+            <el-option label="业绩调整" value="AMOUNT" />
           </el-select>
         </el-form-item>
         <el-form-item v-if="detailAdjustForm.adjustType === 'AMOUNT'" label="调整金额" prop="adjustAmount">

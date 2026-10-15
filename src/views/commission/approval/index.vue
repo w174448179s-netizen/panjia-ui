@@ -113,8 +113,8 @@
               <span class="amount amount-zero">¥0.00</span>
             </el-tooltip>
             <span v-else class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
-            <!-- 在途合同级 AMOUNT 调整：展示审批中调整后合计 -->
-            <div v-if="row.adjustPending && row.adjustPendingType === 'AMOUNT' && row.adjustPendingAmount != null" class="pending-line">
+            <!-- 在途合同级 业绩调整/扣减/增加：展示审批中调整后合计 -->
+            <div v-if="row.adjustPending && ['AMOUNT', 'DEDUCT', 'INCREASE'].includes(row.adjustPendingType ?? '') && row.adjustPendingAmount != null" class="pending-line">
               <span class="amount-arrow">→</span>
               <span class="amount amount-warn">¥{{ formatAmount(row.adjustPendingAmount) }}</span>
               <el-tag type="warning" size="small" effect="plain" style="margin-left: 4px">审批中</el-tag>
