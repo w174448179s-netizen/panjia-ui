@@ -107,10 +107,10 @@
         </div>
         <div class="summary-cell tip-cell">
           <template v-if="adjustType === 'AMOUNT'">
-            业绩调整：修改后合同金额必须保持不变（可增加角色人重新分配）{{ receivedTotal > 0 ? '；该合同已有实收，将按「调整金额×实收÷新签」比例联动调整实收（含新增角色人/人员不一致/新签小于实收时不联动）' : '' }}
+            业绩调整：修改后合同金额必须保持不变（可增加角色人重新分配）{{ receivedTotal > 0 ? '；该合同已有实收，将按「调整金额×实收÷新签」比例联动调整实收（含新增角色人/人员不一致/新签大于实收时不联动）' : '' }}
           </template>
           <template v-else-if="adjustType === 'DEDUCT'">
-            业绩扣减：修改后合同金额必须小于原金额{{ receivedTotal > 0 ? '；该合同已有实收，业绩扣多少实收扣多少（含新增角色人/人员不一致/新签小于实收/扣减超实收时不联动，需另行实收调整）' : '' }}
+            业绩扣减：修改后合同金额必须小于原金额{{ receivedTotal > 0 ? '；该合同已有实收，业绩扣多少实收扣多少（含新增角色人/人员不一致/新签大于实收/扣减超实收时不联动，需另行实收调整）' : '' }}
           </template>
           <template v-else>
             业绩增加：修改后合同金额必须大于原金额{{ receivedTotal > 0 ? '；该合同已有实收，业绩增加不联动实收，需另行调整' : '' }}
@@ -521,9 +521,10 @@ function receivedSkipReason(nrs: EditRow[], existing: EditRow[]): string {
     || [...expectEmpIds].some(id => !receivedEmpIds.has(id))) {
     return '新签与实收人员不一致';
   }
-  // 规则②：调整后新签合计小于实收合计不联动
-  if (targetTotal.value < receivedTotal.value) {
-    return '调整后新签合计小于实收合计';
+  // 规则②：调整后新签合计大于实收合计不联动（新签仍覆盖实收，实收不动；
+  // 新签 ≤ 实收时才联动。2026-10-16 修正：原写成小于号，方向反了）
+  if (targetTotal.value > receivedTotal.value) {
+    return '调整后新签合计大于实收合计';
   }
   // 规则②补充（DEDUCT）：个别经纪人扣减额超过其实收不联动
   if (adjustType.value === 'DEDUCT') {
