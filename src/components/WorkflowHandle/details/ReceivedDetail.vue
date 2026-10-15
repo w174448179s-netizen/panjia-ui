@@ -15,7 +15,13 @@
         <el-descriptions-item label="审批人">{{ detail.approverName || '—' }}</el-descriptions-item>
         <el-descriptions-item label="审批时间">{{ formatDateTime(detail.approveTime) }}</el-descriptions-item>
         <el-descriptions-item label="实收合计">
-          <span class="amount amount-red">¥{{ formatAmount(detail.receivedAmount) }}</span>
+          <template v-if="detail.receivedAdjusted">
+            <span class="amount-strike">¥{{ formatAmount(detail.originalReceivedAmount) }}</span>
+            <span class="amount-arrow">→</span>
+            <span class="amount amount-red">¥{{ formatAmount(detail.receivedAmount) }}</span>
+            <el-tag type="warning" size="small" effect="plain" style="margin-left: 6px">已调整</el-tag>
+          </template>
+          <span v-else class="amount amount-red">¥{{ formatAmount(detail.receivedAmount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="应收合计" :span="2">
           <template v-if="detail.expectedAdjusted">
@@ -59,9 +65,14 @@
           <el-table-column label="角色占比" align="center" width="90">
             <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
           </el-table-column>
-          <el-table-column label="实收业绩" align="right" width="120">
+          <el-table-column label="实收业绩" align="right" width="180">
             <template #default="scope">
-              <span class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
+              <template v-if="scope.row.receivedAdjusted">
+                <span class="amount-strike">¥{{ formatAmount(scope.row.originalAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
+              </template>
+              <span v-else class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="新签业绩" align="right" width="180">

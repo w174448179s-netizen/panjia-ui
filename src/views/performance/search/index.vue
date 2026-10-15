@@ -156,9 +156,15 @@
               <span v-else class="amount-ink">{{ formatMoney(row.expectConvertedAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="canSeeRealAmount" label="实收业绩" align="right" width="130">
+          <!-- 实收业绩：实收调整（含联动）生效时展示「原值 → 调整后值」，同新签口径 -->
+          <el-table-column v-if="canSeeRealAmount" label="实收业绩" align="right" width="200">
             <template #default="{ row }">
-              <span class="amount-red">{{ formatMoney(row.realAmount) }}</span>
+              <template v-if="isRealAdjusted(row)">
+                <span class="amount-strike">{{ formatMoney(row.realOriginalAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount-red">{{ formatMoney(row.realAmount) }}</span>
+              </template>
+              <span v-else class="amount-red">{{ formatMoney(row.realAmount) }}</span>
             </template>
           </el-table-column>
 
@@ -258,7 +264,12 @@
           </span>
         </el-descriptions-item>
         <el-descriptions-item v-if="canSeeRealAmount" label="实收业绩">
-          <span class="amount-red">{{ formatMoney(detailDialog.row.realAmount) }}</span>
+          <template v-if="isRealAdjusted(detailDialog.row)">
+            <span class="amount-strike">{{ formatMoney(detailDialog.row?.realOriginalAmount) }}</span>
+            <span class="amount-arrow">→</span>
+            <span class="amount-red">{{ formatMoney(detailDialog.row?.realAmount) }}</span>
+          </template>
+          <span v-else class="amount-red">{{ formatMoney(detailDialog.row?.realAmount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="调整单状态">
           <el-tag v-if="detailDialog.row.adjustStatus" :type="adjustStatusTagType(detailDialog.row.adjustStatus)" size="small">
@@ -311,7 +322,12 @@
           </template>
           <span v-if="canSeeRealAmount" class="summary-sep">|</span>
           <template v-if="canSeeRealAmount">
-            实收合计：<b class="amount-red">{{ formatMoney(detailSummary.totalReal) }}</b>
+            实收合计：
+            <template v-if="detailSummary.hasRealAdjustRow">
+              <b class="summary-struck">{{ formatMoney(detailSummary.totalRealOriginal) }}</b>
+              <span class="summary-arrow">→</span>
+            </template>
+            <b class="amount-red">{{ formatMoney(detailSummary.totalReal) }}</b>
           </template>
         </span>
       </div>
@@ -359,9 +375,15 @@
             <span v-else class="amount-ink">{{ formatMoney(row.expectConvertedAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="canSeeRealAmount" label="实收业绩" align="right" width="130">
+        <!-- 实收业绩：实收调整生效时展示「原值 → 调整后值」；负数为红冲行 -->
+        <el-table-column v-if="canSeeRealAmount" label="实收业绩" align="right" width="200">
           <template #default="{ row }">
-            <span :class="row.realAmount < 0 ? 'amount-red' : 'amount-ink'">{{ formatMoney(row.realAmount) }}</span>
+            <template v-if="isRowRealAdjusted(row)">
+              <span class="amount-strike">{{ formatMoney(row.originalRealAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span :class="row.realAmount < 0 ? 'amount-red' : 'amount-ink'">{{ formatMoney(row.realAmount) }}</span>
+            </template>
+            <span v-else :class="row.realAmount < 0 ? 'amount-red' : 'amount-ink'">{{ formatMoney(row.realAmount) }}</span>
             <el-tag v-if="row.realAmount < 0" type="danger" size="small" effect="plain" class="adjust-tag">红冲</el-tag>
           </template>
         </el-table-column>
@@ -564,6 +586,15 @@ const isRowAdjusted = (
   row: { expectAmount?: number | string | null; originalExpectAmount?: number | string | null } | null | undefined,
 ): boolean => !!row && row.originalExpectAmount != null && num(row.expectAmount) !== num(row.originalExpectAmount);
 
+/** 实收业绩是否按「原值 → 调整后值」展示：原值与当前值不等即为已调整（口径同新签） */
+const isRealAdjusted = (
+  row: { realAmount?: number | string | null; realOriginalAmount?: number | string | null } | null | undefined,
+): boolean => !!row && row.realOriginalAmount != null && num(row.realAmount) !== num(row.realOriginalAmount);
+/** 合同明细行实收：字段名不同（originalRealAmount），判定口径与列表行一致 */
+const isRowRealAdjusted = (
+  row: { realAmount?: number | string | null; originalRealAmount?: number | string | null } | null | undefined,
+): boolean => !!row && row.originalRealAmount != null && num(row.realAmount) !== num(row.originalRealAmount);
+
 const formatDate = (val?: string | null): string => {
   if (!val) return '—';
   return val.replace('T', ' ').substring(0, 19);
@@ -660,6 +691,9 @@ const detailSummary = computed(() => {
     totalExpectConverted: list.reduce((s, r) => s + num(r.expectConvertedAmount), 0),
     hasAdjustRow: list.some((r) => isRowAdjusted(r)),
     totalReal: list.reduce((s, r) => s + num(r.realAmount), 0),
+    // 实收原值合计：originalRealAmount 由 SQL 兜底，未调整时等于当前值
+    totalRealOriginal: list.reduce((s, r) => s + num(r.originalRealAmount ?? r.realAmount), 0),
+    hasRealAdjustRow: list.some((r) => isRowRealAdjusted(r)),
   };
 });
 

@@ -96,9 +96,15 @@
             <span v-else class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="实收金额" align="right" width="150">
+        <!-- 实收金额：实收调整（含结佣联动）生效时展示「原值 → 调整后值」 -->
+        <el-table-column label="实收金额" align="right" width="210">
           <template #default="{ row }">
-            <span class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
+            <template v-if="row.receivedAmountAdjusted && row.originalReceivedAmount != null">
+              <span class="amount-strike">¥{{ formatAmount(row.originalReceivedAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
+            </template>
+            <span v-else class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="150">
@@ -288,7 +294,12 @@
           <span class="amount amount-red">¥{{ formatAmount(detailDialog.amount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="实收合计">
-          <span class="amount amount-received">¥{{ formatAmount(detailDialog.receivedAmount) }}</span>
+          <template v-if="detailDialog.receivedAmountAdjusted">
+            <span class="amount-strike">¥{{ formatAmount(detailDialog.originalReceivedAmount) }}</span>
+            <span class="amount-arrow">→</span>
+            <span class="amount amount-received">¥{{ formatAmount(detailDialog.receivedAmount) }}</span>
+          </template>
+          <span v-else class="amount amount-received">¥{{ formatAmount(detailDialog.receivedAmount) }}</span>
         </el-descriptions-item>
       </el-descriptions>
 
@@ -326,9 +337,14 @@
             <span :class="['amount', num(row.amount) < 0 ? 'amount-negative' : 'amount-ink']">{{ formatAmount(row.amount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="实收金额" align="right" width="120">
+        <el-table-column label="实收金额" align="right" width="200">
           <template #default="{ row }">
-            <span class="amount amount-received">{{ formatAmount(row.receivedAmount) }}</span>
+            <template v-if="row.originalReceivedAmount != null && num(row.originalReceivedAmount) !== num(row.receivedAmount)">
+              <span class="amount-strike">{{ formatAmount(row.originalReceivedAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount amount-received">{{ formatAmount(row.receivedAmount) }}</span>
+            </template>
+            <span v-else class="amount amount-received">{{ formatAmount(row.receivedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="120">
@@ -634,6 +650,8 @@ const detailDialog = reactive({
   receivedStatus: null as string | null,
   amount: 0 as number | string,
   receivedAmount: 0 as number | string,
+  originalReceivedAmount: null as number | string | null,
+  receivedAmountAdjusted: false,
 });
 const detailActiveRows = computed(() => detailList.value.filter((r) => r.factStatus !== 'VOIDED'));
 const detailTotal = computed(() =>
@@ -661,6 +679,8 @@ const openDetail = async (row: CommissionContractVO) => {
   detailDialog.receivedStatus = row.receivedStatus ?? null;
   detailDialog.amount = row.amount ?? 0;
   detailDialog.receivedAmount = row.receivedAmount ?? 0;
+  detailDialog.originalReceivedAmount = row.originalReceivedAmount ?? null;
+  detailDialog.receivedAmountAdjusted = !!row.receivedAmountAdjusted;
   detailList.value = [];
   detailDialog.visible = true;
   detailLoading.value = true;
@@ -680,16 +700,19 @@ const openDetail = async (row: CommissionContractVO) => {
       }),
     ]);
     const realRows: PerformanceManageRow[] = realRes.data ?? [];
-    // 实收金额按 工号+角色 聚合（跨期合计）
+    // 实收金额按 工号+角色 聚合（跨期合计）；originalAmount 为实收事实链调整前原值（未调整时=amount）
     const realMap = new Map<string, number>();
+    const realOriginalMap = new Map<string, number>();
     for (const r of realRows) {
       if (r.factStatus === 'VOIDED') continue;
       const key = `${r.employeeCode ?? ''}|${r.roleType ?? ''}`;
       realMap.set(key, (realMap.get(key) ?? 0) + num(r.amount));
+      realOriginalMap.set(key, (realOriginalMap.get(key) ?? 0) + num(r.originalAmount ?? r.amount));
     }
     detailList.value = (expectRes.data ?? []).map((r: PerformanceManageRow) => ({
       ...r,
       receivedAmount: realMap.get(`${r.employeeCode ?? ''}|${r.roleType ?? ''}`) ?? 0,
+      originalReceivedAmount: realOriginalMap.get(`${r.employeeCode ?? ''}|${r.roleType ?? ''}`) ?? 0,
     }));
   } catch { /* 拦截器处理 */ } finally {
     detailLoading.value = false;
@@ -806,6 +829,18 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 12px;
+}
+
+/* 调整「原值 → 调整后值」展示（与业绩查询/实收详情同款） */
+.amount-strike {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #c0c4cc;
+  text-decoration: line-through;
+}
+.amount-arrow {
+  margin: 0 4px;
+  color: #c0c4cc;
 }
 
 .batch-hint {

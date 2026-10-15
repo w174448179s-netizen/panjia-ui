@@ -126,9 +126,15 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="实收金额" align="right" width="150">
+        <!-- 实收金额：实收调整（含结佣联动）生效时展示「原值 → 调整后值」 -->
+        <el-table-column label="实收金额" align="right" width="210">
           <template #default="{ row }">
-            <span class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
+            <template v-if="row.receivedAmountAdjusted && row.originalReceivedAmount != null">
+              <span class="amount-strike">¥{{ formatAmount(row.originalReceivedAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
+            </template>
+            <span v-else class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="190">

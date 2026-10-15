@@ -316,6 +316,10 @@ export interface PerformanceFactSearch {
   expectAmount: number;       // 新签业绩合计（调整后当前值）
   expectOriginalAmount: number; // 新签业绩合计（调整前；未调整时 = expectAmount）
   realAmount: number;         // 实收业绩合计
+  /** 实收业绩原值合计（调整前；未调整时 = realAmount，实收加人调整新增行按 0 计） */
+  realOriginalAmount?: number;
+  /** 实收业绩是否已被调整（同 sourceKey 存在 REVERSED 的实收明细） */
+  realAdjusted?: boolean;
   hasAdjust: boolean;         // 是否有调整
   /** 新签业绩折算后金额（expectAmount × 当前生效折算因子） */
   expectConvertedAmount: number;
@@ -391,6 +395,8 @@ export interface PerformanceSearchDetailRow {
   /** 调整前新签业绩折算后金额（originalExpectAmount × 当前生效折算因子） */
   originalExpectConvertedAmount: number;
   realAmount: number;         // 实收业绩（按 source_key 配对，无实收为 0）
+  /** 实收业绩原值（调整前：同 source_key 最早一条 REVERSED 实收明细；实收加人调整新增行按 0；未调整时 = realAmount） */
+  originalRealAmount?: number;
   settled?: boolean;           // 是否已结算
   settleDate?: string;        // 结算日期
   manualAdjust?: boolean;     // 增加角色人（ADD_MEMBER）调整产生的新签行，展示「新签调整」标记

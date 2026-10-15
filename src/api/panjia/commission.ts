@@ -204,6 +204,8 @@ export interface CommissionItemDetail {
   newMemberPending?: boolean;
   /** 实收金额（同合同+员工+角色 当前 ACTIVE 实收明细金额合计） */
   receivedAmount?: number;
+  /** 实收金额原值（调整前：配对 rd 行 sourceKey 链最早 REVERSED 金额，实收加人新人行按 0；未调整时 = receivedAmount） */
+  originalReceivedAmount?: number;
 }
 
 export interface CommissionApplyQuery extends PageQuery {
@@ -265,6 +267,10 @@ export interface CommissionContractVO {
   createTime?: string;
   /** 实收金额合计（PERF_REAL 事实当前 ACTIVE 金额求和，即客户实际到账） */
   receivedAmount?: number;
+  /** 实收金额原值合计（调整前：实收事实链最早 REVERSED 金额求和；仅 receivedAmountAdjusted=true 时有值） */
+  originalReceivedAmount?: number;
+  /** 实收金额已被实收调整（含联动）改过（区别于结佣业绩链标记 receivedAdjusted） */
+  receivedAmountAdjusted?: boolean;
 }
 
 /** 批量操作结果（批量发起 / 批量审批） */
