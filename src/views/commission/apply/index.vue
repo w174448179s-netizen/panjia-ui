@@ -63,6 +63,8 @@
             结佣合计：<b>{{ formatAmount(summary.totalAmount) }}</b>
             <span class="summary-sub">（折算后 {{ formatAmount(summary.totalConvertedAmount) }}）</span>
             <span class="summary-sep">｜</span>
+            实收合计：<b>{{ formatAmount(summary.totalReceivedAmount) }}</b>
+            <span class="summary-sep">｜</span>
             新签合计：<b>{{ formatAmount(summary.totalExpectedAmount) }}</b>
             <span class="summary-sub">（折算后 {{ formatAmount(summary.totalExpectedConvertedAmount) }}）</span>
           </span>
@@ -92,6 +94,11 @@
               <span class="amount amount-zero">¥0.00</span>
             </el-tooltip>
             <span v-else class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="实收金额" align="right" width="150">
+          <template #default="{ row }">
+            <span class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="150">
@@ -280,6 +287,9 @@
         <el-descriptions-item label="结佣合计">
           <span class="amount amount-red">¥{{ formatAmount(detailDialog.amount) }}</span>
         </el-descriptions-item>
+        <el-descriptions-item label="实收合计">
+          <span class="amount amount-received">¥{{ formatAmount(detailDialog.receivedAmount) }}</span>
+        </el-descriptions-item>
       </el-descriptions>
 
       <div class="detail-summary-bar">
@@ -314,6 +324,11 @@
         <el-table-column label="新签业绩" align="right" width="120">
           <template #default="{ row }">
             <span :class="['amount', num(row.amount) < 0 ? 'amount-negative' : 'amount-ink']">{{ formatAmount(row.amount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="实收金额" align="right" width="120">
+          <template #default="{ row }">
+            <span class="amount amount-received">{{ formatAmount(row.receivedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="120">
@@ -358,7 +373,7 @@ const queryParams = reactive({
 });
 
 // 汇总统计：后端按过滤后全集返回（跨页全局，不随分页变化）
-const emptySummary = () => ({ contractCount: 0, employeeCount: 0, detailCount: 0, totalAmount: 0, totalConvertedAmount: 0, totalExpectedAmount: 0, totalExpectedConvertedAmount: 0 });
+const emptySummary = () => ({ contractCount: 0, employeeCount: 0, detailCount: 0, totalAmount: 0, totalConvertedAmount: 0, totalExpectedAmount: 0, totalExpectedConvertedAmount: 0, totalReceivedAmount: 0 });
 const summary = ref(emptySummary());
 
 // 数字安全转换
@@ -427,6 +442,7 @@ const getList = async () => {
       totalConvertedAmount: num(data?.summary?.totalConvertedAmount),
       totalExpectedAmount: num(data?.summary?.totalExpectedAmount),
       totalExpectedConvertedAmount: num(data?.summary?.totalExpectedConvertedAmount),
+      totalReceivedAmount: num(data?.summary?.totalReceivedAmount),
     };
   } catch {
     contractList.value = [];
@@ -617,6 +633,7 @@ const detailDialog = reactive({
   businessDate: '',
   receivedStatus: null as string | null,
   amount: 0 as number | string,
+  receivedAmount: 0 as number | string,
 });
 const detailActiveRows = computed(() => detailList.value.filter((r) => r.factStatus !== 'VOIDED'));
 const detailTotal = computed(() =>
@@ -643,17 +660,37 @@ const openDetail = async (row: CommissionContractVO) => {
   detailDialog.businessDate = row.businessDate ? String(row.businessDate) : '';
   detailDialog.receivedStatus = row.receivedStatus ?? null;
   detailDialog.amount = row.amount ?? 0;
+  detailDialog.receivedAmount = row.receivedAmount ?? 0;
   detailList.value = [];
   detailDialog.visible = true;
   detailLoading.value = true;
   try {
     // period 不传：跨全部期间汇总新签构成，与发起时明细合并口径一致
-    const res: any = await performanceApi.listManageContractDetails({
-      period: '',
-      factType: 'PERF_EXPECT',
-      contractNos: no,
-    });
-    detailList.value = res.data ?? [];
+    // 同时查 PERF_REAL 获取每人实收金额，按 工号+角色 合并到新签明细行
+    const [expectRes, realRes]: [any, any] = await Promise.all([
+      performanceApi.listManageContractDetails({
+        period: '',
+        factType: 'PERF_EXPECT',
+        contractNos: no,
+      }),
+      performanceApi.listManageContractDetails({
+        period: '',
+        factType: 'PERF_REAL',
+        contractNos: no,
+      }),
+    ]);
+    const realRows: PerformanceManageRow[] = realRes.data ?? [];
+    // 实收金额按 工号+角色 聚合（跨期合计）
+    const realMap = new Map<string, number>();
+    for (const r of realRows) {
+      if (r.factStatus === 'VOIDED') continue;
+      const key = `${r.employeeCode ?? ''}|${r.roleType ?? ''}`;
+      realMap.set(key, (realMap.get(key) ?? 0) + num(r.amount));
+    }
+    detailList.value = (expectRes.data ?? []).map((r: PerformanceManageRow) => ({
+      ...r,
+      receivedAmount: realMap.get(`${r.employeeCode ?? ''}|${r.roleType ?? ''}`) ?? 0,
+    }));
   } catch { /* 拦截器处理 */ } finally {
     detailLoading.value = false;
   }
@@ -751,6 +788,9 @@ onMounted(() => {
   }
   .amount-red {
     color: #f56c6c;
+  }
+  .amount-received {
+    color: #e6a23c;
   }
   .amount-zero {
     color: #c0c4cc;

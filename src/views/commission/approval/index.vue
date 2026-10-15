@@ -79,6 +79,8 @@
             结佣合计：<b>{{ formatAmount(summary.totalAmount) }}</b>
             <span class="summary-sub">（折算后 {{ formatAmount(summary.totalConvertedAmount) }}）</span>
             <span class="summary-sep">｜</span>
+            实收合计：<b>{{ formatAmount(summary.totalReceivedAmount) }}</b>
+            <span class="summary-sep">｜</span>
             新签合计：<b>{{ formatAmount(summary.totalExpectedAmount) }}</b>
             <span class="summary-sub">（折算后 {{ formatAmount(summary.totalExpectedConvertedAmount) }}）</span>
           </span>
@@ -122,6 +124,11 @@
             <div v-else-if="row.adjustPending && row.adjustPendingType === 'ADD_MEMBER'" class="pending-line">
               <el-tag type="success" size="small" effect="plain">增加角色人审批中</el-tag>
             </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="实收金额" align="right" width="150">
+          <template #default="{ row }">
+            <span class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="190">
@@ -386,7 +393,7 @@ const queryParams = reactive({
 });
 
 // 汇总统计：后端按过滤后全集返回（跨页全局，不随分页变化）
-const emptySummary = () => ({ contractCount: 0, employeeCount: 0, detailCount: 0, totalAmount: 0, totalConvertedAmount: 0, totalExpectedAmount: 0, totalExpectedConvertedAmount: 0 });
+const emptySummary = () => ({ contractCount: 0, employeeCount: 0, detailCount: 0, totalAmount: 0, totalConvertedAmount: 0, totalExpectedAmount: 0, totalExpectedConvertedAmount: 0, totalReceivedAmount: 0 });
 const summary = ref(emptySummary());
 
 // 数字安全转换
@@ -491,6 +498,7 @@ const getList = async () => {
       totalConvertedAmount: num(data?.summary?.totalConvertedAmount),
       totalExpectedAmount: num(data?.summary?.totalExpectedAmount),
       totalExpectedConvertedAmount: num(data?.summary?.totalExpectedConvertedAmount),
+      totalReceivedAmount: num(data?.summary?.totalReceivedAmount),
     };
   } catch {
     contractList.value = [];
@@ -809,6 +817,9 @@ onMounted(async () => {
     color: #303133;
   }
   .amount-warn {
+    color: #e6a23c;
+  }
+  .amount-received {
     color: #e6a23c;
   }
   .pending-line {

@@ -202,6 +202,8 @@ export interface CommissionItemDetail {
   adjustPendingDelta?: number;
   /** 增加角色人虚拟行标记（审批中新角色人尚无明细行，后端合成） */
   newMemberPending?: boolean;
+  /** 实收金额（同合同+员工+角色 当前 ACTIVE 实收明细金额合计） */
+  receivedAmount?: number;
 }
 
 export interface CommissionApplyQuery extends PageQuery {
@@ -261,6 +263,8 @@ export interface CommissionContractVO {
   receivedStatus?: string;   // 实收审批状态 APPROVED / SUBMITTED / DRAFT / null
   applicantId?: number;
   createTime?: string;
+  /** 实收金额合计（PERF_REAL 事实当前 ACTIVE 金额求和，即客户实际到账） */
+  receivedAmount?: number;
 }
 
 /** 批量操作结果（批量发起 / 批量审批） */

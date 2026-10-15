@@ -31,6 +31,10 @@
             <span class="amount amount-ink">¥{{ formatAmount(totalConvertedAmount) }}</span>
           </span>
         </el-descriptions-item>
+        <!-- 实收合计：客户实际到账金额（PERF_REAL 事实合计） -->
+        <el-descriptions-item label="实收合计">
+          <span class="amount amount-received">¥{{ formatAmount(totalReceivedAmount) }}</span>
+        </el-descriptions-item>
         <!-- 新签合计（应收业绩）：有调整时展示「原值 → 调整后值」，折算后同形式 -->
         <el-descriptions-item label="新签合计">
           <template v-if="detailAdjusted">
@@ -107,6 +111,12 @@
               </template>
               <span v-else class="amount" :class="scope.row.manualAdjust ? 'amount-positive' : 'amount-red'">¥{{ formatAmount(scope.row.amount) }}</span>
               <span v-if="scope.row.manualAdjust" class="new-member-delta">（新增）</span>
+            </template>
+          </el-table-column>
+          <!-- 实收金额：同合同+员工+角色 当前 ACTIVE 实收明细金额合计（客户实际到账，跨期） -->
+          <el-table-column label="实收金额" align="right" width="120">
+            <template #default="scope">
+              <span class="amount amount-received">¥{{ formatAmount(scope.row.receivedAmount) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="折算后" align="right" width="190">
@@ -245,6 +255,8 @@ const { load: loadEmployees, name: employeeName } = useEmployeeMap();
 /** 头部「折算后合计」：按明细逐行折算后金额求和，与表格同源，避免合计与明细对不上 */
 const totalConvertedAmount = computed(() => items.value.reduce((s, it) => s + num(it.convertedAmount), 0));
 const totalExpectedConvertedAmount = computed(() => items.value.reduce((s, it) => s + num(it.expectedConvertedAmount), 0));
+/** 实收合计：按明细逐行实收金额求和（同表格列口径） */
+const totalReceivedAmount = computed(() => items.value.reduce((s, it) => s + num(it.receivedAmount), 0));
 /** 调整前应收的折算后合计：与明细列同源，供「应收合计」展示「原折算 → 调整后折算」 */
 const totalOriginalExpectedConvertedAmount = computed(() =>
   items.value.reduce((s, it) => s + num(it.originalConvertedAmount), 0));
@@ -527,6 +539,8 @@ onMounted(loadDetail);
 .amount-positive { color: #67c23a; font-weight: 600; }
 .amount-negative { color: #f56c6c; font-weight: 600; }
 .amount-warn { color: #e6a23c; font-weight: 600; }
+/* 实收金额：客户实际到账，醒目橙色（与列表页「实收金额」列同色系） */
+.amount-received { color: #e6a23c; }
 .form-tip {
   font-size: 12px;
   color: #909399;
