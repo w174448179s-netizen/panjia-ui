@@ -246,17 +246,29 @@
           <el-divider content-position="left">个税规则</el-divider>
           <el-row :gutter="20">
             <el-col :span="12">
+              <el-form-item label="个税模式">
+                <el-radio-group v-model="policyJson.tax.mode">
+                  <el-radio label="EXTERNAL">外部回补（推荐）</el-radio>
+                  <el-radio label="ENGINE">内部引擎试算</el-radio>
+                </el-radio-group>
+                <div class="form-tip" v-if="policyJson.tax.mode === 'EXTERNAL'">
+                  系统内不预扣个税（记 0）。算薪后在「工资批次 → 导入个税」粘贴扣缴端算税结果回补，得到最终实发。
+                </div>
+                <div class="form-tip" v-else>内部简化试算（缺专项附加扣除、真实累计口径），结果仅供对照，不建议作为发放依据。</div>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
               <el-form-item label="个税起征点">
-                <el-input-number v-model="policyJson.tax.threshold" :min="0" :controls="false" style="width:100%" />
+                <el-input-number v-model="policyJson.tax.threshold" :min="0" :controls="false" style="width:100%" :disabled="policyJson.tax.mode === 'EXTERNAL'" />
               </el-form-item>
             </el-col>
             <el-col :span="12">
               <el-form-item label="扣除社保">
-                <el-switch v-model="policyJson.tax.deductSocial" />
+                <el-switch v-model="policyJson.tax.deductSocial" :disabled="policyJson.tax.mode === 'EXTERNAL'" />
               </el-form-item>
             </el-col>
           </el-row>
-          <el-form-item label="税率阶梯">
+          <el-form-item v-if="policyJson.tax.mode !== 'EXTERNAL'" label="税率阶梯">
             <el-table :data="policyJson.tax.brackets" border size="small" style="width:100%">
               <el-table-column label="下限(元)" width="130">
                 <template #default="{ row }">
@@ -764,7 +776,7 @@ const policyJson = reactive({
   points: { penaltyFee: 0, gradeA: 0, gradeB: 0, deductA: 0, deductB: 0, deductC: 0 },
   commercialInsurance: 0,
   dormitoryFee: 0,
-  tax: { threshold: 0, deductSocial: true, brackets: [] as Array<{ min: number; rate: number; quick: number }> },
+  tax: { mode: 'EXTERNAL', threshold: 0, deductSocial: true, brackets: [] as Array<{ min: number; rate: number; quick: number }> },
 });
 
 const loadPolicy = (row: PolicyRule) => {
@@ -798,6 +810,7 @@ const loadPolicy = (row: PolicyRule) => {
   policyJson.commercialInsurance = j.commercialInsurance ?? 0;
   policyJson.dormitoryFee = j.dormitoryFee ?? 0;
   policyJson.tax = {
+    mode: j.tax?.mode ?? 'EXTERNAL',
     threshold: j.tax?.threshold ?? 5000,
     deductSocial: j.tax?.deductSocial ?? true,
     brackets: (j.tax?.brackets ?? []).map((b: any) => ({ ...b })),

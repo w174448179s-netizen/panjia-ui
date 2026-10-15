@@ -91,6 +91,9 @@
             >
               账户对齐
             </el-button>
+            <el-button v-hasPermi="['people:employee:add']" type="info" plain icon="User" @click="handleVirtualOpen">
+              店组虚拟人
+            </el-button>
           </div>
         </div>
       </template>
@@ -496,6 +499,57 @@
       </template>
     </el-dialog>
 
+    <!-- 店组虚拟人一键新建 -->
+    <el-dialog v-model="virtualDialog.visible" title="店组虚拟人初始化" width="860px" append-to-body>
+      <el-alert type="info" :closable="false" show-icon class="virtual-tip">
+        <template #title>
+          贝壳新签经纪人为空时按店组编码挂靠虚拟人。勾选店组并填写编码（如 CD_15_1696157），
+          一键写入编码并补建虚拟人（工号 = 编码，姓名 = 部门名，不建登录账户）。已存在的自动跳过。
+        </template>
+      </el-alert>
+      <el-table
+        ref="virtualTableRef"
+        v-loading="virtualDialog.loading"
+        border
+        :data="virtualDialog.rows"
+        size="small"
+        max-height="440"
+        @selection-change="handleVirtualSelectionChange"
+      >
+        <el-table-column type="selection" width="45" align="center" :selectable="(row: VirtualEmployeeCandidate) => !row.hasVirtual" />
+        <el-table-column label="门店/组别" prop="deptFullName" min-width="200" show-overflow-tooltip />
+        <el-table-column label="店组编码" min-width="180">
+          <template #default="scope">
+            <el-input
+              v-model="scope.row.deptCategory"
+              :disabled="scope.row.hasVirtual"
+              placeholder="如 CD_15_1696157"
+              size="small"
+              clearable
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="虚拟人" width="90" align="center">
+          <template #default="scope">
+            <el-tag v-if="scope.row.hasVirtual" type="success" size="small">已有</el-tag>
+            <el-tag v-else-if="scope.row.deptCategory" type="warning" size="small">待建</el-tag>
+            <el-tag v-else type="info" size="small">未配编码</el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="virtualDialog.visible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="virtualDialog.submitting"
+          :disabled="virtualSelections.length === 0"
+          @click="handleVirtualSubmit"
+        >
+          一键新建（{{ virtualSelections.length }}）
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- 员工导入 -->
     <el-dialog v-model="importDialog.visible" title="员工导入" width="680px" append-to-body @closed="resetImport">
       <div v-loading="importDialog.loading" element-loading-text="正在上传文件，请稍候..." class="import-dialog-body">
@@ -602,7 +656,7 @@
 </template>
 
 <script setup name="PeopleEmployee" lang="ts">
-import { onUnmounted } from 'vue';
+import { onUnmounted, nextTick } from 'vue';
 import { employeeApi } from '@/api/panjia/employee';
 import type {
   Employee,
@@ -614,7 +668,8 @@ import type {
   PeopleImportBatch,
   PeopleImportIssue,
   PostOption,
-  ReconcileResult
+  ReconcileResult,
+  VirtualEmployeeCandidate
 } from '@/api/panjia/types';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import modal from '@/plugins/modal';
@@ -831,6 +886,72 @@ const fieldLabel = (field: string) =>
 
 const fieldTagType = (field: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' =>
   ({ dept: 'primary', posts: 'warning', status: 'danger' } as Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'>)[field] ?? 'info';
+
+// ==================== 店组虚拟人 ====================
+const virtualTableRef = ref();
+const virtualDialog = reactive({
+  visible: false,
+  loading: false,
+  submitting: false,
+  rows: [] as VirtualEmployeeCandidate[]
+});
+const virtualSelections = ref<VirtualEmployeeCandidate[]>([]);
+
+const loadVirtualCandidates = async () => {
+  virtualDialog.loading = true;
+  try {
+    const res = await employeeApi.virtualCandidates();
+    virtualDialog.rows = res.data ?? [];
+    // 默认勾选「已配编码但缺虚拟人」的行
+    await nextTick();
+    virtualDialog.rows.forEach((row) => {
+      if (!row.hasVirtual && row.deptCategory) {
+        virtualTableRef.value?.toggleRowSelection(row, true);
+      }
+    });
+  } finally {
+    virtualDialog.loading = false;
+  }
+};
+
+const handleVirtualOpen = () => {
+  virtualDialog.visible = true;
+  loadVirtualCandidates();
+};
+
+const handleVirtualSelectionChange = (rows: VirtualEmployeeCandidate[]) => {
+  virtualSelections.value = rows;
+};
+
+const handleVirtualSubmit = async () => {
+  const items = virtualSelections.value
+    .filter((r) => !r.hasVirtual)
+    .map((r) => ({ deptId: r.deptId, deptCategory: (r.deptCategory ?? '').trim() }));
+  if (items.some((i) => !i.deptCategory)) {
+    modal.msgWarning('勾选行存在未填写的店组编码，请补全或取消勾选');
+    return;
+  }
+  await modal.confirm(`将为 ${items.length} 个店组写入编码并补建虚拟人，是否继续？`);
+  virtualDialog.submitting = true;
+  try {
+    const res = await employeeApi.initVirtualEmployees(items);
+    const r = res.data;
+    const parts: string[] = [];
+    if (r?.createdCodes?.length) parts.push(`新建 ${r.createdCodes.length} 个`);
+    if (r?.skippedCodes?.length) parts.push(`已存在跳过 ${r.skippedCodes.length} 个`);
+    if (r?.conflictedCodes?.length) parts.push(`编码冲突 ${r.conflictedCodes.length} 个（${r.conflictedCodes.join('、')}）`);
+    modal.msgSuccess(parts.length ? parts.join('，') : '无变更');
+    if (r?.conflictedCodes?.length) {
+      // 有冲突：刷新候选留在弹窗让用户修正
+      loadVirtualCandidates();
+    } else {
+      virtualDialog.visible = false;
+    }
+    getList();
+  } finally {
+    virtualDialog.submitting = false;
+  }
+};
 
 // ==================== 员工导入 ====================
 const importUploadRef = ref();

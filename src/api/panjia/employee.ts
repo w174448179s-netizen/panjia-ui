@@ -10,7 +10,10 @@ import type {
   PeopleImportBatch,
   PeopleImportIssue,
   PostOption,
-  ReconcileResult
+  ReconcileResult,
+  VirtualEmployeeCandidate,
+  VirtualEmployeeInitItem,
+  VirtualEmployeeInitResult
 } from './types';
 
 /**
@@ -49,6 +52,14 @@ export const employeeApi = {
   /** 员工-系统账户对齐（自动修复 dept/岗位角色/离职禁用差异） */
   reconcile() {
     return panjiaRequest.post<ReconcileResult>('/people/reconcile/run');
+  },
+  /** 店组虚拟人候选列表（全部启用部门 + 店组编码 + 是否已有虚拟人） */
+  virtualCandidates() {
+    return panjiaRequest.get<VirtualEmployeeCandidate[]>('/people/employee/virtual/candidates');
+  },
+  /** 一键新建店组虚拟人（写入店组编码 + 幂等补建虚拟人） */
+  initVirtualEmployees(data: VirtualEmployeeInitItem[]) {
+    return panjiaRequest.post<VirtualEmployeeInitResult>('/people/employee/virtual/init', data);
   },
   // ==================== V6.0 员工导入 ====================
   /** 上传文件导入员工（阶段A同步诊断，阶段B异步落地，返回 batchId 供轮询）；effectiveDate 为覆盖导入的生效时间，不传默认当前时间 */

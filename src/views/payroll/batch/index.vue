@@ -64,6 +64,14 @@
         <el-button :disabled="!details.length" :loading="exporting" @click="exportExcel">
           <el-icon><Download /></el-icon>&nbsp;导出（七 sheet）
         </el-button>
+        <!-- 个税回补（外部回补模式）：算薪后在提交审批前，粘贴扣缴端算税结果回补个税 -->
+        <el-tooltip
+          v-if="canImportTax"
+          content="从个税系统（扣缴端）导出 Excel 后复制粘贴，回补算税结果并重算实发"
+          placement="top"
+        >
+          <el-button type="warning" plain :disabled="!details.length" @click="openTaxImport">导入个税</el-button>
+        </el-tooltip>
       </div>
       <el-tabs v-model="detailTab" class="detail-tabs" @tab-change="onTabChange">
         <!-- ══════════ 工资表 sheet（28 列，含经纪人 + 店长） ══════════ -->
@@ -451,6 +459,49 @@
         <el-button type="primary" :loading="creating" @click="createBatch">创建</el-button>
       </template>
     </el-dialog>
+
+    <!-- 个税回补导入弹窗：粘贴扣缴端导出的「工号/姓名 + 本月个税」，解析匹配后回补 -->
+    <el-dialog v-model="taxImportVisible" title="导入个税（外部回补）" width="760px" destroy-on-close>
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px"
+        title="在个税系统（扣缴端）算税后，将其导出 Excel 的「工号或姓名 + 本月个税」两列直接复制粘贴到下方。每行一条，支持「工号 税额」「姓名 税额」「工号 姓名 税额」三种格式，导入后自动重算实发。" />
+      <el-input v-model="taxPaste" type="textarea" :rows="7"
+        placeholder="示例（可直接从 Excel 复制两列粘贴）：
+A1001	156.30
+张三	0
+A1002 李四	88.50" />
+      <div v-if="taxRows.length" style="margin: 12px 0 8px; display: flex; align-items: center; gap: 12px;">
+        <el-tag :type="taxUnmatched > 0 ? 'warning' : 'success'">
+          解析 {{ taxRows.length }} 行：匹配 {{ taxMatchedRows.length }} 人，异常 {{ taxUnmatched }} 行
+        </el-tag>
+        <span v-if="taxMatchedRows.length && taxMatchedRows.length < details.length" class="tax-tip">
+          批次共 {{ details.length }} 人，未导入的员工个税按 0 计
+        </span>
+      </div>
+      <el-table v-if="taxRows.length" :data="taxRows" size="small" max-height="240" border>
+        <el-table-column label="解析内容" prop="raw" min-width="150" show-overflow-tooltip />
+        <el-table-column label="匹配员工" min-width="130">
+          <template #default="{ row }">{{ row.emp ? `${row.emp.employeeCode || ''} ${row.emp.employeeName || ''}` : '—' }}</template>
+        </el-table-column>
+        <el-table-column label="本月个税" width="100" align="right">
+          <template #default="{ row }">{{ row.tax != null ? Number(row.tax).toFixed(2) : '—' }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.status === 'ok'" type="success" size="small">匹配</el-tag>
+            <el-tag v-else-if="row.status === 'dup'" type="warning" size="small">重名</el-tag>
+            <el-tag v-else-if="row.status === 'bad'" type="danger" size="small">未匹配</el-tag>
+            <el-tag v-else type="info" size="small">忽略</el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="taxImportVisible = false">取消</el-button>
+        <el-button type="primary" :loading="taxImporting"
+          :disabled="!taxMatchedRows.length || taxUnmatched > 0" @click="submitTaxImport">
+          确认导入（{{ taxMatchedRows.length }} 人）
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -739,6 +790,80 @@ const viewDetail = async (row: PayrollBatch) => {
   details.value = (res as any).data ?? [];
 };
 
+/* ───────────── 个税回补导入（外部个税系统算税后粘贴回填） ─────────────
+ * 外部回补模式下算薪个税记 0；本弹窗粘贴扣缴端导出的「工号/姓名 + 税额」，
+ * 前端解析匹配（工号精确 → 姓名唯一）后提交 employeeId → 税额，后端覆盖 tax、
+ * 重算 net、重汇总批次。须在提交审批/锁定/发放前完成。 */
+const canImportTax = computed(
+  () => !!currentBatch.value && ['CALCULATED', 'REVIEWING'].includes(currentBatch.value.status),
+);
+const taxImportVisible = ref(false);
+const taxPaste = ref('');
+const taxImporting = ref(false);
+interface TaxPasteRow {
+  raw: string;
+  tax: number | null;
+  status: 'ok' | 'dup' | 'bad' | 'skip';
+  emp?: PayrollDetail;
+}
+
+const parseTaxPaste = (text: string): TaxPasteRow[] => {
+  if (!text?.trim()) return [];
+  return text
+    .split(/\r?\n/)
+    .map((line): TaxPasteRow | null => {
+      const raw = line.trim();
+      if (!raw) return null;
+      const tokens = raw.split(/[\t,，;；|\s]+/).filter(Boolean);
+      // 最后一个数值列 = 税额；首 token = 工号或姓名（中间列忽略，兼容「工号 姓名 税额」）
+      const taxRaw = tokens[tokens.length - 1]?.replace(/[¥￥元\s]/g, '');
+      const tax = taxRaw && /^-?\d+(\.\d+)?$/.test(taxRaw) ? Number(taxRaw) : null;
+      if (tax == null || tokens.length < 2) {
+        return { raw, tax, status: 'skip' }; // 表头/空行/无税额行
+      }
+      const key = tokens[0];
+      const byCode = details.value.filter((d) => d.employeeCode && String(d.employeeCode) === key);
+      if (byCode.length === 1) {
+        return { raw, tax, status: 'ok', emp: byCode[0] };
+      }
+      const byName = details.value.filter((d) => d.employeeName === key);
+      if (byName.length === 1) {
+        return { raw, tax, status: 'ok', emp: byName[0] };
+      }
+      // 重名必须用工号区分；完全未匹配多为复制了非本批次员工
+      return { raw, tax, status: byName.length > 1 ? 'dup' : 'bad' };
+    })
+    .filter((r): r is TaxPasteRow => r !== null);
+};
+
+const taxRows = computed(() => parseTaxPaste(taxPaste.value));
+const taxMatchedRows = computed(() => taxRows.value.filter((r) => r.status === 'ok' && r.emp && r.tax != null));
+const taxUnmatched = computed(() => taxRows.value.filter((r) => r.status === 'dup' || r.status === 'bad').length);
+
+const openTaxImport = () => {
+  taxPaste.value = '';
+  taxImportVisible.value = true;
+};
+
+const submitTaxImport = async () => {
+  if (!currentBatch.value || !taxMatchedRows.value.length) return;
+  const payload: Record<string, number> = {};
+  taxMatchedRows.value.forEach((r) => { payload[String(r.emp!.employeeId)] = r.tax as number; });
+  taxImporting.value = true;
+  try {
+    await payrollApi.importTax(currentBatch.value.id, payload);
+    ElMessage.success(`个税已回补（${Object.keys(payload).length} 人），实发已重算`);
+    taxImportVisible.value = false;
+    await loadBatches();
+    // 明细弹窗仍开着：静默刷新明细与批次合计
+    await viewDetail(currentBatch.value);
+  } catch {
+    /* 拦截器处理 */
+  } finally {
+    taxImporting.value = false;
+  }
+};
+
 /* ───────────── 新签/结佣全月明细懒加载（首屏不拉，切 tab/导出时按需加载） ───────────── */
 const ensurePerfData = async (kind: 'newsign' | 'commission') => {
   if (perfLoaded[kind] || perfLoading.value[kind] || !currentBatch.value) return;
@@ -952,7 +1077,12 @@ onMounted(() => {
 .detail-toolbar {
   display: flex;
   justify-content: flex-end;
+  gap: 12px;
   margin-bottom: 12px;
+}
+.tax-tip {
+  color: #909399;
+  font-size: 12px;
 }
 
 .tab-toolbar {

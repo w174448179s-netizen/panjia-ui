@@ -51,6 +51,8 @@ export interface PayrollDetail {
   tax: number;
   net: number;
   employerSocial: number;
+  /** 个税来源：ENGINE=内部引擎试算，EXTERNAL=外部个税系统导入回补 */
+  taxSource?: string;
   /** 当月新签业绩（折算后金额） */
   newSignPerformance?: number;
   /** 当月结佣业绩（不折算） */
@@ -176,6 +178,10 @@ export const payrollApi = {
   },
   submit(id: number) {
     return panjiaRequest.post<PayrollBatch>(`/payroll/batch/${id}/submit`);
+  },
+  /** 个税回补导入（外部个税系统算税后回填）：员工ID(字符串雪花) → 本月个税 */
+  importTax(id: number | string, taxByEmployeeId: Record<string, number>) {
+    return panjiaRequest.post<PayrollBatch>(`/payroll/batch/${id}/tax-import`, taxByEmployeeId);
   },
   pay(id: number) {
     return panjiaRequest.post<PayrollBatch>(`/payroll/batch/${id}/pay`);

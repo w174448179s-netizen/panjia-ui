@@ -151,6 +151,28 @@ export interface ReconcileResult {
   items: ReconcileItem[];
 }
 
+/** 店组虚拟人候选行 */
+export interface VirtualEmployeeCandidate {
+  deptId: string | number;
+  deptFullName: string;
+  deptCategory: string | null;
+  hasVirtual: boolean;
+  virtualEmployeeId: string | number | null;
+}
+
+/** 一键新建店组虚拟人请求项 */
+export interface VirtualEmployeeInitItem {
+  deptId: string | number;
+  deptCategory: string;
+}
+
+/** 一键新建店组虚拟人结果 */
+export interface VirtualEmployeeInitResult {
+  createdCodes: string[];
+  skippedCodes: string[];
+  conflictedCodes: string[];
+}
+
 // ==================== 导入域 V2.0（单据导入：业绩/考勤/积分/费用） ====================
 
 /** 单据导入批次 */
