@@ -117,7 +117,10 @@
         <el-table-column label="迟到(分)" align="center" prop="lateMinutes" width="80" />
         <el-table-column label="缺卡次数" align="center" prop="missingCardCount" width="80" />
         <el-table-column label="旷工(天)" align="center" prop="absentDays" width="80" />
-        <el-table-column label="请假(天)" align="center" prop="leaveDays" width="80" />
+        <el-table-column label="事假(天)" align="center" prop="personalLeaveDays" width="80" />
+        <el-table-column label="病假诊所(天)" align="center" prop="sickClinicDays" width="100" />
+        <el-table-column label="病假二甲(天)" align="center" prop="sickHospitalDays" width="100" />
+        <el-table-column label="请假合计(天)" align="center" prop="leaveDays" width="100" />
         <el-table-column label="备注" align="center" prop="remark" min-width="120" show-overflow-tooltip />
         <el-table-column label="操作" align="center" width="200" fixed="right">
           <template #default="scope">
@@ -271,8 +274,18 @@
         <el-form-item label="旷工天数" prop="absentDays">
           <el-input-number v-model="form.absentDays" :min="0" :step="0.5" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="请假天数" prop="leaveDays">
-          <el-input-number v-model="form.leaveDays" :min="0" :step="0.5" style="width: 100%" />
+        <el-form-item label="事假天数" prop="personalLeaveDays">
+          <el-input-number v-model="form.personalLeaveDays" :min="0" :step="0.5" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="病假天数（诊所类证明）" prop="sickClinicDays">
+          <el-input-number v-model="form.sickClinicDays" :min="0" :step="0.5" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="病假天数（二甲医院以上）" prop="sickHospitalDays">
+          <el-input-number v-model="form.sickHospitalDays" :min="0" :step="0.5" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="请假合计天数">
+          <el-input-number :model-value="leaveTotal" disabled style="width: 100%" />
+          <div class="form-tip">合计 = 事假 + 病假诊所 + 病假二甲，自动计算；旧数据未分类差额默认计入事假，请按实际调整</div>
         </el-form-item>
         <el-form-item label="备注" prop="remark">
           <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="512" show-word-limit />
@@ -420,12 +433,18 @@ const createEmptyForm = (): AttendanceSaveForm => ({
   lateMinutes: 0,
   missingCardCount: 0,
   absentDays: 0,
-  leaveDays: 0,
+  personalLeaveDays: 0,
+  sickClinicDays: 0,
+  sickHospitalDays: 0,
   remark: '',
   version: undefined
 });
 
 const form = reactive<AttendanceSaveForm>(createEmptyForm());
+
+/** 请假合计（只读）= 事假 + 病假诊所 + 病假二甲，与后端 buildRecord 口径一致 */
+const leaveTotal = computed(() =>
+  Number(((form.personalLeaveDays ?? 0) + (form.sickClinicDays ?? 0) + (form.sickHospitalDays ?? 0)).toFixed(2)));
 
 const rules: FormRules = {
   employeeId: [{ required: true, message: '请选择员工', trigger: 'change' }],
@@ -449,6 +468,9 @@ const handleEdit = (row: AttendanceRecord) => {
   resetForm();
   dialog.editId = row.id;
   dialog.isEdit = true;
+  // 旧数据可能只有合计 leaveDays、分项为 0：未分类差额默认计入事假，保证合计不丢失
+  const splitSum = (row.personalLeaveDays ?? 0) + (row.sickClinicDays ?? 0) + (row.sickHospitalDays ?? 0);
+  const residual = Number(Math.max(0, (row.leaveDays ?? 0) - splitSum).toFixed(2));
   Object.assign(form, {
     employeeId: row.employeeId,
     attendMonth: row.attendMonth,
@@ -458,7 +480,9 @@ const handleEdit = (row: AttendanceRecord) => {
     lateMinutes: row.lateMinutes ?? 0,
     missingCardCount: row.missingCardCount ?? 0,
     absentDays: row.absentDays ?? 0,
-    leaveDays: row.leaveDays ?? 0,
+    personalLeaveDays: Number(((row.personalLeaveDays ?? 0) + residual).toFixed(2)),
+    sickClinicDays: row.sickClinicDays ?? 0,
+    sickHospitalDays: row.sickHospitalDays ?? 0,
     remark: row.remark || '',
     version: row.version
   });
@@ -667,6 +691,13 @@ onMounted(() => {
 .people-attendance-page {
   .search-panel {
     margin-bottom: 10px;
+  }
+
+  .form-tip {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--el-text-color-secondary);
   }
 
   .toolbar-shell {

@@ -43,7 +43,16 @@
           <el-table-column label="旷工(天)" prop="absentDays" width="90" align="center">
             <template #default="{ row }">{{ fmt(row.absentDays) }}</template>
           </el-table-column>
-          <el-table-column label="请假(天)" prop="leaveDays" width="90" align="center">
+          <el-table-column label="事假(天)" prop="personalLeaveDays" width="90" align="center">
+            <template #default="{ row }">{{ fmt(row.personalLeaveDays) }}</template>
+          </el-table-column>
+          <el-table-column label="病假诊所(天)" prop="sickClinicDays" width="100" align="center">
+            <template #default="{ row }">{{ fmt(row.sickClinicDays) }}</template>
+          </el-table-column>
+          <el-table-column label="病假二甲(天)" prop="sickHospitalDays" width="100" align="center">
+            <template #default="{ row }">{{ fmt(row.sickHospitalDays) }}</template>
+          </el-table-column>
+          <el-table-column label="请假合计(天)" prop="leaveDays" width="100" align="center">
             <template #default="{ row }">{{ fmt(row.leaveDays) }}</template>
           </el-table-column>
           <el-table-column label="备注" prop="remark" min-width="140" show-overflow-tooltip />

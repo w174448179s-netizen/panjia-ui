@@ -383,6 +383,12 @@ export interface AttendanceRecord {
   employeeId: string;
   attendMonth: string;
   leaveDays?: number;
+  /** 事假天数 */
+  personalLeaveDays?: number;
+  /** 病假（诊所类证明）天数 */
+  sickClinicDays?: number;
+  /** 病假（二甲医院以上）天数 */
+  sickHospitalDays?: number;
   absentDays?: number;
   lateCount?: number;
   lateMinutes?: number;
@@ -428,6 +434,12 @@ export interface AttendanceSaveForm {
   employeeId?: string;
   attendMonth?: string;
   leaveDays?: number;
+  /** 事假天数 */
+  personalLeaveDays?: number;
+  /** 病假（诊所类证明）天数 */
+  sickClinicDays?: number;
+  /** 病假（二甲医院以上）天数 */
+  sickHospitalDays?: number;
   absentDays?: number;
   lateCount?: number;
   lateMinutes?: number;
@@ -452,6 +464,12 @@ export interface AttendanceAbnormalRow {
   missingCardCount?: number;
   absentDays?: number;
   leaveDays?: number;
+  /** 事假天数 */
+  personalLeaveDays?: number;
+  /** 病假（诊所类证明）天数 */
+  sickClinicDays?: number;
+  /** 病假（二甲医院以上）天数 */
+  sickHospitalDays?: number;
   remark?: string | null;
 }
 

@@ -35,8 +35,11 @@
             <el-table-column label="迟到次数" align="center" prop="lateCount" width="90" />
             <el-table-column label="迟到(分)" align="center" prop="lateMinutes" width="90" />
             <el-table-column label="缺卡次数" align="center" prop="missingCardCount" width="90" />
-            <el-table-column label="旷工(天)" align="center" prop="absentDays" width="90" />
-            <el-table-column label="请假(天)" align="center" prop="leaveDays" width="90" />
+            <el-table-column label="旷工(天)" align="center" prop="absentDays" width="80" />
+            <el-table-column label="事假(天)" align="center" prop="personalLeaveDays" width="80" />
+            <el-table-column label="病假诊所(天)" align="center" prop="sickClinicDays" width="100" />
+            <el-table-column label="病假二甲(天)" align="center" prop="sickHospitalDays" width="100" />
+            <el-table-column label="请假合计(天)" align="center" prop="leaveDays" width="100" />
             <el-table-column label="备注" align="center" prop="remark" min-width="120" show-overflow-tooltip />
             <el-table-column label="操作" align="center" width="200" fixed="right">
               <template #default="{ row }">
@@ -258,7 +261,9 @@ const FIELD_DEFS = [
   { field: 'lateMinutes', fieldName: '迟到(分)', kind: 'int' },
   { field: 'missingCardCount', fieldName: '缺卡次数', kind: 'int' },
   { field: 'absentDays', fieldName: '旷工(天)', kind: 'decimal' },
-  { field: 'leaveDays', fieldName: '请假(天)', kind: 'decimal' },
+  { field: 'personalLeaveDays', fieldName: '事假(天)', kind: 'decimal' },
+  { field: 'sickClinicDays', fieldName: '病假诊所(天)', kind: 'decimal' },
+  { field: 'sickHospitalDays', fieldName: '病假二甲(天)', kind: 'decimal' },
   { field: 'remark', fieldName: '备注', kind: 'text' }
 ] as const;
 
