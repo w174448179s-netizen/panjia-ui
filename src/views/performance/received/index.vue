@@ -469,6 +469,11 @@ const { loading: approvalLoading, handleBizApproval } = useBizApproval(
     const res: any = await receivedApi.getInstanceId(businessId);
     return res.data?.instanceId ?? null;
   },
+  // 在途任务认领：拥有当前节点角色但不在待办快照时（如事后补赋财务角色的总监）自动认领后再审批
+  async (businessId) => {
+    const res: any = await receivedApi.claim(businessId);
+    return res.data === true;
+  },
 );
 const onBizApprove = (businessId: string | number) =>
   handleBizApproval(businessId, (task) => workflowHandleRef.value?.open(task));

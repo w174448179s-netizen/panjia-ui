@@ -16,8 +16,15 @@ import type { FlowTaskVO } from '@/api/workflow/task/types';
  *
  * 默认通过 getInfo（workflow:instance:query 权限）获取实例 ID；
  * 业务域可传 fetchInstanceId 回调，用业务自身权限的轻量端点获取实例 ID，绕过 workflow:instance:query。
+ *
+ * 可选 claimTask 回调（在途任务认领）：待办快照中查不到本人任务时调用，
+ * 后端校验当前用户拥有节点所需角色后把自己追加为办理人（如事后补赋财务角色的总监），
+ * 认领成功后重新拉取待办并正常打开审批弹窗；认领失败的后端提示由请求拦截器统一弹出。
  */
-export function useBizApproval(fetchInstanceId?: (businessId: string | number) => Promise<string | number | null>) {
+export function useBizApproval(
+  fetchInstanceId?: (businessId: string | number) => Promise<string | number | null>,
+  claimTask?: (businessId: string | number) => Promise<boolean>,
+) {
   const loading = ref(false);
 
   /**
@@ -80,7 +87,20 @@ export function useBizApproval(fetchInstanceId?: (businessId: string | number) =
     open: (task: FlowTaskVO) => void,
     onHandled?: () => void,
   ) => {
-    const task = await getMyTaskByBusinessId(businessId);
+    let task = await getMyTaskByBusinessId(businessId);
+    // 待办快照中查不到：尝试按节点角色认领（事后补赋角色的场景），认领成功则重查待办
+    if (!task && claimTask) {
+      let claimed = false;
+      try {
+        claimed = await claimTask(businessId);
+      } catch {
+        // 认领失败原因（角色不匹配/无待办）已由请求拦截器弹出，这里不再重复提示
+        return;
+      }
+      if (claimed) {
+        task = await getMyTaskByBusinessId(businessId);
+      }
+    }
     if (!task) {
       ElMessage.info('该单据当前不在您的审批范围内');
       return;

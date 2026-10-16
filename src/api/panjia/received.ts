@@ -119,6 +119,9 @@ export const receivedApi = {
   /** 按审批单 ID 查流程实例 ID（绕过 workflow:instance:query 权限） */
   getInstanceId: (id: string | number) =>
     panjiaRequest.get<{ instanceId: string | number }>(`/performance/received/${id}/instance`),
+  /** 认领当前节点待办（拥有节点所需角色但不在授权快照时，如事后补赋财务角色） */
+  claim: (id: string | number) =>
+    panjiaRequest.post<boolean>(`/performance/received/${id}/claim`),
   /** 驳回后重新提交 */
   resubmit: (id: string | number) =>
     panjiaRequest.post<void>(`/performance/received/${id}/resubmit`),
