@@ -98,7 +98,7 @@
                       <template v-if="receivedAmountChanged(row)">
                         <span class="amount-strike">¥{{ formatAmount(row.originalReceivedAmount) }}</span>
                         <span class="amount-arrow">→</span>
-                        <span class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
+                        <span class="amount" :class="deltaClass(row.receivedAmount, row.originalReceivedAmount) || 'amount-red'">¥{{ formatAmount(row.receivedAmount) }}</span>
                       </template>
                       <template v-else>
                         <span class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
@@ -117,9 +117,16 @@
         <el-table-column label="新签业绩" align="right" width="200">
           <template #default="{ row }">
             <template v-if="isAdjusted(row)">
-              <span class="amount-strike">¥{{ formatAmount(row.originalExpectedAmount) }}</span>
-              <span class="amount-arrow">→</span>
-              <span class="amount amount-red">¥{{ formatAmount(row.expectedAmount) }}</span>
+              <!-- 原值与现值不等：展示「原值 → 调整后」；相等（AMOUNT 类总额不变的重分配）仅加「已调整」标识 -->
+              <template v-if="expectedAmountChanged(row)">
+                <span class="amount-strike">¥{{ formatAmount(row.originalExpectedAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount" :class="deltaClass(row.expectedAmount, row.originalExpectedAmount) || 'amount-red'">¥{{ formatAmount(row.expectedAmount) }}</span>
+              </template>
+              <template v-else>
+                <span class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
+                <el-tag type="warning" size="small" effect="plain" class="adjust-tag">已调整</el-tag>
+              </template>
             </template>
             <span v-else class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
           </template>
@@ -207,7 +214,7 @@
           <template v-if="detailReceivedAdjusted">
             <span class="amount-strike">¥{{ formatAmount(detailApp.originalReceivedAmount) }}</span>
             <span class="amount-arrow">→</span>
-            <span class="amount amount-red">¥{{ formatAmount(detailApp.receivedAmount) }}</span>
+            <span class="amount" :class="deltaClass(detailApp.receivedAmount, detailApp.originalReceivedAmount) || 'amount-red'">¥{{ formatAmount(detailApp.receivedAmount) }}</span>
           </template>
           <span v-else class="amount amount-red">¥{{ formatAmount(detailApp.receivedAmount) }}</span>
         </el-descriptions-item>
@@ -216,7 +223,7 @@
           <template v-if="detailAdjusted">
             <span class="amount-strike">¥{{ formatAmount(detailApp.originalExpectedAmount) }}</span>
             <span class="amount-arrow">→</span>
-            <span class="amount amount-red">¥{{ formatAmount(detailApp.expectedAmount) }}</span>
+            <span class="amount" :class="deltaClass(detailApp.expectedAmount, detailApp.originalExpectedAmount) || 'amount-red'">¥{{ formatAmount(detailApp.expectedAmount) }}</span>
           </template>
           <template v-else>
             <span class="amount amount-expected">¥{{ formatAmount(detailApp.expectedAmount) }}</span>
@@ -225,7 +232,7 @@
             折算后
             <span v-if="detailAdjusted" class="amount-strike">¥{{ formatAmount(detailApp.originalExpectedConvertedAmount) }}</span>
             <span v-if="detailAdjusted" class="amount-arrow">→</span>
-            <span class="amount amount-ink">¥{{ formatAmount(detailApp.expectedConvertedAmount) }}</span>
+            <span class="amount" :class="deltaClass(detailApp.expectedConvertedAmount, detailApp.originalExpectedConvertedAmount) || 'amount-ink'">¥{{ formatAmount(detailApp.expectedConvertedAmount) }}</span>
           </span>
         </el-descriptions-item>
         <el-descriptions-item label="签约/认购时间">{{ formatDateTime(detailApp.businessDate) }}</el-descriptions-item>
@@ -264,7 +271,7 @@
               <template v-if="isFactReceivedAdjusted(scope.row)">
                 <span class="amount-strike">¥{{ formatAmount(scope.row.originalAmount) }}</span>
                 <span class="amount-arrow">→</span>
-                <span class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
+                <span class="amount" :class="deltaClass(scope.row.amount, scope.row.originalAmount) || 'amount-red'">¥{{ formatAmount(scope.row.amount) }}</span>
               </template>
               <span v-else class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
             </template>
@@ -275,7 +282,7 @@
               <template v-if="isAdjusted(scope.row)">
                 <span class="amount-strike">¥{{ formatAmount(scope.row.originalExpectedAmount) }}</span>
                 <span class="amount-arrow">→</span>
-                <span class="amount amount-red">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
+                <span class="amount" :class="deltaClass(scope.row.expectedAmount, scope.row.originalExpectedAmount) || 'amount-red'">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
               </template>
               <span v-else class="amount amount-expected">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
             </template>
@@ -475,6 +482,18 @@ const formatAmount = (n: number | string | null | undefined) =>
   n == null ? '0.00' : num(n).toFixed(2);
 
 /**
+ * 调整增减方向着色：调整后 > 原值 = 增加（绿），调整后 < 原值 = 扣减（红）；
+ * 无原值或无变化时返回空串（沿用调用处的默认色）。
+ */
+const deltaClass = (after?: number | string | null, before?: number | string | null): string => {
+  if (after === undefined || after === null || before === undefined || before === null) return '';
+  const diff = num(after) - num(before);
+  if (diff > 0) return 'amount-positive';
+  if (diff < 0) return 'amount-negative';
+  return '';
+};
+
+/**
  * 是否按「原值 → 调整后值」展示：需后端 expectedAdjusted 标记与原值同时成立。
  * 两者缺一（如老数据无提交快照）就退回单值展示，避免出现「0.00 → 12000.00」这类误导。
  * 列表行（ReceivedApply）与每人明细行（ReceivedFact）共用同一判定。
@@ -498,6 +517,14 @@ const isReceivedAdjusted = (
 const receivedAmountChanged = (
   row: { originalReceivedAmount?: number | string | null; receivedAmount?: number | string | null } | null | undefined,
 ): boolean => num(row?.originalReceivedAmount) !== num(row?.receivedAmount);
+
+/**
+ * 新签金额是否发生变动（口径同 receivedAmountChanged）：
+ * 相等（AMOUNT 类业绩调整合同总额不变的重分配）仍有调整发生，仅加「已调整」标签标识。
+ */
+const expectedAmountChanged = (
+  row: { originalExpectedAmount?: number | string | null; expectedAmount?: number | string | null } | null | undefined,
+): boolean => num(row?.originalExpectedAmount) !== num(row?.expectedAmount);
 
 /** 每人实收明细行：调整前字段名为 originalAmount，判定口径与列表行一致 */
 const isFactReceivedAdjusted = (
@@ -1050,6 +1077,17 @@ onMounted(async () => {
   font-variant-numeric: tabular-nums;
 }
 .amount-red {
+  color: #f56c6c;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* 调整增减方向着色：增加=绿、扣减=红，便于一眼区分增减 */
+.amount-positive {
+  color: #67c23a;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.amount-negative {
   color: #f56c6c;
   font-weight: 600;
   font-variant-numeric: tabular-nums;

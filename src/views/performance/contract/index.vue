@@ -105,21 +105,26 @@
             </el-button>
           </template>
         </el-table-column>
-        <!-- 新签业绩：未调整只显示本值；已调整显示「原值 → 调整后业绩」；有审批中调整单显示「当前 → 目标金额 + 审批中标记」；已生效加人调整显示「新增角色人」 -->
+        <!-- 新签业绩：未调整只显示本值；已调整显示「原值 → 调整后业绩」；审批通过但总额不变的调整（金额相等）只加「已调整」标识；有审批中调整单显示「当前 → 目标金额 + 审批中标记」；已生效加人调整显示「新增角色人」 -->
         <el-table-column label="新签业绩" align="right" width="230" fixed="left">
           <template #default="scope">
             <template v-if="isAdjusted(scope.row)">
               <span class="amount-strike">{{ formatAmount(scope.row.originalAmount) }}</span>
               <span class="amount-arrow">→</span>
-              <span class="amount amount-contract">{{ formatAmount(scope.row.amount) }}</span>
+              <span class="amount" :class="deltaClass(scope.row.amount, scope.row.originalAmount) || 'amount-contract'">{{ formatAmount(scope.row.amount) }}</span>
             </template>
             <template v-else-if="scope.row.adjustPending">
               <span>{{ formatAmount(scope.row.amount) }}</span>
               <template v-if="scope.row.adjustPendingType === 'AMOUNT' && scope.row.adjustPendingAmount != null">
                 <span class="amount-arrow">→</span>
-                <span class="amount amount-contract">{{ formatAmount(scope.row.adjustPendingAmount) }}</span>
+                <span class="amount" :class="deltaClass(scope.row.adjustPendingAmount, scope.row.amount) || 'amount-contract'">{{ formatAmount(scope.row.adjustPendingAmount) }}</span>
               </template>
               <el-tag type="warning" size="small" effect="plain" style="margin-left: 6px">调整审批中</el-tag>
+            </template>
+            <!-- 审批通过但合同总额未变（如 AMOUNT 类重分配）：原值=现值，仍要明确标识「有过调整」 -->
+            <template v-else-if="scope.row.originalAmount != null">
+              <span class="amount-original">{{ formatAmount(scope.row.amount) }}</span>
+              <el-tag type="warning" size="small" effect="plain" style="margin-left: 6px">已调整</el-tag>
             </template>
             <span v-else class="amount-original">{{ formatAmount(scope.row.amount) }}</span>
             <div v-if="scope.row.hasAddMember" class="cell-sub">
@@ -132,7 +137,7 @@
             <template v-if="isAdjusted(scope.row)">
               <span class="amount-strike">{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
               <span class="amount-arrow">→</span>
-              <span class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
+              <span class="amount" :class="deltaClass(scope.row.convertedAmount, scope.row.originalConvertedAmount) || 'amount-ink'">{{ formatAmount(scope.row.convertedAmount) }}</span>
             </template>
             <span v-else class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
           </template>
@@ -236,12 +241,12 @@
             新签业绩合计：
             <b class="summary-struck">{{ formatAmount(detailSummary.totalOriginalAmount) }}</b>
             <span class="summary-arrow">→</span>
-            <b :class="{ 'amount-negative': detailSummary.totalAmount < 0 }">{{ formatAmount(detailSummary.totalAmount) }}</b>
+            <b :class="deltaClass(detailSummary.totalAmount, detailSummary.totalOriginalAmount)">{{ formatAmount(detailSummary.totalAmount) }}</b>
             <span class="summary-sep">|</span>
             折算后：
             <b class="summary-struck">{{ formatAmount(detailSummary.totalOriginalConvertedAmount) }}</b>
             <span class="summary-arrow">→</span>
-            <b :class="{ 'amount-negative': detailSummary.totalConvertedAmount < 0 }">{{ formatAmount(detailSummary.totalConvertedAmount) }}</b>
+            <b :class="deltaClass(detailSummary.totalConvertedAmount, detailSummary.totalOriginalConvertedAmount)">{{ formatAmount(detailSummary.totalConvertedAmount) }}</b>
           </template>
           <template v-else>
             新签业绩合计：
@@ -284,7 +289,7 @@
             <template v-if="isAdjusted(scope.row)">
               <span class="amount-strike">{{ formatAmount(scope.row.originalAmount) }}</span>
               <span class="amount-arrow">→</span>
-              <span class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
+              <span class="amount" :class="scope.row.amount < 0 ? 'amount-redink' : deltaClass(scope.row.amount, scope.row.originalAmount)">{{ formatAmount(scope.row.amount) }}</span>
               <span
                 v-if="scope.row.adjustDelta != null && Number(scope.row.adjustDelta) !== 0"
                 class="amount-delta"
@@ -301,7 +306,7 @@
                   && scope.row.adjustPendingAmount != null"
               >
                 <span class="amount-arrow">→</span>
-                <span class="amount">{{ formatAmount(scope.row.adjustPendingAmount) }}</span>
+                <span class="amount" :class="deltaClass(scope.row.adjustPendingAmount, scope.row.amount)">{{ formatAmount(scope.row.adjustPendingAmount) }}</span>
                 <span
                   v-if="scope.row.adjustPendingDelta != null && Number(scope.row.adjustPendingDelta) !== 0"
                   class="amount-delta"
@@ -318,7 +323,7 @@
             <template v-if="isAdjusted(scope.row)">
               <span class="amount-strike">{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
               <span class="amount-arrow">→</span>
-              <span class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
+              <span class="amount" :class="deltaClass(scope.row.convertedAmount, scope.row.originalConvertedAmount) || 'amount-ink'">{{ formatAmount(scope.row.convertedAmount) }}</span>
             </template>
             <span v-else class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
           </template>
@@ -746,6 +751,18 @@ const adjustDeltaClass = (v: number | undefined): string => {
 const isAdjusted = (row: { amount?: number | string | null; originalAmount?: number | string | null }): boolean =>
   row.originalAmount != null && num(row.amount) !== num(row.originalAmount);
 
+/**
+ * 调整增减方向着色：调整后 > 原值 = 增加（绿），调整后 < 原值 = 扣减（红）；
+ * 无原值或无变化时返回空串（沿用调用处的默认色）。
+ */
+const deltaClass = (after?: number | string | null, before?: number | string | null): string => {
+  if (after === undefined || after === null || before === undefined || before === null) return '';
+  const diff = num(after) - num(before);
+  if (diff > 0) return 'amount-positive';
+  if (diff < 0) return 'amount-negative';
+  return '';
+};
+
 const formatRatio = (val: number | string | undefined | null): string => {
   if (val === undefined || val === null || val === '') return '—';
   const n = Number(val);
@@ -1058,6 +1075,10 @@ onMounted(async () => {
     }
 
     .amount-negative {
+      color: #f56c6c;
+    }
+    /* 调整增减方向着色：增加=绿、扣减=红 */
+    .amount-positive {
       color: #67c23a;
     }
 
@@ -1101,18 +1122,19 @@ onMounted(async () => {
 .amount-redink {
   color: #f56c6c;
 }
-/* 调整差额小字：括号包裹、与主金额拉开间距；正差=红（业绩增加）、负差=绿（业绩减少） */
+/* 调整差额小字：括号包裹、与主金额拉开间距 */
 .amount-delta {
   font-variant-numeric: tabular-nums;
   font-size: 12px;
   font-weight: 500;
   margin-left: 6px;
 }
+/* 调整增减方向着色：增加=绿、扣减=红，便于一眼区分增减 */
 .amount-positive {
-  color: #f56c6c;
+  color: #67c23a;
 }
 .amount-negative {
-  color: #67c23a;
+  color: #f56c6c;
 }
 .redink-tag {
   margin-left: 4px;

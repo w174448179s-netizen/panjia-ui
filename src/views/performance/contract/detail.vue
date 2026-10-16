@@ -35,12 +35,12 @@
             新签业绩合计：
             <b class="summary-struck">{{ formatAmount(totalOriginalAmount) }}</b>
             <span class="summary-arrow">→</span>
-            <b :class="{ 'amount-negative': totalAmount < 0 }">{{ formatAmount(totalAmount) }}</b>
+            <b :class="deltaClass(totalAmount, totalOriginalAmount)">{{ formatAmount(totalAmount) }}</b>
             <span class="summary-sep">|</span>
             折算后：
             <b class="summary-struck">{{ formatAmount(totalOriginalConvertedAmount) }}</b>
             <span class="summary-arrow">→</span>
-            <b :class="{ 'amount-negative': totalConvertedAmount < 0 }">{{ formatAmount(totalConvertedAmount) }}</b>
+            <b :class="deltaClass(totalConvertedAmount, totalOriginalConvertedAmount)">{{ formatAmount(totalConvertedAmount) }}</b>
           </template>
           <template v-else>
             新签业绩合计：
@@ -83,7 +83,7 @@
             <template v-if="isAdjusted(scope.row)">
               <span class="amount-strike">{{ formatAmount(scope.row.originalAmount) }}</span>
               <span class="amount-arrow">→</span>
-              <span class="amount" :class="{ 'amount-redink': scope.row.amount < 0 }">{{ formatAmount(scope.row.amount) }}</span>
+              <span class="amount" :class="scope.row.amount < 0 ? 'amount-redink' : deltaClass(scope.row.amount, scope.row.originalAmount)">{{ formatAmount(scope.row.amount) }}</span>
               <span
                 v-if="scope.row.adjustDelta != null && Number(scope.row.adjustDelta) !== 0"
                 class="amount"
@@ -96,7 +96,7 @@
               <span>{{ formatAmount(scope.row.amount) }}</span>
               <template v-if="scope.row.adjustPendingType === 'AMOUNT' && scope.row.adjustPendingAmount != null">
                 <span class="amount-arrow">→</span>
-                <span class="amount">{{ formatAmount(scope.row.adjustPendingAmount) }}</span>
+                <span class="amount" :class="deltaClass(scope.row.adjustPendingAmount, scope.row.amount)">{{ formatAmount(scope.row.adjustPendingAmount) }}</span>
                 <span
                   v-if="scope.row.adjustPendingDelta != null && Number(scope.row.adjustPendingDelta) !== 0"
                   class="amount"
@@ -114,7 +114,7 @@
             <template v-if="isAdjusted(scope.row)">
               <span class="amount-strike">{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
               <span class="amount-arrow">→</span>
-              <span class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
+              <span class="amount" :class="deltaClass(scope.row.convertedAmount, scope.row.originalConvertedAmount) || 'amount-ink'">{{ formatAmount(scope.row.convertedAmount) }}</span>
             </template>
             <span v-else class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
           </template>
@@ -262,6 +262,18 @@ const num = (v: number | string | undefined | null): number => {
  */
 const isAdjusted = (row: { amount?: number | string | null; originalAmount?: number | string | null }): boolean =>
   row.originalAmount != null && num(row.amount) !== num(row.originalAmount);
+
+/**
+ * 调整增减方向着色：调整后 > 原值 = 增加（绿），调整后 < 原值 = 扣减（红）；
+ * 无原值或无变化时返回空串（沿用默认色）。
+ */
+const deltaClass = (after?: number | string | null, before?: number | string | null): string => {
+  if (after === undefined || after === null || before === undefined || before === null) return '';
+  const diff = num(after) - num(before);
+  if (diff > 0) return 'amount-positive';
+  if (diff < 0) return 'amount-negative';
+  return '';
+};
 
 const formatAmount = (val: number | string | undefined | null): string => {
   if (val === undefined || val === null || val === '') return '—';
@@ -534,6 +546,10 @@ onMounted(async () => {
     }
 
     .amount-negative {
+      color: #f56c6c;
+    }
+    /* 调整增减方向着色：增加=绿、扣减=红 */
+    .amount-positive {
       color: #67c23a;
     }
 
@@ -603,6 +619,13 @@ onMounted(async () => {
     color: #c0c4cc;
   }
   .amount-redink {
+    color: #f56c6c;
+  }
+  /* 调整增减方向着色：增加=绿、扣减=红，便于一眼区分增减 */
+  .amount-positive {
+    color: #67c23a;
+  }
+  .amount-negative {
     color: #f56c6c;
   }
   .redink-tag {

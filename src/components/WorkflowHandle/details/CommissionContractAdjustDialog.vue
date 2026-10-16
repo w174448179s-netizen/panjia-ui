@@ -655,11 +655,11 @@ defineExpose({ open });
 }
 
 .amount-positive {
-  color: var(--el-color-danger);
+  color: var(--el-color-success);
 }
 
 .amount-negative {
-  color: var(--el-color-success);
+  color: var(--el-color-danger);
 }
 
 .tip-cell {

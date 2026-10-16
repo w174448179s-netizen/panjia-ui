@@ -18,7 +18,7 @@
           <template v-if="detail.receivedAdjusted">
             <span class="amount-strike">¥{{ formatAmount(detail.originalReceivedAmount) }}</span>
             <span class="amount-arrow">→</span>
-            <span class="amount amount-red">¥{{ formatAmount(detail.receivedAmount) }}</span>
+            <span class="amount" :class="deltaClass(detail.receivedAmount, detail.originalReceivedAmount) || 'amount-red'">¥{{ formatAmount(detail.receivedAmount) }}</span>
             <el-tag type="warning" size="small" effect="plain" style="margin-left: 6px">已调整</el-tag>
           </template>
           <span v-else class="amount amount-red">¥{{ formatAmount(detail.receivedAmount) }}</span>
@@ -27,7 +27,7 @@
           <template v-if="detail.expectedAdjusted">
             <span class="amount-strike">¥{{ formatAmount(detail.originalExpectedAmount) }}</span>
             <span class="amount-arrow">→</span>
-            <span class="amount amount-expected">¥{{ formatAmount(detail.expectedAmount) }}</span>
+            <span class="amount" :class="deltaClass(detail.expectedAmount, detail.originalExpectedAmount) || 'amount-expected'">¥{{ formatAmount(detail.expectedAmount) }}</span>
           </template>
           <template v-else>
             ¥{{ formatAmount(detail.expectedAmount) }}
@@ -70,7 +70,7 @@
               <template v-if="scope.row.receivedAdjusted">
                 <span class="amount-strike">¥{{ formatAmount(scope.row.originalAmount) }}</span>
                 <span class="amount-arrow">→</span>
-                <span class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
+                <span class="amount" :class="deltaClass(scope.row.amount, scope.row.originalAmount) || 'amount-red'">¥{{ formatAmount(scope.row.amount) }}</span>
               </template>
               <span v-else class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
             </template>
@@ -80,7 +80,7 @@
               <template v-if="scope.row.expectedAdjusted">
                 <span class="amount-strike">¥{{ formatAmount(scope.row.originalExpectedAmount) }}</span>
                 <span class="amount-arrow">→</span>
-                <span class="amount">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
+                <span class="amount" :class="deltaClass(scope.row.expectedAmount, scope.row.originalExpectedAmount)">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
               </template>
               <span v-else class="amount">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
             </template>
@@ -115,6 +115,18 @@ const num = (v: number | string | null | undefined): number => {
 };
 const formatAmount = (n: number | string | null | undefined) =>
   n == null ? '0.00' : num(n).toFixed(2);
+
+/**
+ * 调整增减方向着色：调整后 > 原值 = 增加（绿），调整后 < 原值 = 扣减（红）；
+ * 无原值或无变化时返回空串（沿用调用处的默认色）。
+ */
+const deltaClass = (after?: number | string | null, before?: number | string | null): string => {
+  if (after === undefined || after === null || before === undefined || before === null) return '';
+  const diff = num(after) - num(before);
+  if (diff > 0) return 'amount-positive';
+  if (diff < 0) return 'amount-negative';
+  return '';
+};
 const formatDateTime = (val?: string | null): string => (val ? val.replace('T', ' ').substring(0, 19) : '—');
 const formatRatio = (val: number | string | undefined | null): string => {
   if (val === undefined || val === null || val === '') return '—';
@@ -175,6 +187,13 @@ onMounted(async () => {
   font-weight: 600;
 }
 .amount-red {
+  color: #f56c6c;
+}
+/* 调整增减方向着色：增加=绿、扣减=红，便于一眼区分增减 */
+.amount-positive {
+  color: #67c23a;
+}
+.amount-negative {
   color: #f56c6c;
 }
 /* 与「实收审批」详情界面同款金额样式：调整箭头 / 置灰 */
