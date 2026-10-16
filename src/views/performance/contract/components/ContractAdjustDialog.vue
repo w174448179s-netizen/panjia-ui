@@ -107,13 +107,13 @@
         </div>
         <div class="summary-cell tip-cell">
           <template v-if="adjustType === 'AMOUNT'">
-            业绩调整：修改后合同金额必须保持不变（可增加角色人重新分配）{{ receivedTotal > 0 ? '；该合同已有实收，将按「调整金额×实收÷新签」比例联动调整实收（含新增角色人/人员不一致/新签大于实收时不联动）' : '' }}
+            业绩调整：修改后合同金额必须保持不变（可增加角色人重新分配）{{ receivedTotal > 0 ? '；该合同已有实收，新签每人调增/调减多少，实收同额联动（含新增角色人自动新增实收行）' : '' }}
           </template>
           <template v-else-if="adjustType === 'DEDUCT'">
-            业绩扣减：修改后合同金额必须小于原金额{{ receivedTotal > 0 ? '；该合同已有实收，业绩扣多少实收扣多少（含新增角色人/人员不一致/新签大于实收/扣减超实收时不联动，需另行实收调整）' : '' }}
+            业绩扣减：修改后合同金额必须小于原金额{{ receivedTotal > 0 ? '；该合同已有实收，新签每人扣多少实收同额扣多少（含新增角色人；扣减超实收时实收可为负）' : '' }}
           </template>
           <template v-else>
-            业绩增加：修改后合同金额必须大于原金额{{ receivedTotal > 0 ? '；该合同已有实收，业绩增加不联动实收，需另行调整' : '' }}
+            业绩增加：修改后合同金额必须大于原金额{{ receivedTotal > 0 ? '；该合同已有实收，新签每人增多少实收同额增多少（含新增角色人自动新增实收行）' : '' }}
           </template>
         </div>
       </div>
@@ -244,7 +244,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage } from 'element-plus';
 import { performanceApi } from '@/api/panjia/performance';
 import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 import type {
@@ -306,10 +306,8 @@ const adjustType = ref<'AMOUNT' | 'DEDUCT' | 'INCREASE'>('AMOUNT');
 const totalInput = ref<number | null>(null);
 const deltaInput = ref<number | null>(null);
 const reason = ref('');
-/** 该合同实收业绩合计（无实收=0；用于类型提示与业绩增加提醒） */
+/** 该合同实收业绩合计（无实收=0；用于类型提示） */
 const receivedTotal = ref(0);
-/** 该合同各经纪人实收金额（employeeId → 实收金额；业绩扣减逐人扣减额校验用） */
-const receivedByEmp = ref<Map<string, number>>(new Map());
 let keySeq = 0;
 
 // ==================== 计算属性 ====================
@@ -336,11 +334,10 @@ async function open(payload: AdjustInfo) {
   pendingBlocked.value = false;
   pendingRows.value = [];
   receivedTotal.value = 0;
-  receivedByEmp.value = new Map();
   visible.value = true;
   loading.value = true;
   try {
-    // 并行拉取：新签明细（编辑底表，限当期）+ 实收明细（跨期，period 可空；用于类型提示/扣减逐人校验/增加提醒）
+    // 并行拉取：新签明细（编辑底表，限当期）+ 实收明细（跨期，period 可空；用于类型提示）
     const [res, realRes] = await Promise.all([
       performanceApi.listManageContractDetails({
         period: payload.period,
@@ -354,19 +351,12 @@ async function open(payload: AdjustInfo) {
         orderNos: payload.orderNo,
       }),
     ]);
-    // 实收：按经纪人聚合（业绩扣减逐人校验用）+ 合计（业绩增加提醒用）
-    const byEmp = new Map<string, number>();
+    // 实收合计（类型提示用；三类型统一同额联动实收后无需逐人明细）
     let rTotal = 0;
     for (const r of (realRes.data ?? [])) {
       if (r.factStatus === 'VOIDED') continue;
-      const amt = num(r.amount);
-      rTotal = round2(rTotal + amt);
-      if (r.employeeId != null) {
-        const k = String(r.employeeId);
-        byEmp.set(k, round2((byEmp.get(k) ?? 0) + amt));
-      }
+      rTotal = round2(rTotal + num(r.amount));
     }
-    receivedByEmp.value = byEmp;
     receivedTotal.value = rTotal;
     const allRows: PerformanceManageRow[] = (res.data ?? [])
       .filter((r: PerformanceManageRow) => r.factStatus !== 'VOIDED');
@@ -502,50 +492,6 @@ function ratioUnchanged(row: EditRow): boolean {
     || (row.originalRatioPct != null && Math.abs(num(row.ratioPct) - row.originalRatioPct) < 1e-9);
 }
 
-/**
- * 实收联动跳过条件判定（2026-10-15，与后端 linkReceivedForAdjust 同口径）：
- * 命中任一条件返回中文原因（提交前弹「实收不联动提醒」用），未命中返回空串。
- * 仅在 adjustType 为 AMOUNT / DEDUCT 且 receivedTotal > 0 时调用。
- */
-function receivedSkipReason(nrs: EditRow[], existing: EditRow[]): string {
-  // 规则①：含新增角色人不联动（新人在实收侧无对应行）
-  if (nrs.length) {
-    return '含新增角色人';
-  }
-  // 规则③：新签人员集合与实收人员集合不一致不联动
-  const expectEmpIds = new Set(
-    existing.filter(r => r.employeeId != null).map(r => String(r.employeeId)),
-  );
-  const receivedEmpIds = new Set(receivedByEmp.value.keys());
-  if (expectEmpIds.size !== receivedEmpIds.size
-    || [...expectEmpIds].some(id => !receivedEmpIds.has(id))) {
-    return '新签与实收人员不一致';
-  }
-  // 规则②：调整后新签合计大于实收合计不联动（新签仍覆盖实收，实收不动；
-  // 新签 ≤ 实收时才联动。2026-10-16 修正：原写成小于号，方向反了）
-  if (targetTotal.value > receivedTotal.value) {
-    return '调整后新签合计大于实收合计';
-  }
-  // 规则②补充（DEDUCT）：个别经纪人扣减额超过其实收不联动
-  if (adjustType.value === 'DEDUCT') {
-    const deductByEmp = new Map<string, number>();
-    for (const r of existing) {
-      const d = rowDelta(r);
-      if (d < 0 && r.employeeId != null) {
-        const k = String(r.employeeId);
-        deductByEmp.set(k, round2((deductByEmp.get(k) ?? 0) - d));
-      }
-    }
-    for (const [empId, dec] of deductByEmp) {
-      const recv = receivedByEmp.value.get(empId) ?? 0;
-      if (dec - recv > 0.004) {
-        return '个别经纪人扣减额超过其实收';
-      }
-    }
-  }
-  return '';
-}
-
 function ratioText(row: EditRow): string {
   if (ratioUnchanged(row)) {
     return row.originalRatioPct == null ? '占比不改' : `原 ${trimZero(row.originalRatioPct)}%（不变）`;
@@ -616,43 +562,14 @@ async function submit() {
       ElMessage.warning('业绩扣减要求修改后合同金额必须小于原金额');
       return;
     }
-    // （2026-10-15 起）不再按实收余额阻断提交：命中不联动条件时执行端整单跳过，
-    // 下方统一弹「实收不联动提醒」，实收缺口由人工实收调整处理（否则结佣将被拦截）
+    // （2026-10-16 起）三类型统一同额联动实收，无「不联动」分支，无需弹窗提醒
   }
   if (adjustType.value === 'INCREASE') {
     if (delta <= 0) {
       ElMessage.warning('业绩增加要求修改后合同金额必须大于原金额');
       return;
     }
-    // 业绩增加不联动实收：有实收时提交前弹窗提醒，需另行发起实收调整
-    if (receivedTotal.value > 0) {
-      try {
-        await ElMessageBox.confirm(
-          `该合同已有实收业绩 ${formatAmount(receivedTotal.value)} 元，业绩增加不会联动实收，请提交后另行发起实收调整。是否继续提交？`,
-          '实收不联动提醒',
-          { confirmButtonText: '继续提交', cancelButtonText: '再检查一下', type: 'warning' },
-        );
-      } catch {
-        return; // 用户取消
-      }
-    }
-  }
-
-  // 业绩调整/业绩扣减：有实收且命中不联动条件时，提交前弹窗确认（2026-10-15）；
-  // 不联动的合同实收缺口须人工实收调整补齐，否则结佣发起端会拦截
-  if ((adjustType.value === 'AMOUNT' || adjustType.value === 'DEDUCT') && receivedTotal.value > 0) {
-    const skipReason = receivedSkipReason(nrs, existing);
-    if (skipReason) {
-      try {
-        await ElMessageBox.confirm(
-          `该合同已有实收业绩 ${formatAmount(receivedTotal.value)} 元，本次调整（${skipReason}）不会自动联动实收，提交后请另行发起实收调整（否则结佣将被拦截）。是否继续提交？`,
-          '实收不联动提醒',
-          { confirmButtonText: '继续提交', cancelButtonText: '再检查一下', type: 'warning' },
-        );
-      } catch {
-        return; // 用户取消
-      }
-    }
+    // （2026-10-16 起）业绩增加与其它类型一致同额联动实收，无需弹窗提醒
   }
 
   const detailTargets = existing.map(r => ({

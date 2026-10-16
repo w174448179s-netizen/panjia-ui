@@ -94,9 +94,16 @@
         <el-table-column label="实收业绩" align="right" width="220">
                   <template #default="{ row }">
                     <template v-if="isReceivedAdjusted(row)">
-                      <span class="amount-strike">¥{{ formatAmount(row.originalReceivedAmount) }}</span>
-                      <span class="amount-arrow">→</span>
-                      <span class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
+                      <!-- 原值与现值不等：展示「原值 → 调整后」；相等（AMOUNT 类总额不变的重分配）仅加「已调整」标识 -->
+                      <template v-if="receivedAmountChanged(row)">
+                        <span class="amount-strike">¥{{ formatAmount(row.originalReceivedAmount) }}</span>
+                        <span class="amount-arrow">→</span>
+                        <span class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
+                      </template>
+                      <template v-else>
+                        <span class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
+                        <el-tag type="warning" size="small" effect="plain" class="adjust-tag">已调整</el-tag>
+                      </template>
                     </template>
                     <span v-else class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
                     <div v-if="row.adjustPending" class="cell-sub">
@@ -483,6 +490,14 @@ const isAdjusted = (
 const isReceivedAdjusted = (
   row: { receivedAdjusted?: boolean | null; originalReceivedAmount?: number | string | null } | null | undefined,
 ): boolean => !!row?.receivedAdjusted && row.originalReceivedAmount != null;
+
+/**
+ * 实收金额是否发生变动：原值与现值不等才展示「原值 → 现值」；
+ * 相等（AMOUNT 类业绩调整合同总额不变的重分配）仍有调整发生，仅加「已调整」标签标识。
+ */
+const receivedAmountChanged = (
+  row: { originalReceivedAmount?: number | string | null; receivedAmount?: number | string | null } | null | undefined,
+): boolean => num(row?.originalReceivedAmount) !== num(row?.receivedAmount);
 
 /** 每人实收明细行：调整前字段名为 originalAmount，判定口径与列表行一致 */
 const isFactReceivedAdjusted = (
