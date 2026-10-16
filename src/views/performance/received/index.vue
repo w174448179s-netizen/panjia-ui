@@ -150,9 +150,13 @@
         <el-table-column label="明细条数" align="center" width="90">
           <template #default="{ row }">{{ row.itemCount ?? 0 }}</template>
         </el-table-column>
-        <el-table-column label="状态" align="center" width="100">
+        <el-table-column label="状态" align="center" width="130">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+            <!-- 审批中原因提示（人数不一致/实收不足）：审批人与申请人一眼知道卡点 -->
+            <el-tooltip v-if="row.manualReviewReason" :content="row.manualReviewReason" placement="top">
+              <el-tag type="warning" size="small" effect="plain" style="margin-top: 2px">需人工核对</el-tag>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column label="当前节点" align="center" width="100">
@@ -195,6 +199,15 @@
 
     <!-- 详情弹窗 -->
     <el-dialog v-model="showDetail" title="实收业绩审批单详情" width="960px" top="5vh">
+      <!-- 审批中原因提示：人数不一致/实收不足，让审批人一眼知道为什么需要人工核对 -->
+      <el-alert
+        v-if="detailApp && detailApp.manualReviewReason"
+        type="warning"
+        :title="detailApp.manualReviewReason"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      />
       <el-descriptions v-if="detailApp" :column="3" border size="small" class="detail-desc">
         <el-descriptions-item label="审批单号">{{ detailApp.applyNo }}</el-descriptions-item>
         <el-descriptions-item label="期间">{{ detailApp.period }}</el-descriptions-item>

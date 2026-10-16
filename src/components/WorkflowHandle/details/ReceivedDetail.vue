@@ -2,6 +2,15 @@
   <div v-loading="loading" class="wf-detail-body">
     <el-alert v-if="loadError" type="error" :title="loadError" :closable="false" show-icon />
     <template v-if="detail">
+      <!-- 审批中原因提示：人数不一致/实收不足，让审批人一眼知道为什么需要人工核对 -->
+      <el-alert
+        v-if="detail.manualReviewReason"
+        type="warning"
+        :title="detail.manualReviewReason"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      />
       <el-descriptions :column="3" border size="small" class="detail-desc">
         <el-descriptions-item label="审批单号">{{ detail.applyNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="期间">{{ detail.period || '—' }}</el-descriptions-item>
