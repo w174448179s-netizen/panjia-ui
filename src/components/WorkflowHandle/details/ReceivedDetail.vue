@@ -19,6 +19,7 @@
             <span class="amount-strike">¥{{ formatAmount(detail.originalReceivedAmount) }}</span>
             <span class="amount-arrow">→</span>
             <span class="amount" :class="deltaClass(detail.receivedAmount, detail.originalReceivedAmount) || 'amount-red'">¥{{ formatAmount(detail.receivedAmount) }}</span>
+            <span v-if="deltaParen(detail.receivedAmount, detail.originalReceivedAmount)" class="amount" :class="deltaClass(detail.receivedAmount, detail.originalReceivedAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(detail.receivedAmount, detail.originalReceivedAmount) }}</span>
             <el-tag type="warning" size="small" effect="plain" style="margin-left: 6px">已调整</el-tag>
           </template>
           <span v-else class="amount amount-red">¥{{ formatAmount(detail.receivedAmount) }}</span>
@@ -28,6 +29,7 @@
             <span class="amount-strike">¥{{ formatAmount(detail.originalExpectedAmount) }}</span>
             <span class="amount-arrow">→</span>
             <span class="amount" :class="deltaClass(detail.expectedAmount, detail.originalExpectedAmount) || 'amount-expected'">¥{{ formatAmount(detail.expectedAmount) }}</span>
+            <span v-if="deltaParen(detail.expectedAmount, detail.originalExpectedAmount)" class="amount" :class="deltaClass(detail.expectedAmount, detail.originalExpectedAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(detail.expectedAmount, detail.originalExpectedAmount) }}</span>
           </template>
           <template v-else>
             ¥{{ formatAmount(detail.expectedAmount) }}
@@ -71,6 +73,7 @@
                 <span class="amount-strike">¥{{ formatAmount(scope.row.originalAmount) }}</span>
                 <span class="amount-arrow">→</span>
                 <span class="amount" :class="deltaClass(scope.row.amount, scope.row.originalAmount) || 'amount-red'">¥{{ formatAmount(scope.row.amount) }}</span>
+                <span v-if="deltaParen(scope.row.amount, scope.row.originalAmount)" class="amount" :class="deltaClass(scope.row.amount, scope.row.originalAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(scope.row.amount, scope.row.originalAmount) }}</span>
               </template>
               <span v-else class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
             </template>
@@ -81,6 +84,7 @@
                 <span class="amount-strike">¥{{ formatAmount(scope.row.originalExpectedAmount) }}</span>
                 <span class="amount-arrow">→</span>
                 <span class="amount" :class="deltaClass(scope.row.expectedAmount, scope.row.originalExpectedAmount)">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
+                <span v-if="deltaParen(scope.row.expectedAmount, scope.row.originalExpectedAmount)" class="amount" :class="deltaClass(scope.row.expectedAmount, scope.row.originalExpectedAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(scope.row.expectedAmount, scope.row.originalExpectedAmount) }}</span>
               </template>
               <span v-else class="amount">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
             </template>
@@ -126,6 +130,17 @@ const deltaClass = (after?: number | string | null, before?: number | string | n
   if (diff > 0) return 'amount-positive';
   if (diff < 0) return 'amount-negative';
   return '';
+};
+
+/**
+ * 调整差额（括号展示，形如 (+100.00) / (-100.00)），与「新签详情」同款；
+ * 无原值或无变化时返回空串（模板可直接用作 v-if 条件）。
+ */
+const deltaParen = (after?: number | string | null, before?: number | string | null): string => {
+  if (after === undefined || after === null || before === undefined || before === null) return '';
+  const diff = num(after) - num(before);
+  if (diff === 0) return '';
+  return `(${diff > 0 ? '+' : ''}${diff.toFixed(2)})`;
 };
 const formatDateTime = (val?: string | null): string => (val ? val.replace('T', ' ').substring(0, 19) : '—');
 const formatRatio = (val: number | string | undefined | null): string => {

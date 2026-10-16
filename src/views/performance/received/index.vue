@@ -99,6 +99,7 @@
                         <span class="amount-strike">¥{{ formatAmount(row.originalReceivedAmount) }}</span>
                         <span class="amount-arrow">→</span>
                         <span class="amount" :class="deltaClass(row.receivedAmount, row.originalReceivedAmount) || 'amount-red'">¥{{ formatAmount(row.receivedAmount) }}</span>
+                        <span v-if="deltaParen(row.receivedAmount, row.originalReceivedAmount)" class="amount" :class="deltaClass(row.receivedAmount, row.originalReceivedAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(row.receivedAmount, row.originalReceivedAmount) }}</span>
                       </template>
                       <template v-else>
                         <span class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
@@ -122,6 +123,7 @@
                 <span class="amount-strike">¥{{ formatAmount(row.originalExpectedAmount) }}</span>
                 <span class="amount-arrow">→</span>
                 <span class="amount" :class="deltaClass(row.expectedAmount, row.originalExpectedAmount) || 'amount-red'">¥{{ formatAmount(row.expectedAmount) }}</span>
+                <span v-if="deltaParen(row.expectedAmount, row.originalExpectedAmount)" class="amount" :class="deltaClass(row.expectedAmount, row.originalExpectedAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(row.expectedAmount, row.originalExpectedAmount) }}</span>
               </template>
               <template v-else>
                 <span class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
@@ -215,6 +217,7 @@
             <span class="amount-strike">¥{{ formatAmount(detailApp.originalReceivedAmount) }}</span>
             <span class="amount-arrow">→</span>
             <span class="amount" :class="deltaClass(detailApp.receivedAmount, detailApp.originalReceivedAmount) || 'amount-red'">¥{{ formatAmount(detailApp.receivedAmount) }}</span>
+            <span v-if="deltaParen(detailApp.receivedAmount, detailApp.originalReceivedAmount)" class="amount" :class="deltaClass(detailApp.receivedAmount, detailApp.originalReceivedAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(detailApp.receivedAmount, detailApp.originalReceivedAmount) }}</span>
           </template>
           <span v-else class="amount amount-red">¥{{ formatAmount(detailApp.receivedAmount) }}</span>
         </el-descriptions-item>
@@ -224,6 +227,7 @@
             <span class="amount-strike">¥{{ formatAmount(detailApp.originalExpectedAmount) }}</span>
             <span class="amount-arrow">→</span>
             <span class="amount" :class="deltaClass(detailApp.expectedAmount, detailApp.originalExpectedAmount) || 'amount-red'">¥{{ formatAmount(detailApp.expectedAmount) }}</span>
+            <span v-if="deltaParen(detailApp.expectedAmount, detailApp.originalExpectedAmount)" class="amount" :class="deltaClass(detailApp.expectedAmount, detailApp.originalExpectedAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(detailApp.expectedAmount, detailApp.originalExpectedAmount) }}</span>
           </template>
           <template v-else>
             <span class="amount amount-expected">¥{{ formatAmount(detailApp.expectedAmount) }}</span>
@@ -233,6 +237,7 @@
             <span v-if="detailAdjusted" class="amount-strike">¥{{ formatAmount(detailApp.originalExpectedConvertedAmount) }}</span>
             <span v-if="detailAdjusted" class="amount-arrow">→</span>
             <span class="amount" :class="deltaClass(detailApp.expectedConvertedAmount, detailApp.originalExpectedConvertedAmount) || 'amount-ink'">¥{{ formatAmount(detailApp.expectedConvertedAmount) }}</span>
+            <span v-if="deltaParen(detailApp.expectedConvertedAmount, detailApp.originalExpectedConvertedAmount)" class="amount" :class="deltaClass(detailApp.expectedConvertedAmount, detailApp.originalExpectedConvertedAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(detailApp.expectedConvertedAmount, detailApp.originalExpectedConvertedAmount) }}</span>
           </span>
         </el-descriptions-item>
         <el-descriptions-item label="签约/认购时间">{{ formatDateTime(detailApp.businessDate) }}</el-descriptions-item>
@@ -272,6 +277,7 @@
                 <span class="amount-strike">¥{{ formatAmount(scope.row.originalAmount) }}</span>
                 <span class="amount-arrow">→</span>
                 <span class="amount" :class="deltaClass(scope.row.amount, scope.row.originalAmount) || 'amount-red'">¥{{ formatAmount(scope.row.amount) }}</span>
+                <span v-if="deltaParen(scope.row.amount, scope.row.originalAmount)" class="amount" :class="deltaClass(scope.row.amount, scope.row.originalAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(scope.row.amount, scope.row.originalAmount) }}</span>
               </template>
               <span v-else class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
             </template>
@@ -283,6 +289,7 @@
                 <span class="amount-strike">¥{{ formatAmount(scope.row.originalExpectedAmount) }}</span>
                 <span class="amount-arrow">→</span>
                 <span class="amount" :class="deltaClass(scope.row.expectedAmount, scope.row.originalExpectedAmount) || 'amount-red'">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
+                <span v-if="deltaParen(scope.row.expectedAmount, scope.row.originalExpectedAmount)" class="amount" :class="deltaClass(scope.row.expectedAmount, scope.row.originalExpectedAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(scope.row.expectedAmount, scope.row.originalExpectedAmount) }}</span>
               </template>
               <span v-else class="amount amount-expected">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
             </template>
@@ -491,6 +498,17 @@ const deltaClass = (after?: number | string | null, before?: number | string | n
   if (diff > 0) return 'amount-positive';
   if (diff < 0) return 'amount-negative';
   return '';
+};
+
+/**
+ * 调整差额（括号展示，形如 (+100.00) / (-100.00)），与「新签详情」同款；
+ * 无原值或无变化时返回空串（模板可直接用作 v-if 条件）。
+ */
+const deltaParen = (after?: number | string | null, before?: number | string | null): string => {
+  if (after === undefined || after === null || before === undefined || before === null) return '';
+  const diff = num(after) - num(before);
+  if (diff === 0) return '';
+  return `(${diff > 0 ? '+' : ''}${diff.toFixed(2)})`;
 };
 
 /**
