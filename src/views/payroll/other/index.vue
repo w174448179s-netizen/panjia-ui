@@ -29,7 +29,7 @@
         <el-tab-pane label="其他收入" name="INCOME">
           <el-table v-loading="loading" :data="incomeList" stripe border>
             <el-table-column label="生效区间" width="190" align="center">
-              <template #default="{ row }">{{ row.startMonth }} ~ {{ row.endMonth }}</template>
+              <template #default="{ row }">{{ row.startMonth }} ~ {{ row.endMonth || '长期' }}</template>
             </el-table-column>
             <el-table-column label="员工" min-width="160">
               <template #default="{ row }">{{ empDisplay(row.employeeId) }}</template>
@@ -67,7 +67,7 @@
         <el-tab-pane label="其他支出" name="EXPENSE">
           <el-table v-loading="loading" :data="expenseList" stripe border>
             <el-table-column label="生效区间" width="190" align="center">
-              <template #default="{ row }">{{ row.startMonth }} ~ {{ row.endMonth }}</template>
+              <template #default="{ row }">{{ row.startMonth }} ~ {{ row.endMonth || '长期' }}</template>
             </el-table-column>
             <el-table-column label="员工" min-width="160">
               <template #default="{ row }">{{ empDisplay(row.employeeId) }}</template>
@@ -116,7 +116,7 @@
           <el-date-picker v-model="form.startMonth" type="month" value-format="YYYY-MM" placeholder="生效起始月" style="width:100%" />
         </el-form-item>
         <el-form-item label="截止月" prop="endMonth">
-          <el-date-picker v-model="form.endMonth" type="month" value-format="YYYY-MM" placeholder="生效截止月" style="width:100%" />
+          <el-date-picker v-model="form.endMonth" type="month" value-format="YYYY-MM" placeholder="不填=长期生效" style="width:100%" />
         </el-form-item>
         <el-form-item label="员工" prop="employeeId">
           <EmployeeSelect v-model="form.employeeId" @change="onEmployeePicked" />
@@ -199,7 +199,9 @@ const form = ref<any>({
 const rules = {
   itemType: [{ required: true, message: '请选择类型', trigger: 'change' }],
   startMonth: [{ required: true, message: '请选择生效起始月', trigger: 'change' }],
-  endMonth: [{ required: true, message: '请选择生效截止月', trigger: 'change' }],
+  endMonth: [{ validator: (_r: any, v: string, cb: (e?: Error) => void) =>
+    (!form.value.startMonth || !v || v >= form.value.startMonth)
+      ? cb() : cb(new Error('截止月不能早于起始月')), trigger: 'change' }],
   employeeId: [{ required: true, message: '请选择员工', trigger: 'change' }],
   subType: [{ required: true, message: '请选择明细类型', trigger: 'change' }],
   amount: [{ required: true, message: '请输入金额', trigger: 'blur' }],

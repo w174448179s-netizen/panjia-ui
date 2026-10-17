@@ -10,7 +10,7 @@
       </div>
       <el-table :data="list" stripe border>
         <el-table-column label="生效区间" width="190" align="center">
-          <template #default="{ row }">{{ row.startMonth }} ~ {{ row.endMonth }}</template>
+          <template #default="{ row }">{{ row.startMonth }} ~ {{ row.endMonth || '长期' }}</template>
         </el-table-column>
         <el-table-column label="员工" width="160">
           <template #default="{ row }">{{ empName(row.employeeId) || row.employeeId }}</template>
@@ -40,7 +40,7 @@
           <el-date-picker v-model="form.startMonth" type="month" value-format="YYYY-MM" placeholder="生效起始月" style="width:100%" />
         </el-form-item>
         <el-form-item label="截止月">
-          <el-date-picker v-model="form.endMonth" type="month" value-format="YYYY-MM" placeholder="生效截止月" style="width:100%" />
+          <el-date-picker v-model="form.endMonth" type="month" value-format="YYYY-MM" placeholder="不填=长期生效" style="width:100%" />
         </el-form-item>
         <el-form-item label="员工">
           <EmployeeSelect v-model="form.employeeId" @change="onEmployeePicked" />
@@ -92,11 +92,11 @@ const load = async () => {
 };
 
 const submit = async () => {
-  if (!form.value.startMonth || !form.value.endMonth || !form.value.employeeId) {
-    ElMessage.warning('请填写生效起止月和选择员工');
+  if (!form.value.startMonth || !form.value.employeeId) {
+    ElMessage.warning('请填写生效起始月和选择员工');
     return;
   }
-  if (form.value.startMonth > form.value.endMonth) {
+  if (form.value.endMonth && form.value.startMonth > form.value.endMonth) {
     ElMessage.warning('生效起始月不能晚于截止月');
     return;
   }
