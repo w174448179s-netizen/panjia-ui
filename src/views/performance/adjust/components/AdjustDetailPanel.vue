@@ -3,7 +3,7 @@
     <el-alert v-if="loadError" type="error" :title="loadError" :closable="false" show-icon />
 
     <template v-if="detail">
-      <!-- 调整单基础信息 -->
+      <!-- 调整单基础信息（仅元数据，金额统一放下方概览条，避免重复） -->
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item label="调整单号">{{ detail.adjustNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="状态">
@@ -19,51 +19,77 @@
         <el-descriptions-item v-if="detail.adjustScope !== 'CONTRACT'" label="员工">
           {{ detail.employeeName || employeeName(detail.employeeId) }}
         </el-descriptions-item>
-        <el-descriptions-item label="门店/组别">
-          <span>{{ detail.deptName || '—' }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item :label="isReceivedAdjust ? '实收业绩(调整前)' : (isAddMemberView ? '合同业绩总额(调整前)' : '新签业绩')">
-          {{ formatYuan(detail.originalAmount) }}
-        </el-descriptions-item>
-        <el-descriptions-item v-if="!isReceivedAdjust" label="折算后业绩">
-          <span class="amount-ink">{{ formatYuan(detail.convertedOriginalAmount) }}</span>
-        </el-descriptions-item>
-        <template v-if="['AMOUNT', 'DEDUCT', 'INCREASE'].includes(detail.adjustType ?? '')">
-          <el-descriptions-item label="调整金额">
-            <span :class="deltaAmountClass(detail.targetAmount, detail.originalAmount)">
-              {{ deltaYuan(detail.targetAmount, detail.originalAmount) }}
-            </span>
-          </el-descriptions-item>
-          <el-descriptions-item v-if="!isReceivedAdjust" label="调整金额（折算后）">
-            <span :class="deltaAmountClass(detail.convertedTargetAmount, detail.convertedOriginalAmount)">
-              {{ deltaYuan(detail.convertedTargetAmount, detail.convertedOriginalAmount) }}
-            </span>
-          </el-descriptions-item>
-        </template>
-        <template v-if="isAddMemberView">
-          <el-descriptions-item v-if="isAddMember" label="新增角色人业绩">
-            <span class="amount-positive">+{{ formatYuan(detail.targetAmount) }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="调整后合同总额">
-            <span class="amount-ink">{{ formatYuan(addMemberAfterTotal) }}</span>
-            <el-tag v-if="addMemberTotalChanged" type="warning" size="small" effect="plain" style="margin-left: 6px">
-              总额调整 {{ totalChangedText }}
-            </el-tag>
-            <el-tag v-else type="success" size="small" effect="plain" style="margin-left: 6px">总额不变</el-tag>
-          </el-descriptions-item>
-        </template>
-        <el-descriptions-item v-else :label="isReceivedAdjust ? '实收业绩(调整后)' : '调整后业绩'">
-          <span class="amount-red">{{ formatYuan(detail.targetAmount) }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item v-if="!isAddMemberView && !isReceivedAdjust" label="折算后业绩">
-          <span class="amount-ink">{{ formatYuan(detail.convertedTargetAmount) }}</span>
+        <!-- 合同级调整不归属单一门店/组别，仅明细级展示部门 -->
+        <el-descriptions-item v-if="detail.adjustScope !== 'CONTRACT' && detail.deptName" label="门店/组别">
+          <span>{{ detail.deptName }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="申请人">{{ detail.applicantName || '—' }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ detail.createTime || '—' }}</el-descriptions-item>
         <el-descriptions-item label="调整原因" :span="2">{{ detail.reason || '—' }}</el-descriptions-item>
       </el-descriptions>
 
-      <!-- 合同信息 -->
+      <!-- 金额变动行内条：对齐合同详情 summary-bar 规范（无底色卡片，13px 标签 + 16px 粗值） -->
+      <div v-if="isAddMember" class="amount-bar">
+        <span class="ab-item">
+          <span class="ab-label">合同业绩总额(调整前)</span>
+          <b class="ab-value">{{ formatYuan(detail.originalAmount) }}</b>
+        </span>
+        <span class="ab-arrow">→</span>
+        <span class="ab-item">
+          <span class="ab-label">新增角色人业绩</span>
+          <b class="ab-value amount-positive">+{{ formatYuan(detail.targetAmount) }}</b>
+        </span>
+        <span class="ab-arrow">→</span>
+        <span class="ab-item">
+          <span class="ab-label">调整后合同总额</span>
+          <b class="ab-value">{{ formatYuan(addMemberAfterTotal) }}</b>
+          <el-tag v-if="addMemberTotalChanged" type="warning" size="small" effect="plain" style="margin-left: 6px">
+            总额调整 {{ totalChangedText }}
+          </el-tag>
+          <el-tag v-else type="success" size="small" effect="plain" style="margin-left: 6px">总额不变</el-tag>
+        </span>
+      </div>
+      <div v-else class="amount-bar-wrap">
+        <div class="amount-bar">
+          <span class="ab-item">
+            <span class="ab-label">{{ isReceivedAdjust ? '实收业绩(调整前)' : '新签业绩(调整前)' }}</span>
+            <b class="ab-value">{{ formatYuan(detail.originalAmount) }}</b>
+          </span>
+          <span class="ab-arrow">→</span>
+          <span class="ab-item">
+            <span class="ab-label">调整金额</span>
+            <b class="ab-value" :class="deltaAmountClass(detail.targetAmount, detail.originalAmount)">
+              {{ deltaYuan(detail.targetAmount, detail.originalAmount) }}
+            </b>
+          </span>
+          <span class="ab-arrow">→</span>
+          <span class="ab-item">
+            <span class="ab-label">{{ isReceivedAdjust ? '实收业绩(调整后)' : '新签业绩(调整后)' }}</span>
+            <b class="ab-value">{{ formatYuan(detail.targetAmount) }}</b>
+          </span>
+        </div>
+        <!-- 新签口径：折算后金额次行（实收无折算概念） -->
+        <div v-if="!isReceivedAdjust" class="amount-bar amount-bar-sub">
+          <span class="ab-item">
+            <span class="ab-label">折算后(调整前)</span>
+            <b class="ab-value ab-value-sub">{{ formatYuan(detail.convertedOriginalAmount) }}</b>
+          </span>
+          <span class="ab-arrow">→</span>
+          <span class="ab-item">
+            <span class="ab-label">调整金额(折算后)</span>
+            <b class="ab-value ab-value-sub" :class="deltaAmountClass(detail.convertedTargetAmount, detail.convertedOriginalAmount)">
+              {{ deltaYuan(detail.convertedTargetAmount, detail.convertedOriginalAmount) }}
+            </b>
+          </span>
+          <span class="ab-arrow">→</span>
+          <span class="ab-item">
+            <span class="ab-label">折算后(调整后)</span>
+            <b class="ab-value ab-value-sub">{{ formatYuan(detail.convertedTargetAmount) }}</b>
+          </span>
+        </div>
+      </div>
+
+      <!-- 合同信息（仅合同元数据，金额已在上方概览条展示，不再重复） -->
       <div v-if="detail.contractNo" class="detail-block">
         <div class="block-title">合同信息</div>
         <el-descriptions :column="2" border size="small">
@@ -73,42 +99,6 @@
           <el-descriptions-item label="订单号">{{ detail.orderNo || '—' }}</el-descriptions-item>
           <el-descriptions-item label="签约/认购时间">{{ detail.businessDate || '—' }}</el-descriptions-item>
           <el-descriptions-item label="明细条数">{{ detail.detailCount ?? 0 }} 条</el-descriptions-item>
-          <el-descriptions-item :label="isReceivedAdjust ? '实收业绩(调整前)' : (isAddMemberView ? '合同业绩总额(调整前)' : '新签业绩')">
-            <span class="amount">{{ formatYuan(detail.originalAmount) }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item v-if="!isReceivedAdjust" label="折算后业绩">
-            <span class="amount amount-ink">{{ formatYuan(detail.convertedOriginalAmount) }}</span>
-          </el-descriptions-item>
-          <template v-if="['AMOUNT', 'DEDUCT', 'INCREASE'].includes(detail.adjustType ?? '')">
-            <el-descriptions-item label="调整金额">
-              <span class="amount" :class="deltaAmountClass(detail.targetAmount, detail.originalAmount)">
-                {{ deltaYuan(detail.targetAmount, detail.originalAmount) }}
-              </span>
-            </el-descriptions-item>
-            <el-descriptions-item v-if="!isReceivedAdjust" label="调整金额（折算后）">
-              <span class="amount" :class="deltaAmountClass(detail.convertedTargetAmount, detail.convertedOriginalAmount)">
-                {{ deltaYuan(detail.convertedTargetAmount, detail.convertedOriginalAmount) }}
-              </span>
-            </el-descriptions-item>
-          </template>
-          <template v-if="isAddMemberView">
-            <el-descriptions-item v-if="isAddMember" label="新增角色人业绩">
-              <span class="amount amount-positive">+{{ formatYuan(detail.targetAmount) }}</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="调整后合同总额">
-              <span class="amount amount-ink">{{ formatYuan(addMemberAfterTotal) }}</span>
-              <el-tag v-if="addMemberTotalChanged" type="warning" size="small" effect="plain" style="margin-left: 6px">
-                总额调整 {{ totalChangedText }}
-              </el-tag>
-              <el-tag v-else type="success" size="small" effect="plain" style="margin-left: 6px">总额不变</el-tag>
-            </el-descriptions-item>
-          </template>
-          <el-descriptions-item v-else :label="isReceivedAdjust ? '实收业绩(调整后)' : '调整后业绩'">
-            <span class="amount amount-red">{{ formatYuan(detail.targetAmount) }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item v-if="!isAddMemberView && !isReceivedAdjust" label="折算后业绩">
-            <span class="amount amount-ink">{{ formatYuan(detail.convertedTargetAmount) }}</span>
-          </el-descriptions-item>
           <el-descriptions-item label="房源地址" :span="2">{{ detail.propertyAddress || '—' }}</el-descriptions-item>
         </el-descriptions>
       </div>
@@ -436,6 +426,48 @@ onMounted(async () => {
 .contract-no {
   color: var(--el-color-primary);
   font-weight: 500;
+}
+/* 金额变动行内条：对齐合同详情 summary-bar（无底色/无边框，13px 标签 + 16px 粗值 + 灰箭头） */
+.amount-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 0;
+}
+.amount-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  padding: 6px 4px;
+}
+.amount-bar-sub {
+  border-top: 1px dashed var(--el-border-color-lighter);
+  margin: 0 4px;
+  padding: 6px 0 2px;
+}
+.ab-item {
+  display: inline-flex;
+  align-items: baseline;
+}
+.ab-label {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  margin-right: 6px;
+}
+.ab-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  font-variant-numeric: tabular-nums;
+}
+.ab-value-sub {
+  font-size: 13px;
+  font-weight: 600;
+}
+.ab-arrow {
+  color: var(--el-text-color-disabled);
+  margin: 0 12px;
+  font-size: 13px;
 }
 .amount {
   font-variant-numeric: tabular-nums;
