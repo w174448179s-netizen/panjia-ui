@@ -4,12 +4,14 @@
       <div class="flex items-center justify-between mb-4">
         <h3 class="text-lg font-semibold">手工录入项（奖金/其他收入/其他支出）</h3>
         <div class="flex items-center gap-3">
-          <el-date-picker v-model="period" type="month" value-format="YYYY-MM" placeholder="归属月" @change="load" />
+          <el-date-picker v-model="period" type="month" value-format="YYYY-MM" placeholder="生效月" @change="load" />
           <el-button type="primary" @click="showAdd = true">+ 新增</el-button>
         </div>
       </div>
       <el-table :data="list" stripe border>
-        <el-table-column label="归属月" prop="period" width="110" />
+        <el-table-column label="生效区间" width="190" align="center">
+          <template #default="{ row }">{{ row.startMonth }} ~ {{ row.endMonth }}</template>
+        </el-table-column>
         <el-table-column label="员工" width="160">
           <template #default="{ row }">{{ empName(row.employeeId) || row.employeeId }}</template>
         </el-table-column>
@@ -34,8 +36,11 @@
 
     <el-dialog v-model="showAdd" title="新增手工项" width="480px">
       <el-form :model="form" label-width="80px">
-        <el-form-item label="归属月">
-          <el-date-picker v-model="form.period" type="month" value-format="YYYY-MM" style="width:100%" />
+        <el-form-item label="起始月">
+          <el-date-picker v-model="form.startMonth" type="month" value-format="YYYY-MM" placeholder="生效起始月" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="截止月">
+          <el-date-picker v-model="form.endMonth" type="month" value-format="YYYY-MM" placeholder="生效截止月" style="width:100%" />
         </el-form-item>
         <el-form-item label="员工">
           <EmployeeSelect v-model="form.employeeId" @change="onEmployeePicked" />
@@ -69,7 +74,7 @@ import type { PerformanceEmployeeOption } from '@/api/panjia/performance';
 const period = ref(new Date().toISOString().slice(0, 7));
 const list = ref<ManualItem[]>([]);
 const showAdd = ref(false);
-const form = ref<any>({ period: '', employeeId: null, itemType: 'BONUS', subType: '', amount: 0, reason: '' });
+const form = ref<any>({ startMonth: '', endMonth: '', employeeId: null, itemType: 'BONUS', subType: '', amount: 0, reason: '' });
 
 const empCache = new Map<string, string>();
 
@@ -87,14 +92,17 @@ const load = async () => {
 };
 
 const submit = async () => {
-  if (!form.value.period || !form.value.employeeId) {
-    ElMessage.warning('请填写归属月和选择员工');
+  if (!form.value.startMonth || !form.value.endMonth || !form.value.employeeId) {
+    ElMessage.warning('请填写生效起止月和选择员工');
     return;
   }
-  form.value.period = period.value;
+  if (form.value.startMonth > form.value.endMonth) {
+    ElMessage.warning('生效起始月不能晚于截止月');
+    return;
+  }
   await payrollApi.createManual(form.value);
   showAdd.value = false;
-  form.value = { period: '', employeeId: null, itemType: 'BONUS', subType: '', amount: 0, reason: '' };
+  form.value = { startMonth: '', endMonth: '', employeeId: null, itemType: 'BONUS', subType: '', amount: 0, reason: '' };
   ElMessage.success('已保存');
   load();
 };

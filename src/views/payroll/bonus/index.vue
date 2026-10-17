@@ -8,7 +8,7 @@
             v-model="period"
             type="month"
             value-format="YYYY-MM"
-            placeholder="选择归属月"
+            placeholder="生效月"
             clearable
             @change="load"
             @keydown.enter.prevent="load"
@@ -25,7 +25,9 @@
       <el-alert v-if="frozen" :title="freezeTip" type="warning" :closable="false" show-icon class="mb-3" />
 
       <el-table v-loading="loading" :data="filteredList" stripe border>
-        <el-table-column label="归属月" prop="period" width="110" />
+        <el-table-column label="生效区间" width="190" align="center">
+          <template #default="{ row }">{{ row.startMonth }} ~ {{ row.endMonth }}</template>
+        </el-table-column>
         <el-table-column label="员工" min-width="160">
           <template #default="{ row }">
             {{ empDisplay(row.employeeId) }}
@@ -68,8 +70,11 @@
     <!-- 新增弹窗 -->
     <el-dialog v-model="showAdd" title="新增奖金" width="500px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
-        <el-form-item label="归属月" prop="period">
-          <el-date-picker v-model="form.period" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width:100%" />
+        <el-form-item label="起始月" prop="startMonth">
+          <el-date-picker v-model="form.startMonth" type="month" value-format="YYYY-MM" placeholder="生效起始月" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="截止月" prop="endMonth">
+          <el-date-picker v-model="form.endMonth" type="month" value-format="YYYY-MM" placeholder="生效截止月" style="width:100%" />
         </el-form-item>
         <el-form-item label="员工" prop="employeeId">
           <EmployeeSelect v-model="form.employeeId" @change="onEmployeePicked" />
@@ -100,7 +105,7 @@
     <!-- 详情弹窗 -->
     <el-dialog v-model="showDetail" title="奖金详情" width="480px">
       <el-descriptions v-if="detailData" :column="2" border size="small">
-        <el-descriptions-item label="归属月">{{ detailData.period }}</el-descriptions-item>
+        <el-descriptions-item label="生效区间">{{ detailData.startMonth }} ~ {{ detailData.endMonth }}</el-descriptions-item>
         <el-descriptions-item label="员工">{{ empDisplay(detailData.employeeId) }}</el-descriptions-item>
         <el-descriptions-item label="类型">{{ typeLabel(detailData.subType) }}</el-descriptions-item>
         <el-descriptions-item label="金额">¥{{ fmt(detailData.amount) }}</el-descriptions-item>
@@ -152,7 +157,8 @@ const formRef = ref<FormInstance>();
 const empCache = ref<Map<string, Employee>>(new Map());
 
 const form = ref<any>({
-  period: '',
+  startMonth: '',
+  endMonth: '',
   employeeId: null as string | null,
   itemType: 'BONUS',
   subType: '',
@@ -161,7 +167,8 @@ const form = ref<any>({
 });
 
 const rules = {
-  period: [{ required: true, message: '请选择归属月', trigger: 'change' }],
+  startMonth: [{ required: true, message: '请选择生效起始月', trigger: 'change' }],
+  endMonth: [{ required: true, message: '请选择生效截止月', trigger: 'change' }],
   employeeId: [{ required: true, message: '请选择员工', trigger: 'change' }],
   subType: [{ required: true, message: '请选择奖金类型', trigger: 'change' }],
   amount: [{ required: true, message: '请输入金额', trigger: 'blur' }],
@@ -248,7 +255,8 @@ const openAdd = () => {
     return;
   }
   form.value = {
-    period: period.value,
+    startMonth: period.value,
+    endMonth: period.value,
     employeeId: null,
     itemType: 'BONUS',
     subType: '',

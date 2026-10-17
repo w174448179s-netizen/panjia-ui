@@ -326,7 +326,7 @@
           <el-button type="primary" :loading="socialSaving" @click="saveSocialStandards">保存</el-button>
         </div>
         <el-table :data="storeList" stripe border>
-          <el-table-column label="门店" prop="deptName" min-width="180" />
+          <el-table-column label="部门（业务组）" prop="deptName" min-width="180" />
           <el-table-column label="社保扣减标准（元/人/月）" width="240" align="center">
             <template #default="{ row }">
               <el-input-number
@@ -357,7 +357,7 @@
       <el-tab-pane label="门店月度配置" name="deptMonthly">
         <div class="policy-toolbar">
           <div class="monthly-toolbar-left">
-            <span class="policy-title" style="margin-right:12px">新签与结佣差额（按门店 × 月份，算薪直接扣减）</span>
+            <span class="policy-title" style="margin-right:12px">新签与结佣差额（按部门 × 月份，算薪直接扣减）</span>
             <el-date-picker
               v-model="monthlyPeriod" type="month" value-format="YYYY-MM" placeholder="选择月份"
               style="width:140px" @change="loadMonthly"
@@ -366,7 +366,7 @@
           <el-button type="primary" :loading="monthlySaving" @click="saveMonthly">保存</el-button>
         </div>
         <el-table :data="monthlyRows" stripe border v-loading="monthlyLoading">
-          <el-table-column label="门店" prop="deptName" min-width="180" />
+          <el-table-column label="部门（业务组）" prop="deptName" min-width="180" />
           <el-table-column label="新签与结佣差额（元）" width="220" align="center">
             <template #default="{ row }">
               <el-input-number

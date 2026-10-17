@@ -158,7 +158,8 @@ export interface DeptMonthlyConfig {
 
 export interface ManualItem {
   id: number;
-  period: string;
+  startMonth: string;
+  endMonth: string;
   employeeId: number;
   itemType: string;
   subType: string | null;
