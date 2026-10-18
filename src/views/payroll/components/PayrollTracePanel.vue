@@ -192,10 +192,7 @@ const INCOME_COLS: ColDef[] = [
     const base = Number(r.teamIncome) / 0.1;
     return `团队新签业绩 ¥${fmt(base)} × 10% = ¥${fmt(r.teamIncome)}`;
   } },
-  { prop: 'personalNewsignIncome', label: '个人新签', source: (r) => {
-    const base = Number(r.personalNewsignIncome) / 0.7;
-    return `本人新签业绩 ¥${fmt(base)} × 70% = ¥${fmt(r.personalNewsignIncome)}`;
-  } },
+  // 个人新签提成只作保底比较基准、不进应发（2026-10-19 口径），不在收入项展示，算式见「保底补足」区
   { prop: 'storeIncome', label: '门店提成', source: '各门店新签业绩 × 跳点比例' },
   { prop: 'baseSalary', label: '底薪', source: (r) => `职级规则快照：¥${fmt(r.baseSalary)}（保底职级无底薪）` },
   { prop: 'guaranteeFill', label: '保底补足', source: (r) => {
@@ -251,7 +248,10 @@ const guaranteeSteps = (row: PayrollDetail): string[] => {
     if (!gp || typeof gp !== 'object') return [];
     const lines: string[] = [`保底 ¥${fmt(gp.minSalary)} vs ${gp.compareLabel} ¥${fmt(gp.compareValue)}`];
     for (const s of gp.newsignSteps || []) {
-      lines.push(`个人新签业绩 ¥${fmt(s.perf)} × ${s.month}快照提点 ${(Number(s.rate) * 100).toFixed(1)}% = ¥${fmt(s.income)}`);
+      lines.push(`新签业绩 ¥${fmt(s.perf)} × ${s.month}快照提点 ${(Number(s.rate) * 100).toFixed(1)}% = ¥${fmt(s.income)}`);
+    }
+    if ((gp.newsignSteps || []).length > 0) {
+      lines.push(`+${fmt(gp.compareValue)}（按新签月分笔）`);
     }
     for (const s of gp.steps || []) {
       lines.push(`${s.label} ¥${fmt(s.value)}`);

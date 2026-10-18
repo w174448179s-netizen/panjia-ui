@@ -62,6 +62,8 @@ export interface Employee {
   /** 宿舍费金额（自定义；null=用全局默认算法） */
   dormitoryFee?: number;
   isPartTime: boolean;
+  /** 新签业绩不计入所属组别店长的团队业绩（只影响店长团队提成与其社保人数，总监不受影响） */
+  excludeTeam: boolean;
   mentorCode?: string;
   mentorName?: string;
   remark?: string;
@@ -94,6 +96,8 @@ export interface EmployeeCreateForm {
   commercialInsured: boolean;
   dormitory: boolean;
   parttime: boolean;
+  /** 新签业绩不计入所属组别店长的团队业绩（只影响店长侧） */
+  excludeTeam: boolean;
   mentorCode?: string;
   remark?: string;
   /** 社保金额（自定义；null=用全局默认算法） */

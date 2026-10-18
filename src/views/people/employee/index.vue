@@ -336,6 +336,12 @@
               <el-switch v-model="form.parttime" />
             </el-form-item>
           </el-col>
+          <el-col :span="8">
+            <!-- 只影响所在组店长的团队提成与其社保计缴人数；总监跳点用原始口径不受影响；不影响本人提成 -->
+            <el-form-item label="不计入店长团队" prop="excludeTeam">
+              <el-switch v-model="form.excludeTeam" />
+            </el-form-item>
+          </el-col>
           <el-col :span="12" v-if="form.socialInsured">
             <el-form-item label="社保金额">
               <el-input-number v-model="form.socialFee" :min="0" :precision="2" :controls="false" style="width:100%" />
@@ -417,6 +423,11 @@
           <el-descriptions-item label="兼职">
             <el-tag :type="detailData.isPartTime ? 'warning' : 'info'" size="small">
               {{ detailData.isPartTime ? '是' : '否' }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="不计入店长团队">
+            <el-tag :type="detailData.excludeTeam ? 'danger' : 'info'" size="small">
+              {{ detailData.excludeTeam ? '是' : '否' }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="社保">
@@ -803,6 +814,7 @@ const initForm = (): EmployeeCreateForm => ({
   commercialInsured: false,
   dormitory: false,
   parttime: false,
+  excludeTeam: false,
   mentorCode: '',
   remark: '',
   socialFee: undefined,
@@ -861,6 +873,7 @@ const handleUpdate = async (row: Employee) => {
   form.commercialInsured = !!detail.commercialInsured;
   form.dormitory = !!detail.dormitory;
   form.parttime = !!detail.isPartTime;
+  form.excludeTeam = !!detail.excludeTeam;
   form.mentorCode = detail.mentorCode ?? '';
   form.remark = detail.remark ?? '';
   form.socialFee = detail.socialFee ?? undefined;
@@ -927,6 +940,7 @@ const FACT_TYPE_OPTIONS = [
   { code: 'DORMITORY_FEE', desc: '宿舍费金额' },
   { code: 'PARTTIME', desc: '兼职' },
   { code: 'MENTOR', desc: '伯乐' },
+  { code: 'EXCLUDE_TEAM', desc: '不计入店长团队' },
 ];
 const adjustVisible = ref(false);
 const adjusting = ref(false);

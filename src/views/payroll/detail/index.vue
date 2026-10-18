@@ -156,7 +156,10 @@
                   保底 ¥{{ fmt(guaranteeProcess(row)!.minSalary) }} vs {{ guaranteeProcess(row)!.compareLabel }} ¥{{ fmt(guaranteeProcess(row)!.compareValue) }}
                 </div>
                 <div v-for="(s, i) in guaranteeProcess(row)!.newsignSteps || []" :key="'ns' + i" class="calc-step">
-                  个人新签业绩 ¥{{ fmt(s.perf) }} × {{ s.month }}快照提点 {{ (Number(s.rate) * 100).toFixed(1) }}% = ¥{{ fmt(s.income) }}
+                  新签业绩 ¥{{ fmt(s.perf) }} × {{ s.month }}快照提点 {{ (Number(s.rate) * 100).toFixed(1) }}% = ¥{{ fmt(s.income) }}
+                </div>
+                <div v-if="(guaranteeProcess(row)!.newsignSteps || []).length" class="calc-step">
+                  +{{ fmt(guaranteeProcess(row)!.compareValue) }}（按新签月分笔）
                 </div>
                 <div v-for="(s, i) in guaranteeProcess(row)!.steps || []" :key="'st' + i" class="calc-step">
                   {{ s.label }} ¥{{ fmt(s.value) }}
