@@ -72,6 +72,8 @@ export interface PayrollDetail {
   rateAdjustJson?: string | null;
   /** 结佣提成跨月回溯计算过程 JSON（[{month,perf,rate,income}]，仅存在回溯时落地） */
   commissionCalcProcess?: string | null;
+  /** 保底补足计算过程 JSON（{minSalary,compareLabel,compareValue,steps?,newsignSteps?,fill}，保底职级落地，未触发也落地） */
+  guaranteeCalcProcess?: string | null;
   /** 店长/总监 sheet：门店当月新签计薪业绩合计（折算后） */
   deptNewSignTotal?: number;
   /** 店长/总监 sheet：门店社保业绩扣款（门店社保扣减标准 × 计缴参保人数） */

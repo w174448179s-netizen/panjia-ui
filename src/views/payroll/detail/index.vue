@@ -149,7 +149,23 @@
             align="right"
           >
             <template #default="{ row }">
-              <span v-if="isZero(row[c.prop])" class="zero-val">—</span>
+              <!-- 保底补足：保底职级落地计算过程，未触发也展示（优先于零值淡化） -->
+              <div v-if="c.prop === 'guaranteeFill' && guaranteeProcess(row)" class="calc-wrap">
+                <div class="money">{{ fmt(row.guaranteeFill) }}</div>
+                <div class="calc-step">
+                  保底 ¥{{ fmt(guaranteeProcess(row)!.minSalary) }} vs {{ guaranteeProcess(row)!.compareLabel }} ¥{{ fmt(guaranteeProcess(row)!.compareValue) }}
+                </div>
+                <div v-for="(s, i) in guaranteeProcess(row)!.newsignSteps || []" :key="'ns' + i" class="calc-step">
+                  个人新签业绩 ¥{{ fmt(s.perf) }} × {{ s.month }}快照提点 {{ (Number(s.rate) * 100).toFixed(1) }}% = ¥{{ fmt(s.income) }}
+                </div>
+                <div v-for="(s, i) in guaranteeProcess(row)!.steps || []" :key="'st' + i" class="calc-step">
+                  {{ s.label }} ¥{{ fmt(s.value) }}
+                </div>
+                <div class="calc-step" :class="{ 'zero-val': isZero(guaranteeProcess(row)!.fill) }">
+                  取大者补足 ¥{{ fmt(guaranteeProcess(row)!.fill) }}（{{ isZero(guaranteeProcess(row)!.fill) ? '未触发' : '已触发' }}）
+                </div>
+              </div>
+              <span v-else-if="isZero(row[c.prop])" class="zero-val">—</span>
               <!-- 业绩提成：有跨月回溯计算过程时在金额下方分笔展示 -->
               <div v-else-if="c.prop === 'commissionIncome' && row.commissionCalcProcess" class="calc-wrap">
                 <div class="money">{{ fmt(row[c.prop]) }}</div>
@@ -328,13 +344,31 @@ const calcSteps = (row: any): Array<{ month: string; perf: number; rate: number;
   }
 };
 
+/** 解析保底补足计算过程 JSON（保底职级落地，未触发也落地） */
+interface GuaranteeProcess {
+  minSalary: number;
+  compareLabel: string;
+  compareValue: number;
+  steps?: Array<{ label: string; value: number }>;
+  newsignSteps?: Array<{ month: string; perf: number; rate: number; income: number }>;
+  fill: number;
+}
+const guaranteeProcess = (row: any): GuaranteeProcess | null => {
+  try {
+    const p = JSON.parse(row?.guaranteeCalcProcess || 'null');
+    return p && typeof p === 'object' ? p : null;
+  } catch {
+    return null;
+  }
+};
+
 const INCOME_COLS: ColDef[] = [
   { prop: 'commissionIncome', label: '业绩提成', width: 250, source: '结佣业绩 × 新签导入月快照提点（分笔过程见单元格）' },
   { prop: 'teamIncome', label: '团队提成', width: 105, roles: ['MANAGER'], source: '团队新签业绩 × 10%' },
   { prop: 'personalNewsignIncome', label: '个人新签', width: 105, roles: ['MANAGER'], source: '本人新签业绩 × 70%' },
   { prop: 'storeIncome', label: '门店提成', width: 105, roles: ['DIRECTOR'], source: '各门店新签业绩 × 跳点比例' },
-  { prop: 'baseSalary', label: '底薪/保底', width: 100, source: '职级规则配置（历史快照）' },
-  { prop: 'guaranteeFill', label: '保底补足', width: 100, roles: ['MANAGER'], source: 'MAX(保底, 团队+个人新签) 补足部分' },
+  { prop: 'baseSalary', label: '底薪', width: 100, source: '职级规则配置（历史快照）；保底职级无底薪' },
+  { prop: 'guaranteeFill', label: '保底补足', width: 210, source: 'MAX(保底, 个人新签提成)−个人新签提成（经纪人）/ MAX(保底, 团队+个人新签)−团队−个人新签（店长），计算过程见单元格' },
   { prop: 'mentorBonus', label: '招聘奖励', width: 95, source: '师徒关系档案：徒弟结佣业绩 × 2%' },
   { prop: 'bonus', label: '奖金', width: 90, source: '奖金审批单' },
   { prop: 'otherIncome', label: '其他收入', width: 95, source: '收入录入记录（补贴/补发等）' },
@@ -359,6 +393,8 @@ function filterCols(cols: ColDef[]): ColDef[] {
   return cols.filter((c) => {
     if (c.roles && viewRole.value !== 'ALL' && !c.roles.includes(viewRole.value)) return false;
     if (showAllColumns.value) return true;
+    // 保底补足列：保底职级未触发时全 0 但过程有意义（展示"未触发"），有过程即保留
+    if (c.prop === 'guaranteeFill') return viewDetails.value.some((r: any) => r.guaranteeCalcProcess);
     return viewDetails.value.some((r: any) => !isZero(r[c.prop]));
   });
 }

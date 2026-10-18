@@ -197,10 +197,16 @@ const INCOME_COLS: ColDef[] = [
     return `本人新签业绩 ¥${fmt(base)} × 70% = ¥${fmt(r.personalNewsignIncome)}`;
   } },
   { prop: 'storeIncome', label: '门店提成', source: '各门店新签业绩 × 跳点比例' },
-  { prop: 'baseSalary', label: '底薪/保底', source: (r) => `职级规则快照：¥${fmt(r.baseSalary)}` },
+  { prop: 'baseSalary', label: '底薪', source: (r) => `职级规则快照：¥${fmt(r.baseSalary)}（保底职级无底薪）` },
   { prop: 'guaranteeFill', label: '保底补足', source: (r) => {
-    const combined = Number(r.teamIncome) + Number(r.personalNewsignIncome);
-    return `MAX(保底 ¥${fmt(r.baseSalary)}, 团队+个人新签 ¥${fmt(combined)}) 补足 ¥${fmt(r.guaranteeFill)}`;
+    try {
+      const gp = JSON.parse((r as any).guaranteeCalcProcess || 'null');
+      if (gp && typeof gp === 'object') {
+        const triggered = Number(gp.fill) !== 0;
+        return `保底 ¥${fmt(gp.minSalary)} vs ${gp.compareLabel} ¥${fmt(gp.compareValue)} → 取大者，补足 ¥${fmt(gp.fill)}（${triggered ? '已触发' : '未触发'}）`;
+      }
+    } catch { /* 回退默认口径 */ }
+    return `职级保底 ¥${fmt((r as any).minSalary)}：MAX(保底, 对应提成) 补足 ¥${fmt(r.guaranteeFill)}`;
   } },
   { prop: 'mentorBonus', label: '招聘奖励', source: (r) => {
     const apprentice = Number(r.mentorBonus) / 0.02;
@@ -238,8 +244,30 @@ const calcSteps = (row: PayrollDetail): CommissionCalcStep[] => {
   }
 };
 
+/** 保底补足计算过程行（保底职级落地，未触发也展示推导链） */
+const guaranteeSteps = (row: PayrollDetail): string[] => {
+  try {
+    const gp = JSON.parse((row as any).guaranteeCalcProcess || 'null');
+    if (!gp || typeof gp !== 'object') return [];
+    const lines: string[] = [`保底 ¥${fmt(gp.minSalary)} vs ${gp.compareLabel} ¥${fmt(gp.compareValue)}`];
+    for (const s of gp.newsignSteps || []) {
+      lines.push(`个人新签业绩 ¥${fmt(s.perf)} × ${s.month}快照提点 ${(Number(s.rate) * 100).toFixed(1)}% = ¥${fmt(s.income)}`);
+    }
+    for (const s of gp.steps || []) {
+      lines.push(`${s.label} ¥${fmt(s.value)}`);
+    }
+    const triggered = Number(gp.fill) !== 0;
+    lines.push(`取大者补足 ¥${fmt(gp.fill)}（${triggered ? '已触发' : '未触发'}）`);
+    return lines;
+  } catch {
+    return [];
+  }
+};
+
 const incomeItems = INCOME_COLS
-  .filter((c) => !isZero((props.row as any)[c.prop]))
+  // 保底补足：未触发（0 值）但保底职级有计算过程时也展示，让员工看到"有没有触发"
+  .filter((c) => !isZero((props.row as any)[c.prop])
+    || (c.prop === 'guaranteeFill' && !!(props.row as any).guaranteeCalcProcess))
   .map((c) => ({
     label: c.label,
     value: Number((props.row as any)[c.prop]) || 0,
@@ -248,7 +276,9 @@ const incomeItems = INCOME_COLS
     steps: c.prop === 'commissionIncome'
       ? calcSteps(props.row).map((s) =>
           `结佣业绩 ¥${fmt(s.perf)} × ${s.month}快照提点 ${(Number(s.rate) * 100).toFixed(1)}% = ¥${fmt(s.income)}`)
-      : [] as string[],
+      : c.prop === 'guaranteeFill'
+        ? guaranteeSteps(props.row)
+        : [] as string[],
   }));
 
 const deductItems = DEDUCT_COLS
