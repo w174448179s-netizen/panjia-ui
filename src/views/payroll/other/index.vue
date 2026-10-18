@@ -18,6 +18,10 @@
               <el-button type="primary" :disabled="frozen" @click="openAdd">+ 新增</el-button>
             </span>
           </el-tooltip>
+          <el-button :disabled="!period" @click="onExport">导出</el-button>
+          <el-button @click="payrollApi.downloadManualTemplate()">下载模板</el-button>
+          <el-button type="warning" plain :disabled="frozen" @click="pickImport">导入</el-button>
+          <input ref="importInput" type="file" accept=".xlsx,.xls" style="display:none" @change="onImportFile" />
         </div>
       </div>
 
@@ -243,6 +247,31 @@ const empDisplay = (id: number) => {
 
 const onTabChange = (name: string) => {
   activeTab.value = name;
+};
+
+/** 导出当前生效月的记录（与列表同口径） */
+const onExport = () => {
+  if (!period.value) {
+    ElMessage.warning('请先选择生效月');
+    return;
+  }
+  payrollApi.exportManual(period.value, `其他收支_${period.value}.xlsx`);
+};
+
+/** 导入：选择文件即上传，整批校验通过才入库 */
+const importInput = ref<HTMLInputElement>();
+const pickImport = () => importInput.value?.click();
+const onImportFile = async (e: Event) => {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  try {
+    const msg = await payrollApi.importManual(file);
+    ElMessage.success(String(msg || '导入成功'));
+    load();
+  } finally {
+    input.value = '';
+  }
 };
 
 const onTypeChange = () => {

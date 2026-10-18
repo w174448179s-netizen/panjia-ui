@@ -1,4 +1,5 @@
 import panjiaRequest from './index';
+import { download } from '@/utils/request';
 
 export interface PayrollBatch {
   id: number;
@@ -247,6 +248,17 @@ export const payrollApi = {
   },
   deleteManual(id: number) {
     return panjiaRequest.delete(`/payroll/manual-item/${id}`);
+  },
+  importManual(file: File) {
+    const form = new FormData();
+    form.append('file', file);
+    return panjiaRequest.post<string>('/payroll/manual-item/importData', form);
+  },
+  exportManual(period: string, fileName: string) {
+    return download('/payroll/manual-item/export', { period }, fileName);
+  },
+  downloadManualTemplate() {
+    return download('/payroll/manual-item/importTemplate', {}, '其他收支导入模板.xlsx');
   },
 };
 

@@ -113,6 +113,9 @@
             <el-table-column label="提成金额" prop="commissionIncome" width="110" align="right">
               <template #default="{ row }">{{ num(row.commissionIncome) }}</template>
             </el-table-column>
+            <el-table-column label="结佣提成计算过程" width="240" align="left">
+              <template #default="{ row }">{{ calcProcessText(row) || '—' }}</template>
+            </el-table-column>
             <el-table-column label="招聘奖励" prop="mentorBonus" width="90" align="right">
               <template #default="{ row }">{{ num(row.mentorBonus) }}</template>
             </el-table-column>
@@ -264,6 +267,9 @@
             </el-table-column>
             <el-table-column label="业绩提成" prop="commissionIncome" width="110" align="right">
               <template #default="{ row }">{{ num(row.commissionIncome) }}</template>
+            </el-table-column>
+            <el-table-column label="结佣提成计算过程" width="240" align="left">
+              <template #default="{ row }">{{ calcProcessText(row) || '—' }}</template>
             </el-table-column>
             <el-table-column label="招聘提成" prop="mentorBonus" width="100" align="right">
               <template #default="{ row }">{{ num(row.mentorBonus) }}</template>
@@ -518,7 +524,7 @@ import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import { attendanceApi } from '@/api/panjia/attendance';
 import { scoreApi } from '@/api/panjia/score';
-import { exportMultiSheet, parseStoreItems, grossMinusDeduct, type ExportExtraData } from '../components/payroll-export';
+import { exportMultiSheet, parseStoreItems, grossMinusDeduct, calcProcessText, type ExportExtraData } from '../components/payroll-export';
 import { resolveBizNo } from '@/utils/panjiaBiz';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 

@@ -38,6 +38,24 @@ const neg = (v: any): string | number => {
   return n === 0 ? '' : (-n).toFixed(2);
 };
 
+/**
+ * 结佣提成计算过程文案：解析 detail.commissionCalcProcess
+ * JSON 数组 [{month,perf,rate,income}] → "26723.5×70%(2026-08新签月)+..."；
+ * 无跨月回溯（字段为空）返回 ''，导出/明细保持原样不显示该列内容。
+ */
+export const calcProcessText = (r: any): string => {
+  if (!r?.commissionCalcProcess) return '';
+  try {
+    const steps = JSON.parse(r.commissionCalcProcess) as Array<Record<string, any>>;
+    return steps
+      .map((s) => `${num(s.perf)}×${ratePercent(s.rate)}(${s.month}新签月)`)
+      .join(' + ');
+  } catch {
+    return '';
+  }
+};
+
+
 /** 总监各门店提成明细（后端 DirectorStoreItem JSON） */
 export interface DirectorStoreItem {
   deptId: number | string;
@@ -95,7 +113,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
     roles: ['AGENT', 'MANAGER'],
     heads: [
       '门店', '员工编号', '姓名', '职级', '职位', '当月新签业绩', '当月新签业绩提成比列',
-      '绩效提成扣点', '个人提点奖励', '当月最终提成比列', '结佣业绩', '提成比例', '提成金额',
+      '绩效提成扣点', '个人提点奖励', '当月最终提成比列', '结佣业绩', '提成比例', '提成金额', '结佣提成计算过程',
       '招聘奖励', '底薪', '奖金', '其他收入', '考勤扣款', '积分扣款', '应发工资',
       '社保扣款', '公积金扣款', '往月负工资', '商业保险', '宿舍管理费', '其他支出',
       '工资合计', '实发工资', '个税扣除', '最终发放',
@@ -115,6 +133,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         num(r.commissionPerformance),
         r.finalRate != null ? ratePercent(r.finalRate) : '',
         num(r.commissionIncome),
+        calcProcessText(r),
         num(r.mentorBonus),
         baseSalaryOf(r),
         num(r.bonus),
@@ -179,7 +198,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
     name: '总监工资',
     heads: [
       '姓名', '组别', '新签业绩', '社保业绩', '新签与结佣差额', '合计', '提成比例', '提成金额',
-      '底薪', '全勤', '绩效', '结佣业绩', '业绩提成', '招聘提成',
+      '底薪', '全勤', '绩效', '结佣业绩', '业绩提成', '结佣提成计算过程', '招聘提成',
       '社保', '公积金', '商业保险', '应发工资', '个税', '实发工资',
     ],
     row: (r) => {
@@ -200,6 +219,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         num(r.bonus),
         num(r.commissionPerformance),
         num(r.commissionIncome),
+        calcProcessText(r),
         num(r.mentorBonus),
         neg(r.socialFee),                  // 社保（员工级扣款，与 Excel 一致展示负号）
         neg(r.housingFund),                // 公积金
@@ -221,7 +241,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
           num(newSign - social - diff),
           r.storeRate != null ? ratePercent(r.storeRate) : '', num(r.storeIncome),
           num(r.baseSalary), num(r.fullAttendance), num(r.bonus), num(r.commissionPerformance),
-          num(r.commissionIncome), num(r.mentorBonus), neg(r.socialFee), neg(r.housingFund),
+          num(r.commissionIncome), calcProcessText(r), num(r.mentorBonus), neg(r.socialFee), neg(r.housingFund),
           neg(r.commercialInsurance), num(r.gross), neg(r.tax), num(r.net),
         ]];
       }
@@ -238,7 +258,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
             r.employeeName || '', storeName, num(itNew), neg(itSocial), neg(itDiff), num(itBillable),
             ratePercent(it.rate), num(itIncome),
             num(r.baseSalary), num(r.fullAttendance), num(r.bonus), num(r.commissionPerformance),
-            num(r.commissionIncome), num(r.mentorBonus), neg(r.socialFee), neg(r.housingFund),
+            num(r.commissionIncome), calcProcessText(r), num(r.mentorBonus), neg(r.socialFee), neg(r.housingFund),
             neg(r.commercialInsurance), num(r.gross), neg(r.tax), num(r.net),
           ];
         }
@@ -246,7 +266,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         return [
           '', storeName, num(itNew), neg(itSocial), neg(itDiff), num(itBillable),
           ratePercent(it.rate), num(itIncome),
-          '', '', '', '', '', '', '', '', '', '', '', '',
+          '', '', '', '', '', '', '', '', '', '', '', '', '',
         ];
       });
     },

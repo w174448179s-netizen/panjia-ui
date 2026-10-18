@@ -150,6 +150,13 @@
           >
             <template #default="{ row }">
               <span v-if="isZero(row[c.prop])" class="zero-val">—</span>
+              <!-- 业绩提成：有跨月回溯计算过程时在金额下方分笔展示 -->
+              <div v-else-if="c.prop === 'commissionIncome' && row.commissionCalcProcess" class="calc-wrap">
+                <div class="money">{{ fmt(row[c.prop]) }}</div>
+                <div v-for="(s, i) in calcSteps(row)" :key="i" class="calc-step">
+                  结佣业绩 ¥{{ fmt(s.perf) }} × {{ s.month }}快照提点 {{ (Number(s.rate) * 100).toFixed(1) }}% = ¥{{ fmt(s.income) }}
+                </div>
+              </div>
               <span v-else class="money">{{ fmt(row[c.prop]) }}</span>
             </template>
           </el-table-column>
@@ -312,8 +319,17 @@ const viewDetails = computed(() => {
 /* ───────────── 列定义（含适用角色与溯源口径） ───────────── */
 interface ColDef { prop: string; label: string; width: number; roles?: string[]; source: string }
 
+/** 解析结佣提成计算过程 JSON（跨月回溯时引擎落地） */
+const calcSteps = (row: any): Array<{ month: string; perf: number; rate: number; income: number }> => {
+  try {
+    return JSON.parse(row?.commissionCalcProcess || '[]');
+  } catch {
+    return [];
+  }
+};
+
 const INCOME_COLS: ColDef[] = [
-  { prop: 'commissionIncome', label: '业绩提成', width: 110, source: '结佣业绩 × 快照提点' },
+  { prop: 'commissionIncome', label: '业绩提成', width: 250, source: '结佣业绩 × 新签导入月快照提点（分笔过程见单元格）' },
   { prop: 'teamIncome', label: '团队提成', width: 105, roles: ['MANAGER'], source: '团队新签业绩 × 10%' },
   { prop: 'personalNewsignIncome', label: '个人新签', width: 105, roles: ['MANAGER'], source: '本人新签业绩 × 70%' },
   { prop: 'storeIncome', label: '门店提成', width: 105, roles: ['DIRECTOR'], source: '各门店新签业绩 × 跳点比例' },
@@ -483,6 +499,17 @@ onMounted(() => {
 .emp-name.clickable { cursor: pointer; color: #409eff; }
 .emp-name.clickable:hover { text-decoration: underline; }
 .money { font-variant-numeric: tabular-nums; }
+
+/* 结佣提成计算过程（跨月回溯分笔展示） */
+.calc-wrap { text-align: right; }
+.calc-step {
+  font-size: 10px;
+  color: #909399;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: break-all;
+  font-variant-numeric: tabular-nums;
+}
 .deduct-text { color: #c0392b; }
 .zero-val { color: #cdd0d6; }
 .part-time { color: #e6a23c; font-size: 12px; }
