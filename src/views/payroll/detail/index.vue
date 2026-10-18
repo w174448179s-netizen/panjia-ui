@@ -150,7 +150,7 @@
           >
             <template #default="{ row }">
               <!-- 保底推导：保底职级落地计算过程（金额见「保底补足」列），未触发也展示 -->
-              <div v-else-if="c.prop === 'guaranteeTrace' && guaranteeProcess(row)" class="calc-wrap">
+              <div v-if="c.prop === 'guaranteeTrace' && guaranteeProcess(row)" class="calc-wrap">
                 <div class="calc-step">
                   保底 ¥{{ fmt(guaranteeProcess(row)!.minSalary) }} vs {{ guaranteeProcess(row)!.compareLabel }} ¥{{ fmt(guaranteeProcess(row)!.compareValue) }}
                 </div>
