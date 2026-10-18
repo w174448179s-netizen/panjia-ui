@@ -369,7 +369,7 @@ const INCOME_COLS: ColDef[] = [
   { prop: 'storeIncome', label: '门店提成', width: 105, roles: ['DIRECTOR'], source: '各门店新签业绩 × 跳点比例' },
   { prop: 'baseSalary', label: '底薪', width: 100, source: '职级规则配置（历史快照）；保底职级无底薪' },
   { prop: 'guaranteeFill', label: '保底补足', width: 210, source: 'MAX(保底, 个人新签提成)−个人新签提成（经纪人）/ MAX(保底, 团队+个人新签)−团队−个人新签（店长），计算过程见单元格' },
-  { prop: 'mentorBonus', label: '招聘奖励', width: 95, source: '师徒关系档案：徒弟结佣业绩 × 2%' },
+  { prop: 'mentorBonus', label: '伯乐奖励', width: 95, source: '伯乐关系档案：千里马结佣业绩 × 2%' },
   { prop: 'bonus', label: '奖金', width: 90, source: '奖金审批单' },
   { prop: 'otherIncome', label: '其他收入', width: 95, source: '收入录入记录（补贴/补发等）' },
 ];

@@ -36,13 +36,13 @@
           <el-table-column label="个人提点" width="90" align="center">
             <template #default="{ row }">{{ row.personalRate != null ? fmtPct(row.personalRate) : '—' }}</template>
           </el-table-column>
-          <el-table-column label="招聘奖励" min-width="180">
+          <el-table-column label="伯乐奖励" min-width="180">
             <template #default="{ row }">
               <span v-if="parseRank(row as RankRule).mentorBonusMode === 'RATE_ADD'">
                 加点 {{ fmtPct(parseRank(row as RankRule).mentorBonusRateAdd) }} / 上限 {{ fmtPct(parseRank(row as RankRule).mentorBonusRateCap) }}
               </span>
               <span v-else-if="parseRank(row as RankRule).mentorBonusMode === 'AMOUNT_RATIO'">
-                徒弟结佣 × {{ fmtPct(parseRank(row as RankRule).mentorBonusAmountRatio) }}
+                千里马结佣 × {{ fmtPct(parseRank(row as RankRule).mentorBonusAmountRatio) }}
               </span>
               <span v-else>—</span>
             </template>
@@ -443,11 +443,11 @@
           <div class="form-tip" v-if="rankDialog.form.personalRate != null">当前值：{{ fmtPct(rankDialog.form.personalRate) }}</div>
         </el-form-item>
 
-        <el-divider content-position="left">招聘奖励</el-divider>
+        <el-divider content-position="left">伯乐奖励</el-divider>
         <el-form-item label="奖励模式">
           <el-select v-model="rankJson.mentorBonusMode" style="width:100%">
             <el-option label="加点模式（每推荐+X%，上限Y%）" value="RATE_ADD" />
-            <el-option label="金额比例（徒弟结佣 × X%）" value="AMOUNT_RATIO" />
+            <el-option label="金额比例（千里马结佣 × X%）" value="AMOUNT_RATIO" />
           </el-select>
         </el-form-item>
         <template v-if="rankJson.mentorBonusMode === 'RATE_ADD'">
@@ -461,7 +461,7 @@
           </el-form-item>
         </template>
         <template v-else-if="rankJson.mentorBonusMode === 'AMOUNT_RATIO'">
-          <el-form-item label="徒弟结佣比例">
+          <el-form-item label="千里马结佣比例">
             <el-input-number v-model="rankJson.mentorBonusAmountRatio" :min="0" :max="1" :precision="4" :step="0.01" :controls="false" style="width:100%" />
             <div class="form-tip">当前值：{{ fmtPct(rankJson.mentorBonusAmountRatio) }}</div>
           </el-form-item>

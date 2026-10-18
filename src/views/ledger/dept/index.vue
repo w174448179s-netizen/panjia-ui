@@ -60,7 +60,7 @@
         <el-table-column label="保底补足" prop="guaranteeFill" width="110" align="right">
           <template #default="{ row }">¥{{ fmt(row.guaranteeFill) }}</template>
         </el-table-column>
-        <el-table-column label="招聘奖励" prop="mentorBonus" width="110" align="right">
+        <el-table-column label="伯乐奖励" prop="mentorBonus" width="110" align="right">
           <template #default="{ row }">¥{{ fmt(row.mentorBonus) }}</template>
         </el-table-column>
         <el-table-column label="奖金" prop="bonus" width="100" align="right">
@@ -253,7 +253,7 @@ const summaryMethod = ({ columns, data }: any) => {
 const exportExcel = () => {
   if (!tableData.value.length) return;
   const headers = [
-    '部门ID', '人数', '业绩提成', '团队提成', '门店提成', '底薪', '保底补足', '招聘奖励', '奖金', '其他收入', '收入合计',
+    '部门ID', '人数', '业绩提成', '团队提成', '门店提成', '底薪', '保底补足', '伯乐奖励', '奖金', '其他收入', '收入合计',
     '社保', '公积金', '考勤扣款', '商业保险', '宿舍费', '其他支出', '支出合计', '个税', '实发合计', '单位社保',
   ];
   const keys = [

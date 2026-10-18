@@ -41,6 +41,10 @@ export const employeeApi = {
   history(employeeId: string | number) {
     return panjiaRequest.get<EmployeeChangeLog[]>(`/people/employee/${employeeId}/history`);
   },
+  /** 调整算薪事实生效日期（值不变，仅平移生效日；factTypes 传 ["ALL"]=全部项） */
+  adjustFactDate(employeeId: string | number, factTypes: string[], newDate: string) {
+    return panjiaRequest.post<number>(`/people/employee/${employeeId}/adjust-fact-date`, { factTypes, newDate });
+  },
   /** 岗位选项（职位多选下拉） */
   postOptions() {
     return panjiaRequest.get<PostOption[]>('/people/employee/postOptions');

@@ -208,9 +208,9 @@ const INCOME_COLS: ColDef[] = [
     } catch { /* 回退默认口径 */ }
     return `职级保底 ¥${fmt((r as any).minSalary)}：MAX(保底, 对应提成) 补足 ¥${fmt(r.guaranteeFill)}`;
   } },
-  { prop: 'mentorBonus', label: '招聘奖励', source: (r) => {
+  { prop: 'mentorBonus', label: '伯乐奖励', source: (r) => {
     const apprentice = Number(r.mentorBonus) / 0.02;
-    return `徒弟结佣 ¥${fmt(apprentice)} × 2% = ¥${fmt(r.mentorBonus)}`;
+    return `千里马结佣 ¥${fmt(apprentice)} × 2% = ¥${fmt(r.mentorBonus)}`;
   } },
   { prop: 'bonus', label: '奖金', source: '奖金审批单' },
   { prop: 'otherIncome', label: '其他收入', source: '收入录入记录（补贴/补发等）' },

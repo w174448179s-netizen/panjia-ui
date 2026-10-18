@@ -66,7 +66,7 @@
           <div class="table-heading">
             <span class="panel-kicker">Employee Dataset</span>
             <h3>员工管理</h3>
-            <p>共 {{ total }} 名员工。员工事实数据（职级/社保/师傅等）变更全程留痕，离职仅停用不删除。</p>
+            <p>共 {{ total }} 名员工。员工事实数据（职级/社保/伯乐等）变更全程留痕，离职仅停用不删除。</p>
           </div>
           <div class="toolbar-actions">
             <el-button v-hasPermi="['people:employee:add']" type="primary" plain icon="Plus" @click="handleAdd">
@@ -307,8 +307,8 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="师傅工号" prop="mentorCode">
-              <el-input v-model="form.mentorCode" placeholder="填师傅工号；留空表示无师傅，清空即解除" />
+            <el-form-item label="伯乐工号" prop="mentorCode">
+              <el-input v-model="form.mentorCode" placeholder="填伯乐工号；留空表示无伯乐，清空即解除" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -361,12 +361,14 @@
             </el-form-item>
           </el-col>
           <el-col :span="12" v-if="formDialog.isEdit">
-            <el-form-item label="变更生效日" prop="effectiveDate">
+            <el-form-item label="变更生效月" prop="effectiveDate">
+              <!-- 生效粒度 = 月（算薪按月）：月选择器，落库为当月 1 日 -->
               <el-date-picker
                 v-model="form.effectiveDate"
-                type="date"
+                type="month"
+                format="YYYY-MM"
                 value-format="YYYY-MM-DD"
-                placeholder="不填 = 今天"
+                placeholder="不填 = 本月"
                 style="width: 100%"
               />
             </el-form-item>
@@ -402,8 +404,8 @@
           <el-descriptions-item label="状态">
             <dict-tag :options="panjia_employee_status" :value="detailData.status" />
           </el-descriptions-item>
-          <el-descriptions-item label="师傅">
-            {{ detailData.mentorName ? `${detailData.mentorName}（${detailData.mentorCode}）` : '无师傅' }}
+          <el-descriptions-item label="伯乐">
+            {{ detailData.mentorName ? `${detailData.mentorName}（${detailData.mentorCode}）` : '无伯乐' }}
           </el-descriptions-item>
           <el-descriptions-item label="备注" :span="2">{{ detailData.remark || '—' }}</el-descriptions-item>
         </el-descriptions>
@@ -452,9 +454,15 @@
         </el-descriptions>
 
         <div class="detail-section">
-          <h4>变更记录</h4>
+          <h4 class="history-header">
+            <span>变更记录</span>
+            <!-- 调整生效月：值不变，仅平移所选变更项当前生效记录的生效月（更正录入时选错月份） -->
+            <el-button size="small" type="primary" plain @click="openAdjust">调整生效月</el-button>
+          </h4>
           <el-table v-loading="historyLoading" border :data="historyData" size="small">
-            <el-table-column label="生效日" prop="effectiveDate" width="100" align="center" />
+            <el-table-column label="生效月" prop="effectiveDate" width="100" align="center">
+              <template #default="scope">{{ (scope.row.effectiveDate || '').slice(0, 7) }}</template>
+            </el-table-column>
             <el-table-column label="变更项" prop="changeFieldName" width="90" align="center" />
             <el-table-column label="变更前" prop="beforeValue" min-width="100" show-overflow-tooltip>
               <template #default="scope">{{ scope.row.beforeValue || '—' }}</template>
@@ -470,6 +478,47 @@
       </template>
       <template #footer>
         <el-button @click="detailVisible = false">关 闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 调整生效月（值不变，仅平移生效月；用于更正录入时选错生效月的场景） -->
+    <el-dialog v-model="adjustVisible" title="调整生效月" width="520px" append-to-body>
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 14px"
+        title="不修改变更项的值，仅把其当前生效中的记录平移到新生效月；算薪批次为快照，调整后需重算对应批次才生效"
+      />
+      <el-form label-width="90px">
+        <el-form-item label="变更项">
+          <el-select
+            v-model="adjustForm.factTypes"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="选择要调整的变更项（可多选）"
+            style="width: 100%"
+          >
+            <el-option label="全部项" value="ALL" />
+            <el-option v-for="t in FACT_TYPE_OPTIONS" :key="t.code" :label="t.desc" :value="t.code" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="新生效月">
+          <!-- 生效粒度 = 月：月选择器，提交当月 1 日 -->
+          <el-date-picker
+            v-model="adjustForm.newDate"
+            type="month"
+            format="YYYY-MM"
+            value-format="YYYY-MM-DD"
+            placeholder="选择新的生效月份"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="adjustVisible = false">取 消</el-button>
+        <el-button type="primary" :loading="adjusting" @click="submitAdjust">确 定</el-button>
       </template>
     </el-dialog>
 
@@ -570,7 +619,7 @@
         <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
         <template #tip>
           <div class="el-upload__tip">
-            支持 .xlsx / .xls / .csv 格式；模板字段：大区/门店/小组（按层级拆分）、工号、姓名、职位、职级、入职时间、社保/公积金/商保/宿舍/兼职、师傅工号
+            支持 .xlsx / .xls / .csv 格式；模板字段：大区/门店/小组（按层级拆分）、工号、姓名、职位、职级、入职时间、社保/公积金/商保/宿舍/兼职、伯乐工号
           </div>
         </template>
       </el-upload>
@@ -863,6 +912,60 @@ const handleDetail = async (row: Employee) => {
   historyData.value = historyRes.data ?? [];
 };
 
+// ==================== 调整生效日期 ====================
+/** 算薪事实类型选项（与后端 FactType 码值一致） */
+const FACT_TYPE_OPTIONS = [
+  { code: 'LEVEL', desc: '职级' },
+  { code: 'STATUS', desc: '状态' },
+  { code: 'SOCIAL', desc: '社保' },
+  { code: 'SOCIAL_FEE', desc: '社保金额' },
+  { code: 'HOUSING', desc: '公积金' },
+  { code: 'HOUSING_FUND', desc: '公积金金额' },
+  { code: 'COMMERCIAL', desc: '商业保险' },
+  { code: 'COMMERCIAL_FEE', desc: '商业保险金额' },
+  { code: 'DORMITORY', desc: '宿舍' },
+  { code: 'DORMITORY_FEE', desc: '宿舍费金额' },
+  { code: 'PARTTIME', desc: '兼职' },
+  { code: 'MENTOR', desc: '伯乐' },
+];
+const adjustVisible = ref(false);
+const adjusting = ref(false);
+const adjustForm = ref<{ factTypes: string[]; newDate: string | null }>({ factTypes: [], newDate: null });
+
+const openAdjust = () => {
+  adjustForm.value = { factTypes: [], newDate: null };
+  adjustVisible.value = true;
+};
+
+const refreshHistory = async () => {
+  if (!detailData.value) return;
+  const historyRes = await employeeApi.history(detailData.value.employeeId);
+  historyData.value = historyRes.data ?? [];
+};
+
+const submitAdjust = async () => {
+  if (!detailData.value) return;
+  if (!adjustForm.value.factTypes.length || !adjustForm.value.newDate) {
+    ElMessage.warning('请选择变更项和新生效月');
+    return;
+  }
+  adjusting.value = true;
+  try {
+    const res = await employeeApi.adjustFactDate(
+      detailData.value.employeeId,
+      adjustForm.value.factTypes,
+      adjustForm.value.newDate,
+    );
+    ElMessage.success(`已调整 ${(res as any).data ?? 0} 项生效日期`);
+    adjustVisible.value = false;
+    await refreshHistory();
+  } catch {
+    /* 拦截器处理 */
+  } finally {
+    adjusting.value = false;
+  }
+};
+
 // ==================== 对账 ====================
 const reconcileLoading = ref(false);
 const reconcileDialog = reactive({ visible: false });
@@ -1090,7 +1193,7 @@ const issueLabel = (type: string): string =>
     DUPLICATE_CODE: '工号重复',
     DEPT_PATH_INVALID: '部门路径非法',
     LEVEL_INVALID: '职级非法',
-    MENTOR_NOT_FOUND: '师傅不存在'
+    MENTOR_NOT_FOUND: '伯乐不存在'
   })[type] ?? type;
 
 const issueTagType = (type: string): 'danger' | 'warning' | 'info' =>
@@ -1145,6 +1248,12 @@ onMounted(() => {
 
     h4 {
       margin: 0 0 10px;
+    }
+
+    .history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
   }
 

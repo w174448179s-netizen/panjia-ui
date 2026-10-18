@@ -122,7 +122,7 @@
             <el-table-column label="结佣提成计算过程" width="240" align="left">
               <template #default="{ row }">{{ calcProcessText(row) || '—' }}</template>
             </el-table-column>
-            <el-table-column label="招聘奖励" prop="mentorBonus" width="90" align="right">
+            <el-table-column label="伯乐奖励" prop="mentorBonus" width="90" align="right">
               <template #default="{ row }">{{ num(row.mentorBonus) }}</template>
             </el-table-column>
             <el-table-column label="底薪" width="90" align="right">
@@ -277,7 +277,7 @@
             <el-table-column label="结佣提成计算过程" width="240" align="left">
               <template #default="{ row }">{{ calcProcessText(row) || '—' }}</template>
             </el-table-column>
-            <el-table-column label="招聘提成" prop="mentorBonus" width="100" align="right">
+            <el-table-column label="伯乐奖励" prop="mentorBonus" width="100" align="right">
               <template #default="{ row }">{{ num(row.mentorBonus) }}</template>
             </el-table-column>
             <el-table-column label="社保" prop="socialFee" width="90" align="right">
