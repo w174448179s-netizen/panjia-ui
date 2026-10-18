@@ -80,7 +80,7 @@
         </el-tooltip>
       </div>
       <el-tabs v-model="detailTab" class="detail-tabs" @tab-change="onTabChange">
-        <!-- ══════════ 工资表 sheet（28 列，含经纪人 + 店长） ══════════ -->
+        <!-- ══════════ 工资表 sheet（29 列，含经纪人 + 店长） ══════════ -->
         <el-tab-pane label="工资表" name="AGENT" lazy>
           <div class="tab-toolbar">
             <PanjiaDeptSelect v-model="ag.filter.deptId" width="200px" />
@@ -128,6 +128,9 @@
             <el-table-column label="底薪" width="90" align="right">
               <template #default="{ row }">{{ num(baseSalaryOf(row)) }}</template>
             </el-table-column>
+            <el-table-column label="保底推导" width="240" align="left">
+              <template #default="{ row }">{{ guaranteeTraceText(row) || '—' }}</template>
+            </el-table-column>
             <el-table-column label="绩效" prop="bonus" width="90" align="right">
               <template #default="{ row }">{{ num(row.bonus) }}</template>
             </el-table-column>
@@ -172,7 +175,7 @@
             :total="ag.filtered.length" :page-sizes="[20, 50, 100]" layout="total, sizes, prev, pager, next" size="small" />
         </el-tab-pane>
 
-        <!-- ══════════ 店长工资 sheet（15 列，底薪计算与补齐依据，对齐天街工资表 店长工资 sheet） ══════════ -->
+        <!-- ══════════ 店长工资 sheet（16 列，底薪计算与补齐依据，对齐天街工资表 店长工资 sheet） ══════════ -->
         <el-tab-pane label="店长" name="MANAGER" lazy>
           <div class="tab-toolbar">
             <PanjiaDeptSelect v-model="mf.filter.deptId" width="200px" />
@@ -218,6 +221,9 @@
             </el-table-column>
             <el-table-column label="补足8000部分" prop="guaranteeFill" width="120" align="right">
               <template #default="{ row }">{{ num(row.guaranteeFill) }}</template>
+            </el-table-column>
+            <el-table-column label="保底推导" width="240" align="left">
+              <template #default="{ row }">{{ guaranteeTraceText(row) || '—' }}</template>
             </el-table-column>
             <el-table-column label="其他扣款" prop="otherDeduct" width="100" align="right">
               <template #default="{ row }">{{ neg(row.otherDeduct) }}</template>
@@ -530,7 +536,7 @@ import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import { attendanceApi } from '@/api/panjia/attendance';
 import { scoreApi } from '@/api/panjia/score';
-import { exportMultiSheet, parseStoreItems, grossMinusDeduct, calcProcessText, type ExportExtraData } from '../components/payroll-export';
+import { exportMultiSheet, parseStoreItems, grossMinusDeduct, calcProcessText, guaranteeTraceText, type ExportExtraData } from '../components/payroll-export';
 import { resolveBizNo } from '@/utils/panjiaBiz';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 

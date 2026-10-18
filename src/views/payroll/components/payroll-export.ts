@@ -78,7 +78,7 @@ const baseSalaryOf = (r: PayrollDetail): string | number => {
 };
 
 /** 保底补足推导过程（保底职级落地 guaranteeCalcProcess；与页面「保底推导」列同口径，未触发也输出） */
-const guaranteeTraceText = (r: PayrollDetail): string => {
+export const guaranteeTraceText = (r: any): string => {
   try {
     const gp = JSON.parse((r as any).guaranteeCalcProcess || 'null');
     if (!gp || typeof gp !== 'object') return '';
