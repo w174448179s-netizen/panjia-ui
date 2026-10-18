@@ -70,6 +70,8 @@ export interface PayrollDetail {
   totalDeduct?: number | string | null;
   /** 提成点调整溯源 JSON（RateAdjustItem 数组：type/rate/reason/source/adjustId） */
   rateAdjustJson?: string | null;
+  /** 结佣提成跨月回溯计算过程 JSON（[{month,perf,rate,income}]，仅存在回溯时落地） */
+  commissionCalcProcess?: string | null;
   /** 店长/总监 sheet：门店当月新签计薪业绩合计（折算后） */
   deptNewSignTotal?: number;
   /** 店长/总监 sheet：门店社保业绩扣款（门店社保扣减标准 × 计缴参保人数） */

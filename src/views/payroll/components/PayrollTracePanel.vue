@@ -11,7 +11,14 @@
         <div class="compose-block income">
           <div class="compose-head">收入项 <span>应发 ¥{{ fmt(row.gross) }}</span></div>
           <div v-for="it in incomeItems" :key="it.label" class="compose-item">
-            <span class="compose-name">{{ it.label }}<i class="compose-src">{{ it.source }}</i></span>
+            <span class="compose-name">
+              {{ it.label }}
+              <!-- 业绩提成：跨月回溯时展示全部算薪分笔过程（与列表「算薪提成」列同口径） -->
+              <span v-if="it.steps.length" class="compose-steps">
+                <i v-for="(s, i) in it.steps" :key="i" class="compose-src">{{ s }}</i>
+              </span>
+              <i v-else class="compose-src">{{ it.source }}</i>
+            </span>
             <span class="compose-val">+{{ fmt(it.value) }}</span>
           </div>
           <div v-if="!incomeItems.length" class="compose-empty">本期无收入项</div>
@@ -219,9 +226,30 @@ const DEDUCT_COLS: ColDef[] = [
 
 const resolveSource = (c: ColDef, row: PayrollDetail) => typeof c.source === 'function' ? c.source(row) : c.source;
 
+/* ───────────── 结佣提成跨月回溯分笔过程（引擎落地 commissionCalcProcess：[{month,perf,rate,income}]） ───────────── */
+interface CommissionCalcStep { month: string; perf: number; rate: number; income: number }
+
+const calcSteps = (row: PayrollDetail): CommissionCalcStep[] => {
+  try {
+    const arr = JSON.parse((row as any).commissionCalcProcess || '[]');
+    return Array.isArray(arr) ? (arr as CommissionCalcStep[]) : [];
+  } catch {
+    return [];
+  }
+};
+
 const incomeItems = INCOME_COLS
   .filter((c) => !isZero((props.row as any)[c.prop]))
-  .map((c) => ({ label: c.label, value: Number((props.row as any)[c.prop]) || 0, source: resolveSource(c, props.row) }));
+  .map((c) => ({
+    label: c.label,
+    value: Number((props.row as any)[c.prop]) || 0,
+    source: resolveSource(c, props.row),
+    // 业绩提成有跨月回溯过程时逐笔展示，否则回落到单行口径说明
+    steps: c.prop === 'commissionIncome'
+      ? calcSteps(props.row).map((s) =>
+          `结佣业绩 ¥${fmt(s.perf)} × ${s.month}快照提点 ${(Number(s.rate) * 100).toFixed(1)}% = ¥${fmt(s.income)}`)
+      : [] as string[],
+  }));
 
 const deductItems = DEDUCT_COLS
   .filter((c) => !isZero((props.row as any)[c.prop]))
@@ -344,6 +372,8 @@ const teamSummary = ({ columns, data }: any) => {
 .compose-item { display: flex; justify-content: space-between; align-items: baseline; padding: 3px 0; font-size: 13px; gap: 12px; }
 .compose-name { color: #303133; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .compose-src { font-style: normal; font-size: 11px; color: #b0b3b8; }
+/* 跨月回溯分笔过程：纵向排列每笔计算式 */
+.compose-steps { display: flex; flex-direction: column; gap: 2px; text-align: left; }
 .compose-val { font-variant-numeric: tabular-nums; color: #303133; white-space: nowrap; }
 .compose-empty { color: #c0c4cc; font-size: 12px; padding: 4px 0; }
 .net-val { font-weight: 700; color: #0a7d43; font-size: 15px; }
