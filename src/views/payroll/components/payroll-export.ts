@@ -77,6 +77,28 @@ const baseSalaryOf = (r: PayrollDetail): string | number => {
   return num(r.baseSalary);
 };
 
+/** 保底补足推导过程（保底职级落地 guaranteeCalcProcess；与页面「保底推导」列同口径，未触发也输出） */
+const guaranteeTraceText = (r: PayrollDetail): string => {
+  try {
+    const gp = JSON.parse((r as any).guaranteeCalcProcess || 'null');
+    if (!gp || typeof gp !== 'object') return '';
+    const parts: string[] = [`保底${num(gp.minSalary)} vs ${gp.compareLabel}${num(gp.compareValue)}`];
+    for (const s of gp.newsignSteps || []) {
+      parts.push(`新签业绩${num(s.perf)}×${s.month}快照提点${(Number(s.rate) * 100).toFixed(1)}%=${num(s.income)}`);
+    }
+    if ((gp.newsignSteps || []).length) {
+      parts.push(`+${num(gp.compareValue)}（按新签月分笔）`);
+    }
+    for (const s of gp.steps || []) {
+      parts.push(`${s.label}${num(s.value)}`);
+    }
+    parts.push(`取大者补足${num(gp.fill)}（${Number(gp.fill) !== 0 ? '已触发' : '未触发'}）`);
+    return parts.join('; ');
+  } catch {
+    return '';
+  }
+};
+
 /**
  * 工资合计/实发工资口径：应发 - 扣款（未减个税），两列同值；
  * 再减个税（tax）后为最终发放（即 net）。
@@ -107,14 +129,14 @@ export interface SheetConfig {
 }
 
 export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
-  // ────────────── 工资表 sheet（31 列，含经纪人 + 店长） ──────────────
+  // ────────────── 工资表 sheet（32 列，含经纪人 + 店长） ──────────────
   AGENT: {
     name: '工资表',
     roles: ['AGENT', 'MANAGER'],
     heads: [
       '门店', '员工编号', '姓名', '职级', '职位', '当月新签业绩', '当月新签业绩提成比列',
       '绩效提成扣点', '个人提点奖励', '当月最终提成比列', '结佣业绩', '提成比例', '提成金额', '结佣提成计算过程',
-      '伯乐奖励', '底薪', '奖金', '其他收入', '考勤扣款', '积分扣款', '应发工资',
+      '伯乐奖励', '底薪', '保底推导', '奖金', '其他收入', '考勤扣款', '积分扣款', '应发工资',
       '社保扣款', '公积金扣款', '往月负工资', '商业保险', '宿舍管理费', '其他支出',
       '工资合计', '实发工资', '个税扣除', '最终发放',
     ],
@@ -136,6 +158,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         calcProcessText(r),
         num(r.mentorBonus),
         baseSalaryOf(r),
+        guaranteeTraceText(r),
         num(r.bonus),
         num(r.otherIncome),
         neg(r.attendanceFee),
@@ -155,13 +178,13 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
     },
   },
 
-  // ────────────── 店长 sheet（17 列） ──────────────
+  // ────────────── 店长 sheet（18 列） ──────────────
   MANAGER: {
     name: '店长工资',
     heads: [
       '门店', '姓名', '职级', '{period}月新签团队业绩', '社保扣减标准', '计缴参保人数',
       '社保业绩扣款', '新签与结佣差额', '团队计薪业绩', '提成比例', '团队提成金额',
-      '当月个人新签业绩提成', '合计', '保底', '补足8000部分', '其他扣款', '店长工资',
+      '当月个人新签业绩提成', '合计', '保底', '补足8000部分', '保底推导', '其他扣款', '店长工资',
     ],
     row: (r) => {
       const newSign = Number(r.deptNewSignTotal) || 0;
@@ -187,6 +210,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         num(team + personal),               // 合计
         num(r.minSalary),
         num(r.guaranteeFill),
+        guaranteeTraceText(r),
         neg(r.otherDeduct),
         baseSalaryOf(r),                   // 店长工资 = 补足8000部分 + 团队提成金额
       ];
