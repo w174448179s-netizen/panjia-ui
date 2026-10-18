@@ -24,6 +24,21 @@
             {{ statusLabel(currentBatch.status) }}
           </el-tag>
         </div>
+        <!-- 员工核对（纯留痕，不影响审批流）：已核对显示留痕时间；批次锁定/发放后不再提供核对按钮 -->
+        <div v-if="vo" class="header-right">
+          <el-tag v-if="vo.detail.ackTime" type="success" effect="light" size="large">
+            已核对 {{ String(vo.detail.ackTime).replace('T', ' ').slice(0, 16) }}
+          </el-tag>
+          <el-button
+            v-else-if="currentBatch && !['LOCKED', 'PAID'].includes(currentBatch.status)"
+            type="primary"
+            plain
+            :loading="acking"
+            @click="onAck"
+          >
+            核对工资
+          </el-button>
+        </div>
       </div>
 
       <template v-if="vo">
@@ -94,6 +109,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { ElMessage } from 'element-plus';
 import { Wallet } from '@element-plus/icons-vue';
 import { mySalaryApi, type MyPayrollDetailVO, type PayrollBatch } from '@/api/panjia/payroll';
 import PayrollTracePanel from '../components/PayrollTracePanel.vue';
@@ -149,6 +165,24 @@ const loadDetail = async () => {
   }
 };
 
+// 员工核对工资：纯留痕标记（后端写明细行 ack_time），不影响工资审批流；幂等
+const acking = ref(false);
+const onAck = async () => {
+  if (selectedBatchId.value == null || acking.value) return;
+  acking.value = true;
+  try {
+    const res = await mySalaryApi.ackDetail(selectedBatchId.value);
+    if (vo.value && (res as any).data) {
+      vo.value.detail.ackTime = (res as any).data.ackTime || new Date().toISOString();
+    }
+    ElMessage.success('核对完成，已留痕');
+  } catch {
+    /* 拦截器处理 */
+  } finally {
+    acking.value = false;
+  }
+};
+
 onMounted(loadBatches);
 </script>
 
@@ -159,6 +193,7 @@ onMounted(loadBatches);
 
 .header-bar { display: flex; align-items: center; justify-content: space-between; }
 .header-left { display: flex; align-items: center; gap: 12px; }
+.header-right { display: flex; align-items: center; gap: 10px; }
 .page-title { font-size: 17px; font-weight: 600; color: #1f2d3d; }
 
 .emp-bar { display: flex; align-items: center; gap: 10px; margin-top: 14px; }

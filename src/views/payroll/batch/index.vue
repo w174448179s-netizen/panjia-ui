@@ -19,9 +19,13 @@
       <el-table :data="batches" stripe border>
         <el-table-column label="归属月" prop="period" width="110" />
         <el-table-column label="范围" prop="deptScope" width="90" />
-        <el-table-column label="状态" width="110">
+        <el-table-column label="状态" width="150">
           <template #default="{ row }">
             <el-tag :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag>
+            <!-- 工资条发送留痕：已发送的批次员工端「工资查询」可见 -->
+            <el-tooltip v-if="row.sendTime" :content="`工资条发送于 ${String(row.sendTime).replace('T', ' ').slice(0, 16)}，操作人：${row.sendBy || '—'}`" placement="top">
+              <el-tag type="success" size="small" style="margin-left: 4px">已发送</el-tag>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column label="人数" prop="employeeCount" width="70" align="center" />
@@ -41,6 +45,8 @@
                    业务页仅保留算薪/提交/发放动作，按状态平铺 -->
               <el-button v-if="canCalc(row.status)" link type="primary" :loading="actingRowId === row.id" :disabled="!!actingRowId && actingRowId !== row.id" @click="doAction(row as PayrollBatch, 'calculate')">算薪</el-button>
               <el-button v-if="row.status === 'CALCULATED'" link type="success" :loading="actingRowId === row.id" :disabled="!!actingRowId && actingRowId !== row.id" @click="doAction(row as PayrollBatch, 'submit')">提交审批</el-button>
+              <!-- 发送工资条：算薪完成且未锁定可发（后端 canSend 校验）；发送后员工端「工资查询」可见；锁定/发放后不显示 -->
+              <el-button v-if="['CALCULATED', 'REVIEWING', 'APPROVED'].includes(row.status)" link type="success" :loading="actingRowId === row.id" :disabled="!!actingRowId && actingRowId !== row.id" @click="doAction(row as PayrollBatch, 'send')">{{ row.sendTime ? '重发工资条' : '发送工资条' }}</el-button>
               <el-button v-if="row.status === 'LOCKED'" link type="warning" :loading="actingRowId === row.id" :disabled="!!actingRowId && actingRowId !== row.id" @click="doAction(row as PayrollBatch, 'pay')">标记发放</el-button>
               <!-- 解封（反结账）：仅已锁定批次可解封；解封同时解锁该期间所有 LOCKED 批次
                    （LOCKED → CALCULATED），允许重算薪 + 重审批 + 再锁定。PAID 已发放为资金终态，禁止解封 -->
@@ -720,11 +726,14 @@ const createBatch = async () => {
 
 const doAction = async (row: PayrollBatch, action: string) => {
   if (actingRowId.value) return;
-  const labelMap: Record<string, string> = { calculate: '算薪', submit: '提交审核', pay: '标记发放' };
+  const labelMap: Record<string, string> = { calculate: '算薪', submit: '提交审核', send: '发送工资条', pay: '标记发放' };
   const label = labelMap[action];
-  if (action === 'pay') {
+  if (action === 'pay' || action === 'send') {
+    const tip = action === 'send'
+      ? `确认发送批次「${row.period}」工资条？发送后员工在「综合查询 → 工资查询」即可查看本人工资`
+      : `确认${label}批次「${row.period}」？`;
     try {
-      await ElMessageBox.confirm(`确认${label}批次「${row.period}」？`, '提示', { type: 'warning' });
+      await ElMessageBox.confirm(tip, '提示', { type: 'warning' });
     } catch {
       return;
     }

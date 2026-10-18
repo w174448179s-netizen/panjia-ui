@@ -13,12 +13,18 @@ export interface PayrollBatch {
   netTotal: number;
   attempt: number;
   lockedAt: string;
+  /** 工资条发送时间（员工端「工资查询」可见的前提之一；历史锁定/发放批次无此值也可见） */
+  sendTime?: string | null;
+  /** 工资条发送操作人（留痕） */
+  sendBy?: string | null;
   createTime: string;
 }
 
 export interface PayrollDetail {
   id: number;
   employeeId: number;
+  /** 员工核对时间（纯留痕；null=未核对，批次锁定后不可核对） */
+  ackTime?: string | null;
   deptId: number;
   levelCode: string;
   employeeRole: string;
@@ -192,6 +198,10 @@ export const payrollApi = {
   pay(id: number) {
     return panjiaRequest.post<PayrollBatch>(`/payroll/batch/${id}/pay`);
   },
+  /** 发送工资条：算薪完成且未锁定可发；发送后员工端「工资查询」可见 */
+  send(id: number) {
+    return panjiaRequest.post<PayrollBatch>(`/payroll/batch/${id}/send`);
+  },
   listBatches(period?: string) {
     return panjiaRequest.get<PayrollBatch[]>('/payroll/batch', { period });
   },
@@ -301,6 +311,10 @@ export const mySalaryApi = {
   /** 我在指定批次的工资明细 + 员工主数据 */
   getDetail(batchId: number | string) {
     return panjiaRequest.get<MyPayrollDetailVO>('/payroll/batch/my/detail', { batchId });
+  },
+  /** 员工核对工资（纯留痕标记；批次锁定后不可核对，已核对幂等） */
+  ackDetail(batchId: number | string) {
+    return panjiaRequest.post<PayrollDetail>(`/payroll/batch/my/detail/ack?batchId=${batchId}`);
   },
   /** 我的结佣追溯（本人期间已审批结佣明细） */
   myCommissionTrace(period: string) {
