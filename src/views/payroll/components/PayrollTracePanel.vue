@@ -206,6 +206,11 @@ const INCOME_COLS: ColDef[] = [
     return `职级保底 ¥${fmt((r as any).minSalary)}：MAX(保底, 对应提成) 补足 ¥${fmt(r.guaranteeFill)}`;
   } },
   { prop: 'mentorBonus', label: '伯乐奖励', source: (r) => {
+    // 按职级规则模式自适应：RATE_ADD=加点比例（mentorAdd 仅该模式落地）；AMOUNT_RATIO=独立金额
+    if ((r as any).mentorAdd != null) {
+      const add = Number((r as any).mentorAdd);
+      return `伯乐加点 ${(add * 100).toFixed(1)}%（RATE_ADD，已计入最终提成比例）`;
+    }
     const apprentice = Number(r.mentorBonus) / 0.02;
     return `千里马结佣 ¥${fmt(apprentice)} × 2% = ¥${fmt(r.mentorBonus)}`;
   } },

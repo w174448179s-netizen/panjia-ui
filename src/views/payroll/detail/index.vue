@@ -167,6 +167,9 @@
                   取大者补足 ¥{{ fmt(guaranteeProcess(row)!.fill) }}（{{ isZero(guaranteeProcess(row)!.fill) ? '未触发' : '已触发' }}）
                 </div>
               </div>
+              <span v-else-if="c.prop === 'mentorBonus' && row.mentorAdd != null" class="zero-val">—</span>
+              <!-- 个人提点奖励：RATE_ADD 模式的伯乐加点比例（isZero 兜底 null/0 显示 —） -->
+              <div v-else-if="c.prop === 'mentorAdd' && !isZero(row[c.prop])" class="calc-step">{{ ratePercent(row[c.prop]) }}</div>
               <span v-else-if="isZero(row[c.prop])" class="zero-val">—</span>
               <!-- 业绩提成：有跨月回溯计算过程时在金额下方分笔展示 -->
               <div v-else-if="c.prop === 'commissionIncome' && row.commissionCalcProcess" class="calc-wrap">
@@ -372,7 +375,8 @@ const INCOME_COLS: ColDef[] = [
   { prop: 'baseSalary', label: '底薪', width: 100, source: '职级规则配置（历史快照）；保底职级无底薪' },
   { prop: 'guaranteeFill', label: '保底补足', width: 105, source: 'MAX(保底, 个人新签提成)−个人新签提成（经纪人）/ MAX(保底, 团队+个人新签)−团队−个人新签（店长）' },
   { prop: 'guaranteeTrace', label: '保底推导', width: 230, source: '保底补足计算过程：保底 vs 比较、新签业绩按新签月分笔、取大者补足；未触发也展示' },
-  { prop: 'mentorBonus', label: '伯乐奖励', width: 95, source: '伯乐关系档案：千里马结佣业绩 × 2%' },
+  { prop: 'mentorAdd', label: '个人提点奖励', width: 105, source: 'RATE_ADD 模式：伯乐加点比例（已计入最终提成比例）；AMOUNT_RATIO 模式为空' },
+  { prop: 'mentorBonus', label: '伯乐奖励', width: 95, source: 'AMOUNT_RATIO 模式：千里马结佣业绩 × 配置比例；RATE_ADD 模式为空' },
   { prop: 'bonus', label: '奖金', width: 90, source: '奖金审批单' },
   { prop: 'otherIncome', label: '其他收入', width: 95, source: '收入录入记录（补贴/补发等）' },
 ];

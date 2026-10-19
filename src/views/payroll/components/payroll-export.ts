@@ -29,6 +29,13 @@ const ratePercent = (v: any): string => {
   return `${(n * 100).toFixed(2)}%`;
 };
 
+/** 个人提点奖励单元格：RATE_ADD=mentorAdd 加点百分比（比例区）；AMOUNT_RATIO 为空 */
+const mentorAddCell = (r: PayrollDetail): string =>
+  r.mentorAdd != null ? ratePercent(r.mentorAdd) : '';
+/** 伯乐奖励单元格：AMOUNT_RATIO=mentorBonus 金额（金额区）；RATE_ADD 为空（比例见个人提点奖励列） */
+const mentorBonusCell = (r: PayrollDetail): string | number =>
+  r.mentorAdd != null ? '' : num(r.mentorBonus);
+
 const roleLabel = (r: string) =>
   ({ AGENT: '经纪人', MANAGER: '店长', DIRECTOR: '总监' }[r] || r);
 
@@ -150,13 +157,13 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         num(r.newSignPerformance),
         r.newSignRate != null ? ratePercent(r.newSignRate) : '',
         r.totalDeduct != null ? ratePercent(r.totalDeduct) : '',
-        num(r.mentorBonus),
+        mentorAddCell(r),
         r.finalRate != null ? ratePercent(r.finalRate) : '',
         num(r.commissionPerformance),
         r.finalRate != null ? ratePercent(r.finalRate) : '',
         num(r.commissionIncome),
         calcProcessText(r),
-        num(r.mentorBonus),
+        mentorBonusCell(r),
         baseSalaryOf(r),
         guaranteeTraceText(r),
         num(r.bonus),
@@ -244,7 +251,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         num(r.commissionPerformance),
         num(r.commissionIncome),
         calcProcessText(r),
-        num(r.mentorBonus),
+        mentorBonusCell(r),
         neg(r.socialFee),                  // 社保（员工级扣款，与 Excel 一致展示负号）
         neg(r.housingFund),                // 公积金
         neg(r.commercialInsurance),         // 商业保险
@@ -265,7 +272,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
           num(newSign - social - diff),
           r.storeRate != null ? ratePercent(r.storeRate) : '', num(r.storeIncome),
           num(r.baseSalary), num(r.fullAttendance), num(r.bonus), num(r.commissionPerformance),
-          num(r.commissionIncome), calcProcessText(r), num(r.mentorBonus), neg(r.socialFee), neg(r.housingFund),
+          num(r.commissionIncome), calcProcessText(r), mentorBonusCell(r), neg(r.socialFee), neg(r.housingFund),
           neg(r.commercialInsurance), num(r.gross), neg(r.tax), num(r.net),
         ]];
       }
@@ -282,7 +289,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
             r.employeeName || '', storeName, num(itNew), neg(itSocial), neg(itDiff), num(itBillable),
             ratePercent(it.rate), num(itIncome),
             num(r.baseSalary), num(r.fullAttendance), num(r.bonus), num(r.commissionPerformance),
-            num(r.commissionIncome), calcProcessText(r), num(r.mentorBonus), neg(r.socialFee), neg(r.housingFund),
+            num(r.commissionIncome), calcProcessText(r), mentorBonusCell(r), neg(r.socialFee), neg(r.housingFund),
             neg(r.commercialInsurance), num(r.gross), neg(r.tax), num(r.net),
           ];
         }
@@ -326,7 +333,7 @@ function perfFactRow(it: CommissionTraceItem): (string | number)[] {
 const HR_HEADS = [
   '门店名称', '姓名', '职级', '职位', '底薪', '出勤天数', '考勤扣款', '是否全勤',
   '全勤', '考勤详情', '成都社保扣款', '公积金扣款', '宿舍管理费', '积分扣款',
-  '新人绩效', '入职未满半年扣除基地训+从业资格证费用', '新人带教', '其他扣款',
+  '新人绩效', '入职未满半年扣除基地训+从业资格证费用', '伯乐奖励', '其他扣款',
 ];
 
 function hrRow(r: PayrollDetail): (string | number)[] {
@@ -347,7 +354,7 @@ function hrRow(r: PayrollDetail): (string | number)[] {
     neg(r.pointsFee),
     num(r.bonus),                     // 新人绩效/绩效
     neg(r.negativeCarryover),         // 往月负工资
-    num(r.mentorBonus),               // 新人带教
+    mentorBonusCell(r),               // 伯乐奖励
     neg(r.otherDeduct),
   ];
 }

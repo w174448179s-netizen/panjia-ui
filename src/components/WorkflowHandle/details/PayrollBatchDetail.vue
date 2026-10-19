@@ -40,7 +40,7 @@
           <el-table-column label="底薪" prop="baseSalary" width="90" align="right">
             <template #default="{ row }">{{ fmt(row.baseSalary) }}</template>
           </el-table-column>
-          <el-table-column label="招聘奖" prop="mentorBonus" width="90" align="right">
+          <el-table-column label="伯乐奖励" prop="mentorBonus" width="90" align="right">
             <template #default="{ row }">{{ fmt(row.mentorBonus) }}</template>
           </el-table-column>
           <el-table-column label="奖金" prop="bonus" width="90" align="right">

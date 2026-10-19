@@ -105,7 +105,8 @@
               <template #default="{ row }">{{ row.totalDeduct != null ? ratePercent(row.totalDeduct) : '' }}</template>
             </el-table-column>
             <el-table-column label="个人提点奖励" width="110" align="right">
-              <template #default="{ row }">{{ num(row.mentorBonus) }}</template>
+              <!-- RATE_ADD 模式：伯乐加点比例（计入最终提成比例）；AMOUNT_RATIO 模式为空（金额见伯乐奖励列） -->
+              <template #default="{ row }">{{ row.mentorAdd != null ? ratePercent(row.mentorAdd) : '' }}</template>
             </el-table-column>
             <el-table-column label="最终提成比例" width="110" align="right">
               <template #default="{ row }">{{ row.finalRate != null ? ratePercent(row.finalRate) : '' }}</template>
@@ -123,7 +124,8 @@
               <template #default="{ row }">{{ calcProcessText(row) || '—' }}</template>
             </el-table-column>
             <el-table-column label="伯乐奖励" prop="mentorBonus" width="90" align="right">
-              <template #default="{ row }">{{ num(row.mentorBonus) }}</template>
+              <!-- AMOUNT_RATIO 模式：独立金额；RATE_ADD 模式为空（比例见个人提点奖励列） -->
+              <template #default="{ row }">{{ row.mentorAdd != null ? '' : num(row.mentorBonus) }}</template>
             </el-table-column>
             <el-table-column label="底薪" width="90" align="right">
               <template #default="{ row }">{{ num(baseSalaryOf(row)) }}</template>
@@ -284,7 +286,7 @@
               <template #default="{ row }">{{ calcProcessText(row) || '—' }}</template>
             </el-table-column>
             <el-table-column label="伯乐奖励" prop="mentorBonus" width="100" align="right">
-              <template #default="{ row }">{{ num(row.mentorBonus) }}</template>
+              <template #default="{ row }">{{ row.mentorAdd != null ? '' : num(row.mentorBonus) }}</template>
             </el-table-column>
             <el-table-column label="社保" prop="socialFee" width="90" align="right">
               <template #default="{ row }">{{ neg(row.socialFee) }}</template>
@@ -421,8 +423,8 @@
             <el-table-column label="往月负工资" align="right" width="100">
               <template #default="{ row }">{{ neg(row.negativeCarryover) }}</template>
             </el-table-column>
-            <el-table-column label="新人带教" align="right" width="90">
-              <template #default="{ row }">{{ num(row.mentorBonus) }}</template>
+            <el-table-column label="伯乐奖励" align="right" width="90">
+              <template #default="{ row }">{{ row.mentorAdd != null ? '' : num(row.mentorBonus) }}</template>
             </el-table-column>
             <el-table-column label="其他扣款" align="right" width="90">
               <template #default="{ row }">{{ neg(row.otherDeduct) }}</template>

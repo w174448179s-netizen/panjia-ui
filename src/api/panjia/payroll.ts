@@ -74,6 +74,8 @@ export interface PayrollDetail {
   manualAdjust?: number | string | null;
   /** 所有扣点合计（等级扣点 + 未参保自动扣点 + 人工调整，前端「绩效提成扣点」列统一取此值） */
   totalDeduct?: number | string | null;
+  /** 伯乐加点（仅 RATE_ADD 模式落地：加点费率×达标千里马数封顶，已计入 finalRate；AMOUNT_RATIO 为空。前端据此自适应显示百分比或金额） */
+  mentorAdd?: number | string | null;
   /** 提成点调整溯源 JSON（RateAdjustItem 数组：type/rate/reason/source/adjustId） */
   rateAdjustJson?: string | null;
   /** 结佣提成跨月回溯计算过程 JSON（[{month,perf,rate,income}]，仅存在回溯时落地） */
