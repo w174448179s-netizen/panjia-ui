@@ -360,6 +360,21 @@ export const mySalaryApi = {
   myTeamNewSign(period: string) {
     return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/my/team-newsign', { period });
   },
+  // 工资查询密码门
+  /** 查询当前登录员工是否已设置工资查询密码 */
+  passwordStatus() {
+    return panjiaRequest.get<{ hasPassword: boolean }>('/payroll/batch/my/password-status');
+  },
+  /** 验证工资查询密码 */
+  verifyPassword(password: string) {
+    return panjiaRequest.post<void>('/payroll/batch/my/verify-password', { password });
+  },
+  /** 设置/修改工资查询密码；oldPassword 修改时必填，首次设置可省略 */
+  setPassword(password: string, oldPassword?: string) {
+    const body: Record<string, string> = { password };
+    if (oldPassword) body.oldPassword = oldPassword;
+    return panjiaRequest.put<void>('/payroll/batch/my/password', body);
+  },
 };
 
 /** 组织视角结佣追溯（总监/财务查指定员工） */

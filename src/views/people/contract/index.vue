@@ -216,7 +216,7 @@
         type="info"
         :closable="false"
         class="template-tip"
-        title="上传 HTML 格式的合同正文模板，使用 {{占位符}} 标记变量。未上传的类型使用系统默认模板。"
+        title="操作流程：先点「下载模板」得到带占位符的 HTML，按需修改后上传保存即可生效；未上传的类型使用系统默认模板。"
       >
         <template #default>
           <span v-pre>可用占位符：{{partyA}} {{employeeName}} {{genderLabel}} {{idCard}} {{employeeCode}} {{phone}}
@@ -243,8 +243,9 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="200">
+        <el-table-column label="操作" align="center" width="268">
           <template #default="scope">
+            <el-button type="primary" link size="small" @click="downloadTemplate(scope.row)">下载模板</el-button>
             <el-button
               type="primary"
               link
@@ -281,7 +282,7 @@ import ImageUpload from '@/components/ImageUpload/index.vue';
 import FileUpload from '@/components/FileUpload/index.vue';
 import modal from '@/plugins/modal';
 import { useDict } from '@/utils/dict';
-import { renderContractHtml, renderCustomContractHtml } from './contractTemplates';
+import { renderContractHtml, renderCustomContractHtml, downloadContractTemplate } from './contractTemplates';
 
 const { panjia_contract_type } = toRefs<any>(useDict('panjia_contract_type'));
 
@@ -585,6 +586,12 @@ const handleTemplateReset = async (type: string) => {
   } catch {
     /* 拦截器处理 */
   }
+};
+
+/** 下载该类型的模板源文件，用户改完再上传 */
+const downloadTemplate = (row: any) => {
+  const tpl = row as ContractTemplateVO;
+  downloadContractTemplate(tpl.contractType, `${tpl.contractTypeLabel}模板`);
 };
 
 /** 预览模板（用示例数据渲染） */

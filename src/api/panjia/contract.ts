@@ -38,6 +38,30 @@ export const contractApi = {
   /** 删除某类型自定义模板（恢复默认） */
   deleteTemplate(contractType: string) {
     return panjiaRequest.delete<void>(`/people/contract/template/${contractType}`);
+  },
+
+  // ==================== 本人合同查询（综合查询 → 合同查询） ====================
+  /** 我的全部合同列表 */
+  myList() {
+    return panjiaRequest.get<Contract[]>('/people/contract/my/list');
+  },
+  /** 当前登录员工的基本信息（身份证/工资卡等，供打印用） */
+  myEmployee() {
+    return panjiaRequest.get<any>('/people/contract/my/employee');
+  },
+  /** 查询当前登录员工是否已设置合同查询密码（与工资查询共用） */
+  myPasswordStatus() {
+    return panjiaRequest.get<{ hasPassword: boolean }>('/people/contract/my/password-status');
+  },
+  /** 验证合同查询密码（与工资查询共用） */
+  verifyMyPassword(password: string) {
+    return panjiaRequest.post<void>('/people/contract/my/verify-password', { password });
+  },
+  /** 设置/修改合同查询密码 */
+  setMyPassword(password: string, oldPassword?: string) {
+    const body: Record<string, string> = { password };
+    if (oldPassword) body.oldPassword = oldPassword;
+    return panjiaRequest.put<void>('/people/contract/my/password', body);
   }
 };
 

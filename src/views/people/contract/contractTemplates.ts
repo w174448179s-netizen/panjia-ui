@@ -201,3 +201,135 @@ export function renderCustomContractHtml(htmlContent: string, data: ContractPrin
   let body = htmlContent.replace(/\{\{(\w+)\}\}/g, (_, key) => placeholders[key] ?? '');
   return wrapDoc(data.contractTypeLabel || '合同', body, data.printDate);
 }
+
+// ==================== 可下载的模板源文件 ====================
+
+/** 模板文件头部的占位符说明（随模板一起下载，用户照着改） */
+const PLACEHOLDER_DOC = `可用占位符（打印时自动替换，请勿改动花括号写法）：
+  {{partyA}} 甲方门店        {{employeeName}} 员工姓名     {{genderLabel}} 性别
+  {{idCard}} 身份证号        {{employeeCode}} 工号         {{phone}} 联系电话
+  {{contractTypeLabel}} 合同类型  {{startDate}} 开始日      {{endDate}} 结束日（留空=无固定期限）
+  {{bankName}} 开户银行      {{bankBranch}} 开户支行       {{bankCardNo}} 工资卡号
+  {{printDate}} 打印日期`;
+
+const tpl = (title: string, body: string) => `<!--
+  ${title}（可编辑模板）
+  ${PLACEHOLDER_DOC}
+  提示：本文件仅为合同正文，保存后上传即可；页面打印时会自动套用统一版式。
+-->
+${body.trim()}`;
+
+/** 劳动合同模板源文件 */
+const LABOR_TEMPLATE = tpl(
+  '劳动合同书',
+  `
+<h1>劳动合同书</h1>
+<p class="contract-no">合同编号：LD-{{employeeCode}}-{{startDate}}</p>
+<div class="meta">
+  <p>甲方（用人单位）：{{partyA}}</p>
+  <p>乙方（劳动者）：{{employeeName}}　性别：{{genderLabel}}　身份证号：{{idCard}}</p>
+  <p>员工工号：{{employeeCode}}　联系电话：{{phone}}</p>
+</div>
+<p class="clause">根据《中华人民共和国劳动法》《中华人民共和国劳动合同法》及有关法律法规，甲乙双方遵循合法、公平、平等自愿、协商一致、诚实信用的原则，订立本合同。</p>
+<h2>一、合同期限</h2>
+<p class="clause">本合同期限自 {{startDate}} 起至 {{endDate}} 止。</p>
+<h2>二、工作内容与工作地点</h2>
+<p class="clause">乙方同意根据甲方工作需要，在甲方安排的岗位从事相关工作；工作地点为甲方经营场所（{{partyA}}）。甲方可根据经营需要及乙方工作能力，与乙方协商调整工作岗位。</p>
+<h2>三、工作时间与休息休假</h2>
+<p class="clause">甲方安排乙方执行国家规定的工时制度，保障乙方依法享受法定节假日及带薪年休假等休息休假权利。</p>
+<h2>四、劳动报酬</h2>
+<p class="clause">甲方以货币形式按月支付乙方劳动报酬，发薪日为次月，遇节假日顺延。乙方工资卡信息：{{bankName}} {{bankBranch}}，卡号 {{bankCardNo}}。</p>
+<h2>五、社会保险</h2>
+<p class="clause">甲方依法为乙方缴纳社会保险费，个人缴纳部分由甲方从乙方工资中代扣代缴。</p>
+<h2>六、劳动保护与劳动条件</h2>
+<p class="clause">甲方为乙方提供符合国家规定的劳动安全卫生条件和必要的劳动防护用品，对乙方进行安全生产教育和培训。</p>
+<h2>七、合同的变更、解除与终止</h2>
+<p class="clause">本合同的变更、解除、终止及经济补偿，按照《中华人民共和国劳动合同法》及双方约定执行。合同期满，经双方协商一致可以续订。</p>
+<h2>八、其他</h2>
+<p class="clause">本合同未尽事宜，按国家、省、市有关规定执行；本合同一式两份，甲乙双方各执一份，自双方签字（盖章）之日起生效。</p>
+<div class="sign">
+  <div>甲方（盖章）：<div class="line"></div>签订日期：<div class="line"></div></div>
+  <div>乙方（签字）：<div class="line"></div>签订日期：<div class="line"></div></div>
+</div>`
+);
+
+/** 兼职合同模板源文件 */
+const PARTTIME_TEMPLATE = tpl(
+  '兼职（非全日制用工）协议',
+  `
+<h1>兼职（非全日制用工）协议</h1>
+<p class="contract-no">协议编号：JZ-{{employeeCode}}-{{startDate}}</p>
+<div class="meta">
+  <p>甲方（用人单位）：{{partyA}}</p>
+  <p>乙方（劳动者）：{{employeeName}}　性别：{{genderLabel}}　身份证号：{{idCard}}</p>
+  <p>员工工号：{{employeeCode}}　联系电话：{{phone}}</p>
+</div>
+<p class="clause">根据《中华人民共和国劳动法》《中华人民共和国劳动合同法》关于非全日制用工的有关规定，甲乙双方经协商一致，订立本协议。</p>
+<h2>一、协议期限</h2>
+<p class="clause">本协议期限自 {{startDate}} 起至 {{endDate}} 止。</p>
+<h2>二、工作内容</h2>
+<p class="clause">乙方在甲方（{{partyA}}）从事兼职工作，具体工作内容以甲方安排为准。乙方可以与其他用人单位订立劳动合同，但不得影响本协议的履行。</p>
+<h2>三、工作时间</h2>
+<p class="clause">乙方平均每日工作时间不超过四小时，每周工作时间累计不超过二十四小时，具体班次由甲方与乙方协商安排。</p>
+<h2>四、劳务报酬</h2>
+<p class="clause">甲方以货币形式按双方约定周期结算乙方报酬；乙方收款账户：{{bankName}} {{bankBranch}}，卡号 {{bankCardNo}}。</p>
+<h2>五、保险与保障</h2>
+<p class="clause">甲方依法为乙方缴纳工伤保险；甲方可为乙方购买商业保险作为补充保障，具体以甲方投保方案为准。</p>
+<h2>六、协议的变更与终止</h2>
+<p class="clause">双方任何一方均可提前三日通知对方终止本协议；协议终止时，甲方依法结清乙方报酬。</p>
+<h2>七、其他</h2>
+<p class="clause">本协议未尽事宜，双方协商解决；本协议一式两份，甲乙双方各执一份，自双方签字（盖章）之日起生效。</p>
+<div class="sign">
+  <div>甲方（盖章）：<div class="line"></div>签订日期：<div class="line"></div></div>
+  <div>乙方（签字）：<div class="line"></div>签订日期：<div class="line"></div></div>
+</div>`
+);
+
+/** 其他协议模板源文件 */
+const OTHER_TEMPLATE = tpl(
+  '协议书',
+  `
+<h1>协议书</h1>
+<p class="contract-no">编号：QT-{{employeeCode}}-{{startDate}}</p>
+<div class="meta">
+  <p>甲方（用人单位）：{{partyA}}</p>
+  <p>乙方（劳动者）：{{employeeName}}　性别：{{genderLabel}}　身份证号：{{idCard}}</p>
+  <p>员工工号：{{employeeCode}}　联系电话：{{phone}}</p>
+</div>
+<p class="clause">甲乙双方本着平等自愿、协商一致的原则，就合作事项达成如下协议：</p>
+<h2>一、协议期限</h2>
+<p class="clause">本协议期限自 {{startDate}} 起至 {{endDate}} 止。</p>
+<h2>二、协议内容</h2>
+<p class="clause">乙方在甲方（{{partyA}}）从事双方约定的工作或合作事项，具体内容、标准与要求由双方另行书面确认。</p>
+<h2>三、费用与结算</h2>
+<p class="clause">相关费用与结算方式以双方书面约定为准；乙方收款账户：{{bankName}} {{bankBranch}}，卡号 {{bankCardNo}}。</p>
+<h2>四、保密与合规</h2>
+<p class="clause">乙方在履行本协议期间知悉的甲方经营信息、客户信息等，未经甲方书面同意不得对外披露；双方均应遵守国家法律法规及甲方依法制定的规章制度。</p>
+<h2>五、协议的变更与解除</h2>
+<p class="clause">本协议经双方协商一致可以变更或解除；任何一方要求解除本协议，应提前通知对方并办理相关交接手续。</p>
+<h2>六、其他</h2>
+<p class="clause">本协议一式两份，甲乙双方各执一份，自双方签字（盖章）之日起生效。</p>
+<div class="sign">
+  <div>甲方（盖章）：<div class="line"></div>签订日期：<div class="line"></div></div>
+  <div>乙方（签字）：<div class="line"></div>签订日期：<div class="line"></div></div>
+</div>`
+);
+
+/** 按合同类型取可下载的模板源文件 */
+export const CONTRACT_TEMPLATE_SOURCES: Record<string, string> = {
+  LABOR: LABOR_TEMPLATE,
+  PARTTIME: PARTTIME_TEMPLATE,
+  OTHER: OTHER_TEMPLATE
+};
+
+/** 下载指定合同类型的模板源文件（用户改完再上传） */
+export function downloadContractTemplate(contractType: string, fileName: string) {
+  const content = CONTRACT_TEMPLATE_SOURCES[contractType] ?? OTHER_TEMPLATE;
+  const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${fileName}.html`;
+  link.click();
+  URL.revokeObjectURL(url);
+}

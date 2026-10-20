@@ -1,10 +1,89 @@
 <template>
   <div class="my-salary">
+    <!-- ══════════ 密码门：未验证前遮罩 + 弹窗 ══════════ -->
+    <template v-if="!verified">
+      <el-card shadow="never" class="lock-card">
+        <div class="lock-wrapper">
+          <el-icon :size="64" color="#909399"><Lock /></el-icon>
+          <div class="lock-title">工资查询已锁定</div>
+          <div class="lock-desc" v-if="hasPassword === null">正在检测...</div>
+          <div class="lock-desc" v-else-if="hasPassword">请输入密码解锁</div>
+          <div class="lock-desc" v-else>首次使用，请先设置查询密码</div>
+        </div>
+      </el-card>
+      <!-- 密码弹窗 -->
+      <el-dialog
+        v-model="pwdDialogVisible"
+        :title="hasPassword ? '输入工资查询密码' : '设置工资查询密码'"
+        width="420px"
+        :close-on-click-modal="false"
+        :show-close="false"
+        center
+        append-to-body
+      >
+        <el-form
+          ref="pwdFormRef"
+          :model="pwdForm"
+          :rules="pwdRules"
+          label-width="0"
+          @submit.prevent
+        >
+          <el-form-item prop="password">
+            <el-input
+              v-model="pwdForm.password"
+              type="password"
+              :placeholder="hasPassword ? '请输入密码' : '请设置密码（至少4位）'"
+              show-password
+              size="large"
+              clearable
+              @keyup.enter="onPwdConfirm"
+            />
+          </el-form-item>
+          <el-form-item v-if="!hasPassword" prop="confirmPassword">
+            <el-input
+              v-model="pwdForm.confirmPassword"
+              type="password"
+              placeholder="请再次输入密码"
+              show-password
+              size="large"
+              clearable
+              @keyup.enter="onPwdConfirm"
+            />
+          </el-form-item>
+          <el-form-item v-if="hasPassword" prop="newPassword" v-show="resetMode">
+            <el-input
+              v-model="pwdForm.newPassword"
+              type="password"
+              placeholder="新密码（至少4位）"
+              show-password
+              size="large"
+              clearable
+            />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button v-if="hasPassword" type="primary" size="large" :loading="pwdLoading" @click="onPwdConfirm">
+            解锁
+          </el-button>
+          <el-button v-else type="primary" size="large" :loading="pwdLoading" @click="onPwdConfirm">
+            确认设置
+          </el-button>
+        </template>
+        <div class="pwd-footer-tip" v-if="hasPassword">
+          <el-button link type="primary" size="small" @click="resetMode = true">忘记密码？联系管理员重置</el-button>
+        </div>
+      </el-dialog>
+    </template>
+
     <!-- ══════════ 顶部：期间选择 + 本人指标 ══════════ -->
-    <el-card shadow="never" class="header-card">
+    <el-card v-else shadow="never" class="header-card">
       <div class="header-bar">
         <div class="header-left">
           <span class="page-title">工资查询</span>
+          <el-tag type="info" effect="light" size="small" class="unlock-hint">
+            <el-icon><Timer /></el-icon>
+            1分钟无操作自动锁定
+          </el-tag>
           <el-select
             v-model="selectedBatchId"
             placeholder="选择工资期间"
@@ -37,6 +116,10 @@
             @click="onAck"
           >
             核对工资
+          </el-button>
+          <el-button text size="small" @click="lockNow">
+            <el-icon><Lock /></el-icon>
+            锁定
           </el-button>
         </div>
       </div>
@@ -84,7 +167,7 @@
     </el-card>
 
     <!-- ══════════ 工资构成 + 结佣追溯（与工资明细页同一组件） ══════════ -->
-    <el-card v-if="vo" shadow="never" class="detail-card" v-loading="loading">
+    <el-card v-if="verified && vo" shadow="never" class="detail-card" v-loading="loading">
       <PayrollTracePanel
         :row="vo.detail"
         :employee-name="vo.employee.employeeName"
@@ -95,7 +178,7 @@
 
     <!-- 空态 -->
     <el-empty
-      v-else-if="!loading"
+      v-else-if="verified && !loading"
       class="empty-state"
       description="暂无您的工资数据"
     >
@@ -108,12 +191,130 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { ElMessage } from 'element-plus';
-import { Wallet } from '@element-plus/icons-vue';
+import { ref, computed, onMounted, onUnmounted, reactive, nextTick } from 'vue';
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
+import { Wallet, Lock, Timer } from '@element-plus/icons-vue';
 import { mySalaryApi, type MyPayrollDetailVO, type PayrollBatch } from '@/api/panjia/payroll';
 import PayrollTracePanel from '../components/PayrollTracePanel.vue';
 
+// ==================== 密码门状态 ====================
+const verified = ref(false);
+const hasPassword = ref<boolean | null>(null); // null=未检测
+const pwdDialogVisible = ref(true);
+const pwdLoading = ref(false);
+const resetMode = ref(false);
+const pwdFormRef = ref<FormInstance>();
+
+const pwdForm = reactive({
+  password: '',
+  confirmPassword: '',
+  newPassword: '',
+});
+
+const pwdRules = computed<FormRules>(() => ({
+  password: [
+    { required: true, message: '请输入密码', trigger: 'blur' },
+    { min: 4, message: '密码至少 4 位', trigger: 'blur' },
+  ],
+  confirmPassword: [
+    { required: true, message: '请再次输入密码', trigger: 'blur' },
+    {
+      validator: (_r, v, cb) => {
+        if (v !== pwdForm.password) cb(new Error('两次密码不一致'));
+        else cb();
+      },
+      trigger: 'blur',
+    },
+  ],
+}));
+
+/** 首次进入检测密码状态，自动弹窗 */
+const initPasswordGate = async () => {
+  try {
+    const res = await mySalaryApi.passwordStatus();
+    hasPassword.value = res.data?.hasPassword ?? false;
+    pwdDialogVisible.value = true;
+    nextTick(() => pwdFormRef.value?.validate().catch(() => void 0));
+  } catch {
+    ElMessage.error('密码状态检测失败');
+  }
+};
+
+/** 密码弹窗确认：验证 or 设置 */
+const onPwdConfirm = async () => {
+  try {
+    await pwdFormRef.value?.validate();
+  } catch {
+    return;
+  }
+  pwdLoading.value = true;
+  try {
+    if (!hasPassword.value) {
+      // 首次设置
+      await mySalaryApi.setPassword(pwdForm.password);
+      ElMessage.success('密码设置成功');
+      hasPassword.value = true;
+    }
+    // 验证密码（修改模式也先走验证，后面可扩展修改流程）
+    await mySalaryApi.verifyPassword(pwdForm.password);
+    verified.value = true;
+    pwdDialogVisible.value = false;
+    startIdleTimer();
+    await loadBatches();
+  } catch {
+    // 拦截器处理错误提示
+  } finally {
+    pwdLoading.value = false;
+  }
+};
+
+// ==================== 1 分钟自动锁定 ====================
+const IDLE_TIMEOUT = 60_000;
+let idleTimer: number | null = null;
+
+const resetIdleTimer = () => {
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = window.setTimeout(() => lockNow(), IDLE_TIMEOUT);
+};
+
+const startIdleTimer = () => {
+  resetIdleTimer();
+  document.addEventListener('click', resetIdleTimer);
+  document.addEventListener('keydown', resetIdleTimer);
+  document.addEventListener('scroll', resetIdleTimer);
+  document.addEventListener('mousemove', resetIdleTimer);
+};
+
+const stopIdleTimer = () => {
+  if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+  document.removeEventListener('click', resetIdleTimer);
+  document.removeEventListener('keydown', resetIdleTimer);
+  document.removeEventListener('scroll', resetIdleTimer);
+  document.removeEventListener('mousemove', resetIdleTimer);
+};
+
+/** 手动锁定 / 自动锁定 */
+const lockNow = () => {
+  stopIdleTimer();
+  verified.value = false;
+  // 清空数据
+  batches.value = [];
+  vo.value = null;
+  selectedBatchId.value = null;
+  loading.value = false;
+  acking.value = false;
+  // 重置密码表单
+  pwdForm.password = '';
+  pwdForm.confirmPassword = '';
+  pwdForm.newPassword = '';
+  resetMode.value = false;
+  pwdDialogVisible.value = true;
+};
+
+onMounted(initPasswordGate);
+onUnmounted(stopIdleTimer);
+
+// ==================== 工资数据加载 ====================
 const batches = ref<PayrollBatch[]>([]);
 const selectedBatchId = ref<number | string | null>(null);
 const vo = ref<MyPayrollDetailVO | null>(null);
@@ -182,8 +383,6 @@ const onAck = async () => {
     acking.value = false;
   }
 };
-
-onMounted(loadBatches);
 </script>
 
 <style scoped>
@@ -191,12 +390,21 @@ onMounted(loadBatches);
 .header-card :deep(.el-card__body) { padding: 14px 16px; }
 .detail-card :deep(.el-card__body) { padding: 10px 12px; margin-top: 10px; }
 
-.header-bar { display: flex; align-items: center; justify-content: space-between; }
-.header-left { display: flex; align-items: center; gap: 12px; }
+/* 锁定态 */
+.lock-card :deep(.el-card__body) { padding: 60px 20px; }
+.lock-wrapper { text-align: center; color: #606266; }
+.lock-title { font-size: 18px; font-weight: 600; margin-top: 18px; color: #303133; }
+.lock-desc { font-size: 14px; color: #909399; margin-top: 8px; }
+.pwd-footer-tip { text-align: center; margin-top: 4px; }
+
+/* 已解锁态 */
+.unlock-hint { margin-right: 4px; display: inline-flex; align-items: center; gap: 3px; }
+.header-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.header-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .header-right { display: flex; align-items: center; gap: 10px; }
 .page-title { font-size: 17px; font-weight: 600; color: #1f2d3d; }
 
-.emp-bar { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.emp-bar { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
 .emp-name { font-size: 16px; font-weight: 600; color: #1f2d3d; }
 .emp-meta { font-size: 13px; color: #909399; }
 
