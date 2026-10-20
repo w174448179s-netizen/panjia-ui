@@ -442,9 +442,15 @@ const createEmptyForm = (): AttendanceSaveForm => ({
 
 const form = reactive<AttendanceSaveForm>(createEmptyForm());
 
+/** 后端 BigDecimal 经 Jackson 序列化为字符串，参与运算前统一转数值，避免字符串拼接导致 .toFixed 报错 */
+const toNum = (v: unknown): number => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
 /** 请假合计（只读）= 事假 + 病假诊所 + 病假二甲，与后端 buildRecord 口径一致 */
 const leaveTotal = computed(() =>
-  Number(((form.personalLeaveDays ?? 0) + (form.sickClinicDays ?? 0) + (form.sickHospitalDays ?? 0)).toFixed(2)));
+  Number((toNum(form.personalLeaveDays) + toNum(form.sickClinicDays) + toNum(form.sickHospitalDays)).toFixed(2)));
 
 const rules: FormRules = {
   employeeId: [{ required: true, message: '请选择员工', trigger: 'change' }],
@@ -469,20 +475,20 @@ const handleEdit = (row: AttendanceRecord) => {
   dialog.editId = row.id;
   dialog.isEdit = true;
   // 旧数据可能只有合计 leaveDays、分项为 0：未分类差额默认计入事假，保证合计不丢失
-  const splitSum = (row.personalLeaveDays ?? 0) + (row.sickClinicDays ?? 0) + (row.sickHospitalDays ?? 0);
-  const residual = Number(Math.max(0, (row.leaveDays ?? 0) - splitSum).toFixed(2));
+  const splitSum = toNum(row.personalLeaveDays) + toNum(row.sickClinicDays) + toNum(row.sickHospitalDays);
+  const residual = Math.max(0, toNum(row.leaveDays) - splitSum);
   Object.assign(form, {
     employeeId: row.employeeId,
     attendMonth: row.attendMonth,
-    attendDays: row.attendDays ?? undefined,
-    restDays: row.restDays ?? undefined,
-    lateCount: row.lateCount ?? 0,
-    lateMinutes: row.lateMinutes ?? 0,
-    missingCardCount: row.missingCardCount ?? 0,
-    absentDays: row.absentDays ?? 0,
-    personalLeaveDays: Number(((row.personalLeaveDays ?? 0) + residual).toFixed(2)),
-    sickClinicDays: row.sickClinicDays ?? 0,
-    sickHospitalDays: row.sickHospitalDays ?? 0,
+    attendDays: row.attendDays == null ? undefined : toNum(row.attendDays),
+    restDays: row.restDays == null ? undefined : toNum(row.restDays),
+    lateCount: toNum(row.lateCount),
+    lateMinutes: toNum(row.lateMinutes),
+    missingCardCount: toNum(row.missingCardCount),
+    absentDays: toNum(row.absentDays),
+    personalLeaveDays: Number((toNum(row.personalLeaveDays) + residual).toFixed(2)),
+    sickClinicDays: toNum(row.sickClinicDays),
+    sickHospitalDays: toNum(row.sickHospitalDays),
     remark: row.remark || '',
     version: row.version
   });
