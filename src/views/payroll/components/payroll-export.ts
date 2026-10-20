@@ -364,10 +364,19 @@ function hrRow(r: PayrollDetail): (string | number)[] {
 // ════════════════════════════════════════════════════════════════════
 
 const PERF_HEADS = [
-  '门店', '姓名', '动态考核', '积分考核', '其他扣款', '', '', '', '',
-  '姓名', '总积分', '出勤天数', '平均积分', '绩效等级', '绩效提成点',
+  '门店', '姓名', '动态考核', '积分考核', '业绩扣款', '其他扣款', '', '', '',
+  '姓名', '总积分', '出勤天数', '平均积分', '绩效方案', '绩效等级', '绩效提成点',
   '未买社保提成点', '未完成电话考核提成点', '7.1-12.31日何方方提成扣2%', '合计',
 ];
+
+/** 绩效方案名（溯源 JSON 落地方案名；历史批次无 JSON=默认积分绩效） */
+const perfSchemeName = (r: PayrollDetail): string => {
+  try {
+    const p = JSON.parse((r as any).perfCalcProcess || 'null');
+    if (p && typeof p === 'object' && p.schemeName) return String(p.schemeName);
+  } catch { /* 忽略坏数据 */ }
+  return '默认（积分绩效）';
+};
 
 function perfDeductRow(r: PayrollDetail): (string | number)[] {
   return [
@@ -375,12 +384,14 @@ function perfDeductRow(r: PayrollDetail): (string | number)[] {
     r.employeeName || '',
     '',                               // 动态考核（无字段）
     neg(r.pointsFee),                 // 积分考核
+    neg(r.perfDeductFee),             // 业绩扣款（业绩绩效B版/店长积分绩效固定金额扣款）
     neg(r.otherDeduct),              // 其他扣款
-    '', '', '', '',                  // 间隔列
+    '', '', '',                      // 间隔列
     r.employeeName || '',
     '',                               // 总积分（无字段）
     '',                               // 出勤天数（无字段）
     '',                               // 平均积分（无字段）
+    perfSchemeName(r),                // 绩效方案（该批次冻结的实际生效方案）
     r.perfGrade || '',
     r.perfDeduct != null ? ratePercent(r.perfDeduct) : '',
     '',                               // 未买社保提成点（含在 totalDeduct 里无法拆分）

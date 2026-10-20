@@ -70,6 +70,12 @@ export interface PayrollDetail {
   perfGrade: string;
   /** 绩效提成扣点（积分等级 A/B/C 对应扣点，A=0/B=-2%/C=-4%，负=扣点） */
   perfDeduct?: number | string | null;
+  /** 绩效方案金额扣款（业绩绩效B版/店长积分绩效：未达标扣固定金额，正=扣款；积分类方案为空） */
+  perfDeductFee?: number | string | null;
+  /** 绩效方案编码（该批次冻结的实际生效方案；空=历史批次按默认积分绩效） */
+  perfSchemeCode?: string | null;
+  /** 绩效方案计算过程 JSON（{schemeCode,schemeName,schemeType,grade?,tierMin?,tierMax?,perf?,deduct?,fee?}） */
+  perfCalcProcess?: string | null;
   /** 提成点调整叠加值（负值=扣点，算薪时叠加到综合提点；0=无调整） */
   manualAdjust?: number | string | null;
   /** 所有扣点合计（等级扣点 + 未参保自动扣点 + 人工调整，前端「绩效提成扣点」列统一取此值） */
@@ -148,6 +154,26 @@ export interface ConversionRule {
   id: number;
   bizType: string;
   factor: number;
+  effectiveFrom: string;
+}
+
+/** 绩效方案类型 */
+export type PerfSchemeType = 'NONE' | 'GRADE_RATE' | 'RATE_TIER' | 'AMOUNT_TIER' | 'GRADE_AMOUNT';
+
+/** 绩效方案（pj_payroll_perf_scheme；员工档案经 PERF_SCHEME 事实按月指派，未指派=默认方案积分绩效） */
+export interface PerfScheme {
+  id?: number;
+  /** 方案编码（唯一，指派事实存储值） */
+  code: string;
+  name: string;
+  /** NONE=无绩效/GRADE_RATE=积分绩效（等级扣提点）/RATE_TIER=业绩阶梯扣提点/AMOUNT_TIER=业绩阶梯扣金额/GRADE_AMOUNT=积分等级扣金额（店长） */
+  schemeType: PerfSchemeType;
+  /** 适用岗位 AGENT=经纪人/MANAGER=店长/ALL=不限 */
+  applicableRole: string;
+  /** 方案参数 JSON：积分类 {gradeA,gradeB,deductA..C,penaltyFee} 或 {gradeA,gradeB,feeA..C}；阶梯类 {tiers:[{min,max,rate|amount}]} */
+  ruleContent: string;
+  /** 默认方案（唯一；员工未指派时算薪按此方案） */
+  isDefault?: boolean;
   effectiveFrom: string;
 }
 
@@ -236,6 +262,14 @@ export const payrollApi = {
   },
   saveConversion(data: ConversionRule) {
     return panjiaRequest.post('/payroll/rule/conversion', data);
+  },
+  /** 绩效方案列表（积分/业绩阶梯/店长积分/无绩效，员工档案指派） */
+  perfSchemeList() {
+    return panjiaRequest.get<PerfScheme[]>('/payroll/rule/perf-scheme');
+  },
+  /** 保存绩效方案（code 存在则更新；默认方案唯一） */
+  savePerfScheme(data: PerfScheme) {
+    return panjiaRequest.post('/payroll/rule/perf-scheme', data);
   },
 
   // 门店级配置

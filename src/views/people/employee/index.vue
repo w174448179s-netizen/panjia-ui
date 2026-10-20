@@ -52,6 +52,33 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item label="性别" prop="gender">
+          <el-select v-model="queryParams.gender" placeholder="请选择性别" clearable style="width: 120px">
+            <el-option
+              v-for="dict in panjia_employee_gender"
+              :key="dict.value"
+              :label="dict.label"
+              :value="dict.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="入职时间" prop="hireDateRange">
+          <el-date-picker
+            v-model="queryParams.hireDateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="-"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
+        </el-form-item>
+        <el-form-item label="排序" prop="sortSel">
+          <el-select v-model="sortSel" placeholder="默认排序" clearable style="width: 170px" @change="handleQuery">
+            <el-option label="入职时间 从早到晚" value="hireDate_asc" />
+            <el-option label="入职时间 从晚到早" value="hireDate_desc" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
           <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -82,6 +109,15 @@
               导入员工
             </el-button>
             <el-button
+              v-hasPermi="['people:employee:list']"
+              type="primary"
+              plain
+              icon="Download"
+              @click="handleExport"
+            >
+              导出
+            </el-button>
+            <el-button
               v-hasPermi="['people:employee:reconcile']"
               type="warning"
               plain
@@ -98,9 +134,41 @@
         </div>
       </template>
 
+      <!-- 合同到期提醒条：已到期未重签（error）+ 30 天内到期（warning） -->
+      <template v-if="expiringList.length">
+        <el-alert
+          type="error"
+          show-icon
+          :closable="true"
+          class="contract-alert"
+        >
+          <template #title>
+            <b>{{ expiredCount }} 名员工合同已到期未重签</b>
+          </template>
+          <div v-for="item in expiredRows" :key="`e-${item.employeeId}-${item.contractType}`" class="contract-alert-row">
+            {{ item.employeeName }}（{{ item.employeeCode }}）· {{ item.deptName || '—' }} ·
+            {{ contractTypeLabel(item.contractType) }} · 到期日 {{ item.endDate }}
+          </div>
+        </el-alert>
+        <el-alert type="warning" show-icon :closable="true" class="contract-alert">
+          <template #title>
+            <b>{{ expiringCount }} 名员工合同 30 天内到期，请及时安排续签</b>
+          </template>
+          <div v-for="item in expiringRows" :key="`w-${item.employeeId}-${item.contractType}`" class="contract-alert-row">
+            {{ item.employeeName }}（{{ item.employeeCode }}）· {{ item.deptName || '—' }} ·
+            {{ contractTypeLabel(item.contractType) }} · 到期日 {{ item.endDate }}
+          </div>
+        </el-alert>
+      </template>
+
       <el-table v-loading="loading" border class="data-table" :data="employeeList">
         <el-table-column label="工号" align="center" prop="employeeCode" width="110" />
         <el-table-column label="姓名" align="center" prop="employeeName" width="90" />
+        <el-table-column label="性别" align="center" prop="gender" width="70">
+          <template #default="scope">
+            <dict-tag :options="panjia_employee_gender" :value="scope.row.gender" />
+          </template>
+        </el-table-column>
         <el-table-column label="门店/组别" align="center" prop="deptName" min-width="160" show-overflow-tooltip />
         <el-table-column label="职位" align="center" min-width="140">
           <template #default="scope">
@@ -241,6 +309,30 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
+            <el-form-item label="性别" prop="gender">
+              <el-radio-group v-model="form.gender">
+                <el-radio v-for="dict in panjia_employee_gender" :key="dict.value" :value="dict.value">
+                  {{ dict.label }}
+                </el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="开户银行" prop="bankName">
+              <el-input v-model="form.bankName" placeholder="工资卡开户银行" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="开户支行" prop="bankBranch">
+              <el-input v-model="form.bankBranch" placeholder="工资卡开户支行" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="工资卡号" prop="bankCardNo">
+              <el-input v-model="form.bankCardNo" placeholder="本人银行卡号" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
             <el-form-item label="报道日期" prop="reportDate">
               <el-date-picker
                 v-model="form.reportDate"
@@ -266,7 +358,7 @@
             <el-form-item label="状态" prop="status">
               <el-select v-model="form.status" placeholder="请选择状态" style="width: 100%">
                 <el-option
-                  v-for="dict in panjia_employee_status"
+                  v-for="dict in editableStatusOptions"
                   :key="dict.value"
                   :label="dict.label"
                   :value="dict.value"
@@ -342,6 +434,19 @@
               <el-switch v-model="form.excludeTeam" />
             </el-form-item>
           </el-col>
+          <el-col :span="8" v-if="formDialog.isEdit">
+            <el-form-item label="绩效方案" prop="perfSchemeCode">
+              <!-- 按适用岗位过滤（店长专用方案仅店长可见）；空=默认积分绩效 -->
+              <el-select v-model="form.perfSchemeCode" clearable placeholder="默认（积分绩效）" style="width:100%">
+                <el-option
+                  v-for="s in schemeOptionsForForm"
+                  :key="s.code"
+                  :label="`${s.name}（${schemeTypeLabel(s.schemeType)}）`"
+                  :value="s.code"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
           <el-col :span="12" v-if="form.socialInsured">
             <el-form-item label="社保金额">
               <el-input-number v-model="form.socialFee" :min="0" :precision="2" :controls="false" style="width:100%" />
@@ -374,9 +479,10 @@
                 type="month"
                 format="YYYY-MM"
                 value-format="YYYY-MM-DD"
-                placeholder="不填 = 本月"
+                placeholder="改算薪配置必填；仅改基本信息请留空"
                 style="width: 100%"
               />
+              <span class="form-tip" style="margin-left:8px">留空则仅保存基本信息，算薪配置不变</span>
             </el-form-item>
           </el-col>
         </el-row>
@@ -404,6 +510,12 @@
           </el-descriptions-item>
           <el-descriptions-item label="手机号">{{ detailData.phone || '—' }}</el-descriptions-item>
           <el-descriptions-item label="身份证号">{{ detailData.idCard || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="性别">
+            <dict-tag :options="panjia_employee_gender" :value="detailData.gender" />
+          </el-descriptions-item>
+          <el-descriptions-item label="开户银行">{{ detailData.bankName || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="开户支行">{{ detailData.bankBranch || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="工资卡号">{{ detailData.bankCardNo || '—' }}</el-descriptions-item>
           <el-descriptions-item label="报道日期">{{ detailData.reportDate || '—' }}</el-descriptions-item>
           <el-descriptions-item label="入职日期">{{ detailData.hireDate || '—' }}</el-descriptions-item>
           <el-descriptions-item label="离职日期">{{ detailData.leaveDate || '—' }}</el-descriptions-item>
@@ -429,6 +541,12 @@
             <el-tag :type="detailData.excludeTeam ? 'danger' : 'info'" size="small">
               {{ detailData.excludeTeam ? '是' : '否' }}
             </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="绩效方案">
+            <span v-if="detailData.perfSchemeCode">
+              {{ perfSchemeOptions.find((s) => s.code === detailData.perfSchemeCode)?.name ?? detailData.perfSchemeCode }}
+            </span>
+            <el-tag v-else type="info" size="small">默认（积分绩效）</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="社保">
             <el-tag :type="detailData.socialInsured ? 'success' : 'info'" size="small">
@@ -716,9 +834,12 @@
 </template>
 
 <script setup name="PeopleEmployee" lang="ts">
-import { onUnmounted, nextTick } from 'vue';
+import { computed, onMounted, onUnmounted, nextTick, ref } from 'vue';
 import { employeeApi } from '@/api/panjia/employee';
+import { contractApi } from '@/api/panjia/contract';
+import type { PerfScheme } from '@/api/panjia/payroll';
 import type {
+  ContractExpiring,
   Employee,
   EmployeeChangeLog,
   EmployeeCreateForm,
@@ -737,15 +858,31 @@ import { useDict } from '@/utils/dict';
 import { UploadFilled, Document } from '@element-plus/icons-vue';
 import type { UploadFile } from 'element-plus';
 
-const { panjia_employee_level, panjia_employee_status } = toRefs<any>(
-  useDict('panjia_employee_level', 'panjia_employee_status')
+const { panjia_employee_level, panjia_employee_status, panjia_employee_gender } = toRefs<any>(
+  useDict('panjia_employee_level', 'panjia_employee_status', 'panjia_employee_gender')
 );
 
+/** 编辑表单可选状态（排除「虚拟」，虚拟员工只能通过店组虚拟人功能创建） */
+const editableStatusOptions = computed(() =>
+  (panjia_employee_status.value ?? []).filter((d: any) => d.value !== 'VIRTUAL')
+);
+
+/** 合同类型中文（到期提醒条展示用，与字典 panjia_contract_type 对应） */
+const CONTRACT_TYPE_LABELS: Record<string, string> = {
+  LABOR: '劳动合同',
+  PARTTIME: '兼职合同',
+  OTHER: '其他'
+};
+const contractTypeLabel = (type: string) => CONTRACT_TYPE_LABELS[type] ?? type;
+
 // ==================== 列表 ====================
+/** 默认展示状态：离职默认不显示，需主动勾选「离职」才可见 */
+const DEFAULT_STATUS = ['ACTIVE', 'PARTTIME', 'PENDING'];
 const loading = ref(false);
 const employeeList = ref<Employee[]>([]);
 const total = ref(0);
 const queryFormRef = ref<ElFormInstance>();
+const sortSel = ref('');
 const queryParams = reactive({
   pageNum: 1,
   pageSize: 10,
@@ -753,13 +890,24 @@ const queryParams = reactive({
   employeeName: '',
   deptId: undefined as string | undefined,
   postName: '',
-  status: [] as string[]
+  status: [...DEFAULT_STATUS] as string[],
+  gender: '',
+  hireDateRange: [] as string[]
 });
 
 const getList = async () => {
   loading.value = true;
   try {
-    const res = await employeeApi.list(queryParams);
+    const { hireDateRange, ...rest } = queryParams;
+    const [hireDateBegin, hireDateEnd] = hireDateRange || [];
+    const [sortField, sortOrder] = (sortSel.value || '').split('_');
+    const res = await employeeApi.list({
+      ...rest,
+      hireDateBegin: hireDateBegin || undefined,
+      hireDateEnd: hireDateEnd || undefined,
+      sortField: sortField || undefined,
+      sortOrder: sortOrder || undefined
+    });
     employeeList.value = res.data?.rows ?? [];
     total.value = res.data?.total ?? 0;
   } finally {
@@ -776,8 +924,30 @@ const resetQuery = () => {
   queryFormRef.value?.resetFields();
   queryParams.deptId = undefined;
   queryParams.postName = '';
-  queryParams.status = [];
+  queryParams.status = [...DEFAULT_STATUS];
+  queryParams.gender = '';
+  queryParams.hireDateRange = [];
+  sortSel.value = '';
   handleQuery();
+};
+
+// ==================== 合同到期提醒（提前 30 天） ====================
+const expiringList = ref<ContractExpiring[]>([]);
+/** 已到期未重签 */
+const expiredRows = computed(() => expiringList.value.filter((i) => i.expired));
+/** 30 天内到期 */
+const expiringRows = computed(() => expiringList.value.filter((i) => !i.expired));
+const expiredCount = computed(() => expiredRows.value.length);
+const expiringCount = computed(() => expiringRows.value.length);
+
+const loadExpiring = async () => {
+  try {
+    const res = await contractApi.expiring();
+    expiringList.value = res.data ?? [];
+  } catch (e) {
+    // 无 people:contract:list 权限（如店长）时静默忽略，提醒条不展示
+    expiringList.value = [];
+  }
 };
 
 // ==================== 选项数据 ====================
@@ -798,7 +968,7 @@ const submitLoading = ref(false);
 const formDialog = reactive({ visible: false, title: '', isEdit: false });
 const editingEmployeeId = ref<string | number>('');
 
-const initForm = (): EmployeeCreateForm => ({
+const initForm = (): EmployeeCreateForm & EmployeeUpdateForm => ({
   employeeCode: '',
   employeeName: '',
   deptId: '',
@@ -806,6 +976,10 @@ const initForm = (): EmployeeCreateForm => ({
   levelCode: '',
   phone: '',
   idCard: '',
+  gender: '',
+  bankName: '',
+  bankBranch: '',
+  bankCardNo: '',
   reportDate: '',
   hireDate: '',
   status: 'ACTIVE',
@@ -815,12 +989,14 @@ const initForm = (): EmployeeCreateForm => ({
   dormitory: false,
   parttime: false,
   excludeTeam: false,
+  perfSchemeCode: '',
   mentorCode: '',
   remark: '',
   socialFee: undefined,
   commercialFee: undefined,
   housingFund: undefined,
-  dormitoryFee: undefined
+  dormitoryFee: undefined,
+  effectiveDate: undefined
 });
 
 const form = reactive<EmployeeCreateForm & EmployeeUpdateForm>({ ...initForm() });
@@ -864,6 +1040,10 @@ const handleUpdate = async (row: Employee) => {
   form.levelCode = detail.levelCode ?? '';
   form.phone = detail.phone ?? '';
   form.idCard = detail.idCard ?? '';
+  form.gender = detail.gender ?? '';
+  form.bankName = detail.bankName ?? '';
+  form.bankBranch = detail.bankBranch ?? '';
+  form.bankCardNo = detail.bankCardNo ?? '';
   form.reportDate = detail.reportDate ?? '';
   form.hireDate = detail.hireDate ?? '';
   form.leaveDate = detail.leaveDate ?? undefined;
@@ -874,6 +1054,7 @@ const handleUpdate = async (row: Employee) => {
   form.dormitory = !!detail.dormitory;
   form.parttime = !!detail.isPartTime;
   form.excludeTeam = !!detail.excludeTeam;
+  form.perfSchemeCode = detail.perfSchemeCode ?? '';
   form.mentorCode = detail.mentorCode ?? '';
   form.remark = detail.remark ?? '';
   form.socialFee = detail.socialFee ?? undefined;
@@ -941,10 +1122,33 @@ const FACT_TYPE_OPTIONS = [
   { code: 'PARTTIME', desc: '兼职' },
   { code: 'MENTOR', desc: '伯乐' },
   { code: 'EXCLUDE_TEAM', desc: '不计入店长团队' },
+  { code: 'PERF_SCHEME', desc: '绩效方案' },
 ];
 const adjustVisible = ref(false);
 const adjusting = ref(false);
 const adjustForm = ref<{ factTypes: string[]; newDate: string | null }>({ factTypes: [], newDate: null });
+
+// ==================== 绩效方案（指派下拉数据源） ====================
+const perfSchemeOptions = ref<PerfScheme[]>([]);
+const SCHEME_TYPE_LABELS: Record<string, string> = {
+  NONE: '无绩效',
+  GRADE_RATE: '积分',
+  RATE_TIER: '业绩A·扣点',
+  AMOUNT_TIER: '业绩B·扣款',
+  GRADE_AMOUNT: '店长积分'
+};
+const schemeTypeLabel = (t: string) => SCHEME_TYPE_LABELS[t] ?? t;
+
+/** 按适用岗位过滤：店长岗位可见 MANAGER/ALL 方案，其余岗位可见 AGENT/ALL 方案 */
+const schemeOptionsForForm = computed(() =>
+  perfSchemeOptions.value.filter((s) => {
+    const isManager = (form.postNames ?? []).includes('店长');
+    if (!s.applicableRole || s.applicableRole === 'ALL') return true;
+    if (s.applicableRole === 'MANAGER') return isManager;
+    return !isManager; // AGENT：仅非店长（经纪人/总监等）
+  })
+);
+
 
 const openAdjust = () => {
   adjustForm.value = { factTypes: [], newDate: null };
@@ -1199,6 +1403,22 @@ const downloadTemplate = async () => {
   }
 };
 
+/** 导出当前筛选条件下的员工名单 */
+const handleExport = async () => {
+  try {
+    const { hireDateRange, ...rest } = queryParams;
+    const [hireDateBegin, hireDateEnd] = hireDateRange || [];
+    await employeeApi.exportEmployees({
+      ...rest,
+      hireDateBegin: hireDateBegin || undefined,
+      hireDateEnd: hireDateEnd || undefined
+    });
+    modal.msgSuccess('导出成功');
+  } catch (e: any) {
+    modal.msgError('导出失败: ' + (e?.message || ''));
+  }
+};
+
 /** 问题类型中文映射 */
 const issueLabel = (type: string): string =>
   ({
@@ -1216,6 +1436,12 @@ const issueTagType = (type: string): 'danger' | 'warning' | 'info' =>
 onMounted(() => {
   loadOptions();
   getList();
+  loadExpiring();
+  // 绩效方案清单（指派下拉数据源；拦截器返回 R 包装对象取 .data；加载失败不阻塞页面，下拉为空时仍可默认考核）
+  employeeApi
+    .perfSchemes()
+    .then((res) => (perfSchemeOptions.value = res.data ?? []))
+    .catch(() => (perfSchemeOptions.value = []));
 });
 </script>
 
@@ -1279,6 +1505,14 @@ onMounted(() => {
 
   .reconcile-alert {
     margin-bottom: 14px;
+  }
+
+  .contract-alert {
+    margin-bottom: 10px;
+
+    .contract-alert-row {
+      line-height: 1.8;
+    }
   }
 
   .import-upload {

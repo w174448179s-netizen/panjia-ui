@@ -45,6 +45,14 @@ export interface Employee {
   levelCode: string;
   phone: string;
   idCard: string;
+  /** 性别（字典 panjia_employee_gender：MALE/FEMALE） */
+  gender?: string;
+  /** 工资卡开户银行 */
+  bankName?: string;
+  /** 工资卡开户支行 */
+  bankBranch?: string;
+  /** 工资卡卡号（本人） */
+  bankCardNo?: string;
   reportDate: string;
   hireDate: string;
   leaveDate?: string;
@@ -64,6 +72,8 @@ export interface Employee {
   isPartTime: boolean;
   /** 新签业绩不计入所属组别店长的团队业绩（只影响店长团队提成与其社保人数，总监不受影响） */
   excludeTeam: boolean;
+  /** 绩效方案编码（空/null=未指派，算薪按默认方案积分绩效） */
+  perfSchemeCode?: string | null;
   mentorCode?: string;
   mentorName?: string;
   remark?: string;
@@ -77,6 +87,16 @@ export interface EmployeeQuery extends PageQuery {
   postName?: string;
   /** 状态集合（多选：ACTIVE/PARTTIME/LEFT/PENDING） */
   status?: string[];
+  /** 性别（MALE/FEMALE，精确） */
+  gender?: string;
+  /** 入职时间范围-起（含） */
+  hireDateBegin?: string;
+  /** 入职时间范围-止（含） */
+  hireDateEnd?: string;
+  /** 排序字段（createTime=默认录入时间倒序；hireDate=入职时间） */
+  sortField?: string;
+  /** 排序方向（asc/desc；默认 desc） */
+  sortOrder?: string;
 }
 
 /** 新增员工表单 */
@@ -88,6 +108,14 @@ export interface EmployeeCreateForm {
   levelCode: string;
   phone: string;
   idCard: string;
+  /** 性别（MALE/FEMALE） */
+  gender?: string;
+  /** 工资卡开户银行 */
+  bankName?: string;
+  /** 工资卡开户支行 */
+  bankBranch?: string;
+  /** 工资卡卡号（本人） */
+  bankCardNo?: string;
   reportDate: string;
   hireDate: string;
   status: string;
@@ -98,6 +126,8 @@ export interface EmployeeCreateForm {
   parttime: boolean;
   /** 新签业绩不计入所属组别店长的团队业绩（只影响店长侧） */
   excludeTeam: boolean;
+  /** 绩效方案编码（修改时 null=不修改；空串=清除指派回默认方案；新增不支持指派） */
+  perfSchemeCode?: string | null;
   mentorCode?: string;
   remark?: string;
   /** 社保金额（自定义；null=用全局默认算法） */
@@ -122,6 +152,75 @@ export interface DeptNode {
   deptName: string;
   parentId: string;
   children: DeptNode[];
+}
+
+// ==================== 员工合同域 ====================
+
+/** 员工合同 */
+export interface Contract {
+  contractId: string;
+  employeeId: string;
+  /** 工号（后端 enrich） */
+  employeeCode?: string;
+  /** 姓名（后端 enrich） */
+  employeeName?: string;
+  deptId: string;
+  /** 门店全路径名（后端 enrich） */
+  deptName?: string;
+  /** 合同类型（LABOR/PARTTIME/OTHER） */
+  contractType: string;
+  startDate: string;
+  /** 合同结束日（null=无固定期限） */
+  endDate?: string | null;
+  /** 身份证扫描件 ossId 集合 */
+  idCardOssIds: string[];
+  /** 身份证扫描件访问 URL 集合（与 ossId 一一对应） */
+  idCardUrls?: (string | null)[];
+  remark?: string;
+  createTime: string;
+}
+
+/** 合同分页查询参数 */
+export interface ContractQuery extends PageQuery {
+  employeeId?: string;
+  employeeCode?: string;
+  employeeName?: string;
+  contractType?: string;
+  deptId?: string;
+}
+
+/** 新增合同表单 */
+export interface ContractCreateForm {
+  employeeId: string;
+  contractType: string;
+  deptId: string;
+  startDate: string;
+  endDate?: string | null;
+  /** 身份证扫描件 ossId 集合 */
+  idCardOssIds?: string[];
+  remark?: string;
+}
+
+/** 修改合同表单（员工不允许改） */
+export interface ContractUpdateForm {
+  contractType?: string;
+  deptId?: string;
+  startDate?: string;
+  endDate?: string | null;
+  idCardOssIds?: string[];
+  remark?: string;
+}
+
+/** 合同到期提醒行（已到期未重签 or 30 天内到期） */
+export interface ContractExpiring {
+  employeeId: string;
+  employeeCode?: string;
+  employeeName?: string;
+  deptName?: string;
+  contractType: string;
+  endDate: string;
+  /** true=已到期未重签；false=30 天内到期 */
+  expired: boolean;
 }
 
 /** 岗位选项 */

@@ -130,6 +130,13 @@
             <span v-else class="zero-val">—</span>
           </template>
         </el-table-column>
+        <el-table-column label="绩效方案" width="120" align="center" show-overflow-tooltip>
+          <template #default="{ row }">
+            <!-- 该批次冻结的实际生效方案（溯源 JSON 落地）；历史批次无 JSON=默认积分绩效 -->
+            <span v-if="perfProcess(row)?.schemeName">{{ perfProcess(row)!.schemeName }}</span>
+            <span v-else class="zero-val">默认</span>
+          </template>
+        </el-table-column>
         <el-table-column label="绩效提成扣点" width="110" align="center">
           <template #default="{ row }">
             <span v-if="row.totalDeduct != null && Number(row.totalDeduct) !== 0" class="deduct-text">
@@ -303,7 +310,7 @@ const fmtNeg = (n: number | null | undefined) => {
 };
 /** 扣款字段集合（列表与合计行展示时统一加负号） */
 const DEDUCT_PROPS = new Set([
-  'socialFee', 'housingFund', 'attendanceFee', 'pointsFee',
+  'socialFee', 'housingFund', 'attendanceFee', 'pointsFee', 'perfDeductFee',
   'commercialInsurance', 'dormitoryFee', 'negativeCarryover', 'otherDeduct',
   'deduct', 'tax',
 ]);
@@ -367,6 +374,16 @@ const guaranteeProcess = (row: any): GuaranteeProcess | null => {
   }
 };
 
+/** 解析绩效方案计算过程 JSON（未触发也落地；历史批次无此字段返回 null） */
+const perfProcess = (row: any): { schemeCode?: string; schemeName?: string; schemeType?: string; grade?: string; tierMin?: number; tierMax?: number; perf?: number; deduct?: number; fee?: number } | null => {
+  try {
+    const p = JSON.parse(row?.perfCalcProcess || 'null');
+    return p && typeof p === 'object' ? p : null;
+  } catch {
+    return null;
+  }
+};
+
 const INCOME_COLS: ColDef[] = [
   { prop: 'commissionIncome', label: '业绩提成', width: 250, source: '结佣业绩 × 新签导入月快照提点（分笔过程见单元格）' },
   { prop: 'teamIncome', label: '团队提成', width: 105, roles: ['MANAGER'], source: '团队新签业绩 × 10%' },
@@ -386,6 +403,7 @@ const DEDUCT_COLS: ColDef[] = [
   { prop: 'housingFund', label: '公积金', width: 90, source: '员工档案自缴金额' },
   { prop: 'attendanceFee', label: '考勤扣款', width: 95, source: '考勤Excel导入：迟到×20 + 旷工/请假标准' },
   { prop: 'pointsFee', label: '积分扣款', width: 90, source: '积分日报晚提交处罚：5元/次' },
+  { prop: 'perfDeductFee', label: '业绩扣款', width: 95, source: '绩效方案金额扣款（业绩绩效B版/店长积分绩效：未达标扣固定金额；明细见工资构成弹窗）' },
   { prop: 'commercialInsurance', label: '商业保险', width: 95, source: '人事数据（21元/月）' },
   { prop: 'dormitoryFee', label: '宿舍费', width: 85, source: '人事数据（住宿名单）' },
   { prop: 'negativeCarryover', label: '负工资结转', width: 105, source: '上月负工资余额（系统自动结转）' },

@@ -59,8 +59,8 @@
             <span class="compose-val net-val">¥{{ fmt(row.net) }}</span>
           </div>
           <div class="compose-item">
-            <span class="compose-name">绩效等级 / 综合提点</span>
-            <span class="compose-val muted">{{ row.perfGrade || '—' }} / {{ row.finalRate != null ? (Number(row.finalRate) * 100).toFixed(1) + '%' : '—' }}</span>
+            <span class="compose-name">绩效方案 / 等级 / 综合提点<i class="compose-src">按员工指派方案考核（未指派=默认积分绩效）</i></span>
+            <span class="compose-val muted">{{ schemeLabel(row) }} / {{ row.perfGrade || '—' }} / {{ row.finalRate != null ? (Number(row.finalRate) * 100).toFixed(1) + '%' : '—' }}</span>
           </div>
         </div>
       </div>
@@ -226,6 +226,24 @@ const DEDUCT_COLS: ColDef[] = [
   { prop: 'housingFund', label: '公积金', source: (r) => `员工档案自缴：¥${fmt(r.housingFund)}` },
   { prop: 'attendanceFee', label: '考勤扣款', source: (r) => `考勤导入：¥${fmt(Math.abs(Number(r.attendanceFee)))}` },
   { prop: 'pointsFee', label: '积分扣款', source: (r) => `积分日报晚提交：¥${fmt(r.pointsFee)}` },
+  {
+    // 绩效方案金额扣款（业绩绩效B版/店长积分绩效）：推导链取 perf_calc_process（方案/等级或阶梯/业绩/扣款）
+    prop: 'perfDeductFee',
+    label: '业绩扣款',
+    source: (r) => {
+      const p = perfProcess(r);
+      if (p) {
+        const bits = [`${p.schemeName || p.schemeCode || '绩效方案'}（${SCHEME_TYPE_LABELS[p.schemeType] || p.schemeType}）`];
+        if (p.grade) bits.push(`绩效等级 ${p.grade}`);
+        if (p.tierMin != null || p.tierMax != null) {
+          bits.push(`业绩 ¥${fmt(p.perf)} ∈ [${p.tierMin ?? 0}, ${p.tierMax ?? '∞'})`);
+        }
+        bits.push(`扣款 ¥${fmt(p.fee)}`);
+        return bits.join('；');
+      }
+      return '绩效方案金额扣款（未达标固定扣款）';
+    }
+  },
   { prop: 'commercialInsurance', label: '商业保险', source: (r) => `人事数据：¥${fmt(r.commercialInsurance)}/月` },
   { prop: 'dormitoryFee', label: '宿舍费', source: (r) => `人事数据（住宿）：¥${fmt(r.dormitoryFee)}` },
   { prop: 'negativeCarryover', label: '负工资结转', source: (r) => `上月负工资余额：¥${fmt(Math.abs(Number(r.negativeCarryover)))}` },
@@ -233,6 +251,44 @@ const DEDUCT_COLS: ColDef[] = [
 ];
 
 const resolveSource = (c: ColDef, row: PayrollDetail) => typeof c.source === 'function' ? c.source(row) : c.source;
+
+/* ───────────── 绩效方案溯源（perfCalcProcess：{schemeCode,schemeName,schemeType,grade?,tierMin?,tierMax?,perf?,deduct?,fee?}） ───────────── */
+const SCHEME_TYPE_LABELS: Record<string, string> = {
+  NONE: '无绩效',
+  GRADE_RATE: '积分绩效',
+  RATE_TIER: '业绩阶梯·扣提点',
+  AMOUNT_TIER: '业绩阶梯·扣金额',
+  GRADE_AMOUNT: '店长积分·扣金额'
+};
+
+interface PerfProcess {
+  schemeCode?: string;
+  schemeName?: string;
+  schemeType?: string;
+  grade?: string;
+  tierMin?: number | null;
+  tierMax?: number | null;
+  perf?: number;
+  deduct?: number;
+  fee?: number;
+}
+
+/** 解析绩效方案计算过程 JSON（未触发也落地；历史批次无此字段返回 null） */
+const perfProcess = (row: PayrollDetail): PerfProcess | null => {
+  try {
+    const p = JSON.parse((row as any).perfCalcProcess || 'null');
+    return p && typeof p === 'object' ? (p as PerfProcess) : null;
+  } catch {
+    return null;
+  }
+};
+
+/** 绩效方案展示名：优先取溯源 JSON 的方案名；历史批次（无 JSON）按默认口径显示 */
+const schemeLabel = (row: PayrollDetail): string => {
+  const p = perfProcess(row);
+  if (p?.schemeName) return p.schemeName;
+  return '默认（积分绩效）';
+};
 
 /* ───────────── 结佣提成跨月回溯分笔过程（引擎落地 commissionCalcProcess：[{month,perf,rate,income}]） ───────────── */
 interface CommissionCalcStep { month: string; perf: number; rate: number; income: number }

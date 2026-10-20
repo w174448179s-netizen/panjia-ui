@@ -191,42 +191,13 @@
           <p class="section-tip">日工资 = 满月底薪 ÷ 当月自然天数（按算薪归属月自动计算，不再使用固定的月计薪天数 21.75）。</p>
 
           <el-divider content-position="left">积分考核规则</el-divider>
-          <el-row :gutter="20">
-            <el-col :span="12">
-              <el-form-item label="处罚费用">
-                <el-input-number v-model="policyJson.points.penaltyFee" :min="0" :precision="2" :controls="false" style="width:100%" />
-                <span class="form-tip" style="margin-left:8px">元/次</span>
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="A线标准">
-                <el-input-number v-model="policyJson.points.gradeA" :min="0" :precision="1" :controls="false" style="width:100%" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="B线标准">
-                <el-input-number v-model="policyJson.points.gradeB" :min="0" :precision="1" :controls="false" style="width:100%" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="A级扣点">
-                <el-input-number v-model="policyJson.points.deductA" :min="-1" :max="1" :precision="4" :step="0.01" :controls="false" style="width:100%" />
-                <span class="form-tip" style="margin-left:8px">{{ fmtPct(policyJson.points.deductA) }}</span>
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="B级扣点">
-                <el-input-number v-model="policyJson.points.deductB" :min="-1" :max="1" :precision="4" :step="0.01" :controls="false" style="width:100%" />
-                <span class="form-tip" style="margin-left:8px">{{ fmtPct(policyJson.points.deductB) }}</span>
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="C级扣点">
-                <el-input-number v-model="policyJson.points.deductC" :min="-1" :max="1" :precision="4" :step="0.01" :controls="false" style="width:100%" />
-                <span class="form-tip" style="margin-left:8px">{{ fmtPct(policyJson.points.deductC) }}</span>
-              </el-form-item>
-            </el-col>
-          </el-row>
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            title="积分规则已迁移至「绩效方案」配置"
+            description="积分绩效（等级阈值/扣点/晚提交罚款）现按绩效方案统一维护：薪酬计算 → 绩效方案。员工可在档案中指派不同绩效方案（积分绩效/业绩绩效A版/业绩绩效B版/店长积分绩效/无绩效）；未指派的员工按默认方案「积分绩效」考核，口径与本处历史配置一致。"
+          />
 
           <el-divider content-position="left">商业保险与宿舍</el-divider>
           <el-row :gutter="20">
@@ -773,7 +744,7 @@ const policyJson = reactive({
     sickHospitalWithBaseFee: 20, sickHospitalNoBaseFee: 0,
     leaveFee: 50,
   },
-  points: { penaltyFee: 0, gradeA: 0, gradeB: 0, deductA: 0, deductB: 0, deductC: 0 },
+  points: { penaltyFee: 0, gradeA: 0, gradeB: 0, deductA: 0, deductB: 0, deductC: 0 }, // 仅回显兼容，已迁移至绩效方案配置
   commercialInsurance: 0,
   dormitoryFee: 0,
   tax: { mode: 'EXTERNAL', threshold: 0, deductSocial: true, brackets: [] as Array<{ min: number; rate: number; quick: number }> },
@@ -832,7 +803,7 @@ const savePolicyInline = async () => {
       housingFund: policyJson.housingFund,
       noSocialDeduct: policyJson.noSocialDeduct,
       attendance: policyJson.attendance,
-      points: policyJson.points,
+      // points 已迁移至绩效方案（pj_payroll_perf_scheme），保存时剔除避免双配置源
       commercialInsurance: policyJson.commercialInsurance,
       dormitoryFee: policyJson.dormitoryFee,
       tax: policyJson.tax,

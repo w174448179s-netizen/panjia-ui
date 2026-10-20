@@ -444,13 +444,25 @@
           <el-table :data="pf.paged" stripe border max-height="600" size="small">
             <el-table-column label="门店" prop="deptName" width="120" fixed="left" />
             <el-table-column label="姓名" prop="employeeName" width="80" fixed="left" />
+            <el-table-column label="绩效方案" width="120" align="center" show-overflow-tooltip>
+              <template #default="{ row }">
+                <!-- 该批次冻结的实际生效方案；历史批次无溯源 JSON=默认积分绩效 -->
+                <span v-if="perfProcess(row)?.schemeName">{{ perfProcess(row)!.schemeName }}</span>
+                <span v-else class="zero-val">默认</span>
+              </template>
+            </el-table-column>
             <el-table-column label="积分扣款" align="right" width="90">
               <template #default="{ row }">{{ neg(row.pointsFee) }}</template>
+            </el-table-column>
+            <el-table-column label="业绩扣款" align="right" width="90">
+              <template #default="{ row }">{{ neg(row.perfDeductFee) }}</template>
             </el-table-column>
             <el-table-column label="其他扣款" align="right" width="90">
               <template #default="{ row }">{{ neg(row.otherDeduct) }}</template>
             </el-table-column>
-            <el-table-column label="绩效等级" prop="perfGrade" width="80" align="center" />
+            <el-table-column label="绩效等级" prop="perfGrade" width="80" align="center">
+              <template #default="{ row }">{{ row.perfGrade || '—' }}</template>
+            </el-table-column>
             <el-table-column label="绩效提成点" width="100" align="center">
               <template #default="{ row }">{{ row.perfDeduct != null ? (Number(row.perfDeduct) * 100).toFixed(2) + '%' : '' }}</template>
             </el-table-column>
@@ -589,6 +601,16 @@ const ratePercent = (v: any) => {
   const n = Number(v);
   if (Number.isNaN(n)) return '';
   return `${(n * 100).toFixed(2)}%`;
+};
+
+/** 解析绩效方案计算过程 JSON（引擎落地，未触发也落；历史批次无此字段返回 null=默认方案） */
+const perfProcess = (row: any): { schemeName?: string; schemeType?: string } | null => {
+  try {
+    const p = JSON.parse(row?.perfCalcProcess || 'null');
+    return p && typeof p === 'object' ? p : null;
+  } catch {
+    return null;
+  }
 };
 
 /** 底薪：经纪人取 baseSalary，店长取 teamIncome + guaranteeFill（保底补足） */

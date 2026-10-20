@@ -15,6 +15,7 @@ import type {
   VirtualEmployeeInitItem,
   VirtualEmployeeInitResult
 } from './types';
+import type { PerfScheme } from './payroll';
 
 /**
  * 员工域 V5.2 接口（实际前缀 /api/panjia）。
@@ -48,6 +49,10 @@ export const employeeApi = {
   /** 岗位选项（职位多选下拉） */
   postOptions() {
     return panjiaRequest.get<PostOption[]>('/people/employee/postOptions');
+  },
+  /** 绩效方案清单（员工编辑表单指派下拉数据源；方案本体由薪酬域「绩效方案」页维护） */
+  perfSchemes() {
+    return panjiaRequest.get<PerfScheme[]>('/people/employee/perf-schemes');
   },
   /** 部门树选项（门店 → 组别，不含客户根节点） */
   deptTree() {
@@ -102,5 +107,34 @@ export const employeeApi = {
     link.download = '员工导入模板.xlsx';
     link.click();
     window.URL.revokeObjectURL(url);
+  },
+  /** 导出员工名单（Excel，列与导入模板一致，支持闭环） */
+  async exportEmployees(params?: Record<string, any>) {
+    const { getToken } = await import('@/utils/auth');
+    const baseApi = import.meta.env.VITE_APP_BASE_API;
+    const usp = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v === undefined || v === null || v === '') return;
+        if (Array.isArray(v)) {
+          v.forEach((item) => usp.append(k, String(item)));
+        } else {
+          usp.append(k, String(v));
+        }
+      });
+    }
+    const qs = usp.toString();
+    const url = `${baseApi}/api/panjia/people/employee/export${qs ? '?' + qs : ''}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${getToken()}`, clientid: 'e5cd7e4891bf95d1d19206ce24a7b32e' }
+    });
+    if (!res.ok) throw new Error('导出失败');
+    const blob = await res.blob();
+    const objUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objUrl;
+    link.download = '员工名单.xlsx';
+    link.click();
+    window.URL.revokeObjectURL(objUrl);
   }
 };
