@@ -45,6 +45,10 @@ export interface Employee {
   levelCode: string;
   phone: string;
   idCard: string;
+  /** 户口所在地 */
+  residence?: string;
+  /** 现住地址 */
+  currentAddress?: string;
   /** 性别（字典 panjia_employee_gender：MALE/FEMALE） */
   gender?: string;
   /** 工资卡开户银行 */
@@ -108,6 +112,10 @@ export interface EmployeeCreateForm {
   levelCode: string;
   phone: string;
   idCard: string;
+  /** 户口所在地 */
+  residence?: string;
+  /** 现住地址 */
+  currentAddress?: string;
   /** 性别（MALE/FEMALE） */
   gender?: string;
   /** 工资卡开户银行 */

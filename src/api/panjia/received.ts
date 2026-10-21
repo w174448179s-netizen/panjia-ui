@@ -47,6 +47,8 @@ export interface ReceivedApply {
   /** 终审人昵称（后端按 approverId 翻译） */
   approverName?: string;
   approveTime?: string;
+  /** 自动发起结佣生成的结佣申请单号（仅系统自动通过且非二手买卖时有值，留痕提示） */
+  autoCommissionApplyNo?: string;
   createTime: string;
 }
 

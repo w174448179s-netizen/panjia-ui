@@ -309,6 +309,16 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
+            <el-form-item label="户口所在地" prop="residence">
+              <el-input v-model="form.residence" placeholder="请输入户口所在地" maxlength="200" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="现住地址" prop="currentAddress">
+              <el-input v-model="form.currentAddress" placeholder="请输入现住地址" maxlength="200" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
             <el-form-item label="性别" prop="gender">
               <el-radio-group v-model="form.gender">
                 <el-radio v-for="dict in panjia_employee_gender" :key="dict.value" :value="dict.value">
@@ -510,6 +520,8 @@
           </el-descriptions-item>
           <el-descriptions-item label="手机号">{{ detailData.phone || '—' }}</el-descriptions-item>
           <el-descriptions-item label="身份证号">{{ detailData.idCard || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="户口所在地">{{ detailData.residence || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="现住地址">{{ detailData.currentAddress || '—' }}</el-descriptions-item>
           <el-descriptions-item label="性别">
             <dict-tag :options="panjia_employee_gender" :value="detailData.gender" />
           </el-descriptions-item>
@@ -976,6 +988,8 @@ const initForm = (): EmployeeCreateForm & EmployeeUpdateForm => ({
   levelCode: '',
   phone: '',
   idCard: '',
+  residence: '',
+  currentAddress: '',
   gender: '',
   bankName: '',
   bankBranch: '',
@@ -1040,6 +1054,8 @@ const handleUpdate = async (row: Employee) => {
   form.levelCode = detail.levelCode ?? '';
   form.phone = detail.phone ?? '';
   form.idCard = detail.idCard ?? '';
+  form.residence = detail.residence ?? '';
+  form.currentAddress = detail.currentAddress ?? '';
   form.gender = detail.gender ?? '';
   form.bankName = detail.bankName ?? '';
   form.bankBranch = detail.bankBranch ?? '';

@@ -153,6 +153,14 @@
         <el-table-column label="状态" align="center" width="130">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+            <!-- 自动发起结佣留痕：系统自动审批通过且非二手买卖时，结佣域已自动建单并提交 -->
+            <el-tooltip
+              v-if="row.autoCommissionApplyNo"
+              :content="`已自动发起结佣：${row.autoCommissionApplyNo}`"
+              placement="top"
+            >
+              <el-tag type="success" size="small" effect="plain" style="margin-top: 2px">已自动结佣</el-tag>
+            </el-tooltip>
             <!-- 审批中原因提示（人数不一致/实收不足）：审批人与申请人一眼知道卡点 -->
             <el-tooltip v-if="row.manualReviewReason" :content="row.manualReviewReason" placement="top">
               <el-tag type="warning" size="small" effect="plain" style="margin-top: 2px">需人工核对</el-tag>
@@ -224,6 +232,13 @@
           {{ detailApp.approverName || '—' }}
         </el-descriptions-item>
         <el-descriptions-item label="审批时间">{{ formatDateTime(detailApp.approveTime) }}</el-descriptions-item>
+        <!-- 自动发起结佣留痕：系统自动审批通过且非二手买卖时由结佣域自动建单并提交 -->
+        <el-descriptions-item label="自动结佣">
+          <template v-if="detailApp.autoCommissionApplyNo">
+            已自动发起结佣（{{ detailApp.autoCommissionApplyNo }}）
+          </template>
+          <template v-else>—</template>
+        </el-descriptions-item>
         <!-- 实收合计：结佣调整生效时展示「原值 → 调整后值」（实收不做折算） -->
         <el-descriptions-item label="实收合计">
           <template v-if="detailReceivedAdjusted">

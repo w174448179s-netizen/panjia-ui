@@ -12,6 +12,10 @@ export interface ContractPrintData {
   /** 性别中文（男/女，可为空） */
   genderLabel?: string;
   idCard?: string;
+  /** 户口所在地 */
+  residence?: string;
+  /** 现住地址 */
+  currentAddress?: string;
   employeeCode: string;
   phone?: string;
   /** 合同类型中文（劳动合同/兼职合同/其他） */
@@ -167,6 +171,8 @@ export function renderCustomContractHtml(htmlContent: string, data: ContractPrin
     employeeName: data.employeeName ?? '',
     genderLabel: data.genderLabel ?? '',
     idCard: data.idCard ?? '',
+    residence: data.residence ?? '',
+    currentAddress: data.currentAddress ?? '',
     employeeCode: data.employeeCode ?? '',
     phone: data.phone ?? '',
     contractTypeLabel: data.contractTypeLabel ?? '',
@@ -186,7 +192,8 @@ export function renderCustomContractHtml(htmlContent: string, data: ContractPrin
 /** 模板文件头部的占位符说明（随模板一起下载，用户照着改） */
 const PLACEHOLDER_DOC = `可用占位符（打印时自动替换，请勿改动花括号写法）：
   {{partyA}} 甲方门店        {{employeeName}} 员工姓名     {{genderLabel}} 性别
-  {{idCard}} 身份证号        {{employeeCode}} 工号         {{phone}} 联系电话
+  {{idCard}} 身份证号        {{residence}} 户口所在地    {{currentAddress}} 现住地址
+  {{employeeCode}} 工号      {{phone}} 联系电话
   {{contractTypeLabel}} 合同类型  {{startDate}} 开始日      {{endDate}} 结束日（留空=无固定期限）
   {{bankName}} 开户银行      {{bankBranch}} 开户支行       {{bankCardNo}} 工资卡号
   {{printDate}} 打印日期`;
@@ -211,7 +218,7 @@ const LABOR_TEMPLATE = tpl(
   <p>法定代表人：廖明</p>
   <p>员工（乙方）：{{employeeName}}</p>
   <p>身份证号码：{{idCard}}</p>
-  <p>户口所在地：<span class="blank" style="min-width:220px;"></span></p>
+  <p>户口所在地：{{residence}}</p>
   <p>联 系 电 话：{{phone}}</p>
 </div>
 <p class="clause">根据《中华人民共和国劳动合同法》及相关法律法规的规定，甲、乙双方协商一致，同意签订本合同，并达成如下协议条款，供双方共同遵守执行：</p>
@@ -306,7 +313,7 @@ const LABOR_TEMPLATE = tpl(
   <p>注 册 地 址：成都市金牛区花照壁中横街88号1层</p>
   <p>员工（乙方）：{{employeeName}}</p>
   <p>身份证号码：{{idCard}}</p>
-  <p>现 住 地 址：<span class="blank" style="min-width:220px;"></span></p>
+  <p>现 住 地 址：{{currentAddress}}</p>
 </div>
 <p class="clause">因为甲方聘用乙方工作性质的特殊性，双方共识并自愿达成以下协议：</p>
 <h2>一、关于违反同业竞争禁止性规定的认定和处理</h2>
