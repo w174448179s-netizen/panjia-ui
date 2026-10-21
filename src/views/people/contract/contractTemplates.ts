@@ -8,6 +8,12 @@
 export interface ContractPrintData {
   /** 甲方（签约门店名） */
   partyA: string;
+  /** 甲方单位全称（按部门映射，pj_people_contract_party） */
+  partyACompany: string;
+  /** 甲方注册地址 */
+  partyAAddress: string;
+  /** 甲方法定代表人 */
+  partyALegal: string;
   employeeName: string;
   /** 性别中文（男/女，可为空） */
   genderLabel?: string;
@@ -72,10 +78,10 @@ const wrapDoc = (title: string, body: string, printDate: string) => `<!DOCTYPE h
 </body>
 </html>`;
 
-/** 甲方信息块（三个模板共用） */
+/** 甲方信息块（兼职/其他模板共用；用人单位=映射的甲方单位全称，未配置兜底门店名） */
 const partyABlock = (d: ContractPrintData) => `
   <div class="meta">
-    <p>甲方（用人单位）：${d.partyA}</p>
+    <p>甲方（用人单位）：${d.partyACompany || d.partyA}</p>
     <p>乙方（劳动者）：${d.employeeName}
       ${d.genderLabel ? `　性别：${d.genderLabel}` : ''}
       ${d.idCard ? `　身份证号：${d.idCard}` : ''}</p>
@@ -168,6 +174,9 @@ export function renderContractHtml(contractType: string, data: ContractPrintData
 export function renderCustomContractHtml(htmlContent: string, data: ContractPrintData): string {
   const placeholders: Record<string, string> = {
     partyA: data.partyA ?? '',
+    partyACompany: data.partyACompany ?? '',
+    partyAAddress: data.partyAAddress ?? '',
+    partyALegal: data.partyALegal ?? '',
     employeeName: data.employeeName ?? '',
     genderLabel: data.genderLabel ?? '',
     idCard: data.idCard ?? '',
@@ -196,6 +205,7 @@ const PLACEHOLDER_DOC = `可用占位符（打印时自动替换，请勿改动�
   {{employeeCode}} 工号      {{phone}} 联系电话
   {{contractTypeLabel}} 合同类型  {{startDate}} 开始日      {{endDate}} 结束日（留空=无固定期限）
   {{bankName}} 开户银行      {{bankBranch}} 开户支行       {{bankCardNo}} 工资卡号
+  {{partyACompany}} 甲方单位  {{partyAAddress}} 注册地址   {{partyALegal}} 法定代表人
   {{printDate}} 打印日期`;
 
 const tpl = (title: string, body: string) => `<!--
@@ -209,13 +219,13 @@ ${body.trim()}`;
 const LABOR_TEMPLATE = tpl(
   '劳动合同（三合一）',
   `
-<p class="company-line">成都市人居天街房地产经纪有限公司</p>
+<p class="company-line">{{partyACompany}}</p>
 <h1>劳 动 合 同</h1>
 <p class="contract-no">合同编号：TJ-{{employeeCode}}-{{startDate}}</p>
 <div class="meta">
-  <p>单位（甲方）：成都市人居天街房地产经纪有限公司</p>
-  <p>注 册 地 址：成都市金牛区花照壁中横街88号1层</p>
-  <p>法定代表人：廖明</p>
+  <p>单位（甲方）：{{partyACompany}}</p>
+  <p>注 册 地 址：{{partyAAddress}}</p>
+  <p>法定代表人：{{partyALegal}}</p>
   <p>员工（乙方）：{{employeeName}}</p>
   <p>身份证号码：{{idCard}}</p>
   <p>户口所在地：{{residence}}</p>
@@ -261,13 +271,13 @@ const LABOR_TEMPLATE = tpl(
 <p class="clause">第二十五条 本合同一式两份，甲、乙双方各执一份。每份均具有同等法律效力，本合同的附件作为本合同不可分割的一部分，同样具有法律效力。合同附件包括但不限于：保密协议书、竞业限制协议、技术培训协议、服务承诺书等。</p>
 <p class="clause">第二十六条 本劳动合同不得代签或涂改，经甲、乙双方签字（盖章）后生效。</p>
 <div class="sign">
-  <div>甲方：成都市人居天街房地产经纪有限公司（公章）<div class="line"></div>签约人：<div class="line"></div>签约时间：<div class="line"></div></div>
+  <div>甲方：{{partyACompany}}（公章）<div class="line"></div>签约人：<div class="line"></div>签约时间：<div class="line"></div></div>
   <div>乙方：<div class="line"></div>身份证号：<div class="line"></div>签约时间：<div class="line"></div></div>
 </div>
 
 <div class="page-break"></div>
 <h1>诚 信 声 明</h1>
-<p class="clause">本人声明：在与成都市人居天街房地产经纪有限公司（以下简称公司）合作期间，自觉遵守职业道德和公司制度，杜绝以下10种不诚信行为，否则视为本人违反职业操守，违反合作协议行为。本人愿意接受公司的相应处罚，包括但不限于被解除合作协议，被扣工资、奖金及提成等收入、被行业通报，并愿意赔偿由此给公司或他人所造成的经济损失。</p>
+<p class="clause">本人声明：在与{{partyACompany}}（以下简称公司）合作期间，自觉遵守职业道德和公司制度，杜绝以下10种不诚信行为，否则视为本人违反职业操守，违反合作协议行为。本人愿意接受公司的相应处罚，包括但不限于被解除合作协议，被扣工资、奖金及提成等收入、被行业通报，并愿意赔偿由此给公司或他人所造成的经济损失。</p>
 <p class="clause">一、私自收受好处；指：私自收受合作单位或个人给予的好处。好处包括但不限于：收礼、借款、小费、返点、回扣、红包、好处费、感谢费、帮忙等；合作单位或个人包括但不限于：与公司有业务往来的各个银行、担保公司、政府机构、供应商、开发商、合作方，或房屋买卖及租赁的双方客户、公司同事等。主动将因不便回绝而收受的礼物等上交公司的除外；</p>
 <p class="clause">二、做私单；指：私自协助买卖或租赁双方达成交易（包括但不限于私自将双方或单方客户介绍到其他公司或个人处成交等）；或私自协助客户办理结按、过户、贷款等事项（或将客户介绍到其他公司或个人处办理）；或私自将房客源联系电话等信息透露给公司以外的任何人；</p>
 <p class="clause">三、干私活；指：私自在其它单位担任职务，包括股东、合伙人、雇员、临时工（兼职）顾问、培训师等；</p>
@@ -284,8 +294,8 @@ const LABOR_TEMPLATE = tpl(
 <div class="page-break"></div>
 <h1>业务管理告知</h1>
 <div class="meta">
-  <p>单位（甲方）：成都市人居天街房地产经纪有限公司</p>
-  <p>注 册 地 址：成都市金牛区花照壁中横街88号1层</p>
+  <p>单位（甲方）：{{partyACompany}}</p>
+  <p>注 册 地 址：{{partyAAddress}}</p>
   <p>员工（乙方）：{{employeeName}}</p>
   <p>身份证号码：{{idCard}}</p>
 </div>
@@ -301,16 +311,16 @@ const LABOR_TEMPLATE = tpl(
 <p class="clause">七、入职贝壳平台必须参加贝壳平台的岗前培训——融合训，贝壳收取500元的培训费用。公司报名时全额垫付，若该参训经纪人入职3个月内离职，则本人承担该笔费用，从工资扣除500元。入职3个月后扣除500元业绩。</p>
 <p class="clause">八、成都市房地产经纪协会相关规定，从事房地产经纪活动，必须参加"成都市房地产经纪资格证"考试，考试费用200元。公司报名时全额垫付，若该参训经纪人入职3个月内离职，则本人承担该笔费用，从工资扣除200元。入职3个月后扣除200元业绩。</p>
 <div class="sign">
-  <div>甲方：成都市人居天街房地产经纪有限公司<div class="line"></div>签约时间：<div class="line"></div></div>
+  <div>甲方：{{partyACompany}}<div class="line"></div>签约时间：<div class="line"></div></div>
   <div>乙方：<div class="line"></div>签约时间：<div class="line"></div></div>
 </div>
 
 <div class="page-break"></div>
-<p class="company-line">成都市人居天街房地产经纪有限公司</p>
+<p class="company-line">{{partyACompany}}</p>
 <h1>保 密 协 议</h1>
 <div class="meta">
-  <p>单位（甲方）：成都市人居天街房地产经纪有限公司</p>
-  <p>注 册 地 址：成都市金牛区花照壁中横街88号1层</p>
+  <p>单位（甲方）：{{partyACompany}}</p>
+  <p>注 册 地 址：{{partyAAddress}}</p>
   <p>员工（乙方）：{{employeeName}}</p>
   <p>身份证号码：{{idCard}}</p>
   <p>现 住 地 址：{{currentAddress}}</p>
@@ -347,7 +357,7 @@ const LABOR_TEMPLATE = tpl(
 <p class="clause">5、其他保密事宜。</p>
 <p class="clause" style="margin-top:16px;">乙方承诺书：本人 <span class="blank" style="min-width:120px;">{{employeeName}}</span> 已认真阅读上述保密协定，并充分理解和支持公司的规定，本人承诺遵守与公司保密协定内容中之约定，若本人违反保密协定内容之约定，本人愿意承担一切后果及违约赔偿责任；在此本人慎重承诺，不做私单，不做有损公司利益和形象的事情。</p>
 <div class="sign">
-  <div>甲方：成都市人居天街房地产经纪有限公司<div class="line"></div>签约时间：<div class="line"></div></div>
+  <div>甲方：{{partyACompany}}<div class="line"></div>签约时间：<div class="line"></div></div>
   <div>乙方：<div class="line"></div>签约时间：<div class="line"></div></div>
 </div>`
 );

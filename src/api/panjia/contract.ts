@@ -62,8 +62,62 @@ export const contractApi = {
     const body: Record<string, string> = { password };
     if (oldPassword) body.oldPassword = oldPassword;
     return panjiaRequest.put<void>('/people/contract/my/password', body);
+  },
+
+  // ==================== 合同甲方（用人单位）配置 ====================
+  /** 甲方配置全量列表（管理弹窗用） */
+  listParty() {
+    return panjiaRequest.get<ContractPartyVO[]>('/people/contract/party/list');
+  },
+  /** 新增甲方配置 */
+  addParty(data: ContractPartyForm) {
+    return panjiaRequest.post<void>('/people/contract/party', data);
+  },
+  /** 修改甲方配置 */
+  updateParty(data: ContractPartyForm) {
+    return panjiaRequest.put<void>('/people/contract/party', data);
+  },
+  /** 删除甲方配置（默认甲方不可删） */
+  deleteParty(partyId: string | number) {
+    return panjiaRequest.delete<void>(`/people/contract/party/${partyId}`);
+  },
+  /** 按员工解析甲方三要素（合同打印用） */
+  resolveParty(employeeId: string | number) {
+    return panjiaRequest.get<ContractPartyInfo>('/people/contract/party/resolve', { employeeId });
+  },
+  /** 当前登录员工的甲方三要素（本人合同打印用） */
+  myPartyInfo() {
+    return panjiaRequest.get<ContractPartyInfo>('/people/contract/my/party-info');
   }
 };
+
+/** 甲方配置（部门→单位映射） */
+export interface ContractPartyVO {
+  partyId: number;
+  deptId: number;
+  deptName: string;
+  companyName: string;
+  regAddress: string | null;
+  legalPerson: string | null;
+  remark: string | null;
+}
+
+/** 甲方配置表单 */
+export interface ContractPartyForm {
+  partyId?: number | null;
+  deptId?: number | string | null;
+  companyName: string;
+  regAddress?: string;
+  legalPerson?: string;
+  remark?: string;
+}
+
+/** 甲方三要素（打印用） */
+export interface ContractPartyInfo {
+  companyName: string;
+  regAddress: string;
+  legalPerson: string;
+}
 
 /** 合同模板配置 */
 export interface ContractTemplateVO {

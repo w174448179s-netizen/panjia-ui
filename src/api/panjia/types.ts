@@ -184,6 +184,10 @@ export interface Contract {
   idCardOssIds: string[];
   /** 身份证扫描件访问 URL 集合（与 ossId 一一对应） */
   idCardUrls?: (string | null)[];
+  /** 合同签署扫描件 ossId 集合（签订后上传留底） */
+  contractOssIds?: string[];
+  /** 合同签署扫描件访问 URL 集合（与 ossId 一一对应） */
+  contractUrls?: (string | null)[];
   remark?: string;
   createTime: string;
 }
@@ -206,6 +210,8 @@ export interface ContractCreateForm {
   endDate?: string | null;
   /** 身份证扫描件 ossId 集合 */
   idCardOssIds?: string[];
+  /** 合同签署扫描件 ossId 集合（null=不修改；空集合=清空） */
+  contractOssIds?: string[];
   remark?: string;
 }
 
@@ -216,6 +222,8 @@ export interface ContractUpdateForm {
   startDate?: string;
   endDate?: string | null;
   idCardOssIds?: string[];
+  /** 合同签署扫描件 ossId 集合（null=不修改；空集合=清空） */
+  contractOssIds?: string[];
   remark?: string;
 }
 

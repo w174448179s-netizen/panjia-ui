@@ -267,8 +267,19 @@ const idCardUrls = (row: any): string[] => {
 const handlePrint = async (row: Contract) => {
   const emp = employeeInfo.value;
   if (!emp) { ElMessage.error('员工信息加载失败，请刷新重试'); return; }
+  // 甲方三要素：按员工部门映射（部门精确 → 门店锚点 → 默认甲方）
+  let partyInfo = { companyName: '', regAddress: '', legalPerson: '' };
+  try {
+    const partyRes = await contractApi.myPartyInfo();
+    partyInfo = (partyRes as any).data ?? partyInfo;
+  } catch {
+    // 甲方配置获取失败时仍可打印（三要素留空）
+  }
   const printData = {
     partyA: emp.deptName ?? row.deptName ?? '',
+    partyACompany: partyInfo.companyName ?? '',
+    partyAAddress: partyInfo.regAddress ?? '',
+    partyALegal: partyInfo.legalPerson ?? '',
     employeeName: row.employeeName ?? '',
     genderLabel: emp.genderLabel ?? '',
     idCard: emp.idCard ?? '',

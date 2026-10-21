@@ -53,6 +53,9 @@
             <p>劳动合同 / 兼职合同 / 其他。续签 = 新增一条记录，历史合同保留；到期前 30 天在员工管理页提醒。</p>
           </div>
           <div class="toolbar-actions">
+            <el-button v-hasPermi="['people:contract:edit']" plain icon="OfficeBuilding" @click="openPartyManager">
+              甲方配置
+            </el-button>
             <el-button v-hasPermi="['people:contract:edit']" plain icon="Setting" @click="openTemplateManager">
               模板管理
             </el-button>
@@ -104,11 +107,37 @@
             <span v-else class="no-file">—</span>
           </template>
         </el-table-column>
+        <el-table-column label="合同扫描件" align="center" width="140">
+          <template #default="scope">
+            <template v-if="contractUrls(scope.row).length">
+              <el-image
+                v-for="(url, idx) in contractUrls(scope.row)"
+                :key="idx"
+                :src="url"
+                :preview-src-list="contractUrls(scope.row)"
+                :initial-index="idx"
+                preview-teleported
+                fit="cover"
+                class="id-card-thumb"
+              />
+            </template>
+            <span v-else class="no-file">—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="备注" align="center" prop="remark" min-width="120" show-overflow-tooltip />
         <el-table-column label="操作" align="center" width="150" fixed="right">
           <template #default="scope">
             <el-tooltip content="打印合同" placement="top">
               <el-button link type="primary" icon="Printer" @click="handlePrint(scope.row as Contract)" />
+            </el-tooltip>
+            <el-tooltip content="导入合同扫描件（留底）" placement="top">
+              <el-button
+                v-hasPermi="['people:contract:edit']"
+                link
+                type="primary"
+                icon="Upload"
+                @click="openImport(scope.row as Contract)"
+              />
             </el-tooltip>
             <el-tooltip content="修改" placement="top">
               <el-button
@@ -140,6 +169,21 @@
         @pagination="getList"
       />
     </el-card>
+
+    <!-- 导入合同扫描件（留底） -->
+    <el-dialog v-model="importVisible" title="导入合同扫描件" width="560px" append-to-body>
+      <el-alert
+        type="info"
+        :closable="false"
+        style="margin-bottom: 12px"
+        :title="`${importRow?.employeeName ?? ''} 的合同 — 签订完成后上传扫描件留底，可增删，保存即生效`"
+      />
+      <ImageUpload v-model="importOssIds" :limit="9" :file-size="10" />
+      <template #footer>
+        <el-button type="primary" :loading="importSaving" @click="submitImport">保 存</el-button>
+        <el-button @click="importVisible = false">取 消</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 新增 / 修改合同 -->
     <el-dialog v-model="formVisible" :title="formTitle" width="680px" append-to-body @closed="resetForm">
@@ -210,6 +254,76 @@
       </template>
     </el-dialog>
 
+    <!-- 甲方（用人单位）配置 -->
+    <el-dialog v-model="partyVisible" title="甲方（用人单位）配置" width="900px" append-to-body>
+      <el-alert
+        type="info"
+        :closable="false"
+        class="template-tip"
+        title="打印合同时按员工所属部门匹配甲方：部门精确匹配 → 所属门店匹配 → 默认甲方（dept_id=0）。未配置具体映射的部门一律使用默认甲方。"
+      />
+      <div style="margin-bottom: 12px; text-align: right">
+        <el-button v-hasPermi="['people:contract:add']" type="primary" plain icon="Plus" @click="openPartyEdit(null)">
+          新增映射
+        </el-button>
+      </div>
+      <el-table v-loading="partyLoading" :data="partyList" border>
+        <el-table-column label="部门" prop="deptName" min-width="170" show-overflow-tooltip />
+        <el-table-column label="单位（甲方）" prop="companyName" min-width="220" show-overflow-tooltip />
+        <el-table-column label="注册地址" prop="regAddress" min-width="200" show-overflow-tooltip />
+        <el-table-column label="法定代表人" prop="legalPerson" width="110" align="center" />
+        <el-table-column label="操作" align="center" width="140">
+          <template #default="scope">
+            <el-button v-hasPermi="['people:contract:edit']" type="primary" link size="small" @click="openPartyEdit(scope.row as ContractPartyVO)">
+              编辑
+            </el-button>
+            <el-button
+              v-if="scope.row.deptId !== 0"
+              v-hasPermi="['people:contract:delete']"
+              type="danger"
+              link
+              size="small"
+              @click="handlePartyDelete(scope.row as ContractPartyVO)"
+            >删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="partyVisible = false">关 闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 甲方配置编辑 -->
+    <el-dialog v-model="partyFormVisible" :title="partyForm.partyId ? '编辑甲方映射' : '新增甲方映射'" width="560px" append-to-body>
+      <el-form :model="partyForm" label-width="110px">
+        <el-form-item label="映射部门" required>
+          <PanjiaDeptSelect
+            v-model="partyForm.deptId"
+            :scope="false"
+            :clearable="true"
+            placeholder="不选 = 默认甲方（全部部门兜底）"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="单位（甲方）" required>
+          <el-input v-model="partyForm.companyName" maxlength="200" placeholder="如：成都市人居天街房地产经纪有限公司" />
+        </el-form-item>
+        <el-form-item label="注册地址">
+          <el-input v-model="partyForm.regAddress" maxlength="500" placeholder="请输入注册地址" />
+        </el-form-item>
+        <el-form-item label="法定代表人">
+          <el-input v-model="partyForm.legalPerson" maxlength="50" placeholder="请输入法定代表人" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="partyForm.remark" type="textarea" :rows="2" maxlength="500" show-word-limit />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button type="primary" :loading="partySaving" @click="submitPartyForm">确 定</el-button>
+        <el-button @click="partyFormVisible = false">取 消</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 合同模板管理 -->
     <el-dialog v-model="templateVisible" title="合同模板管理" width="780px" append-to-body>
       <el-alert
@@ -220,7 +334,8 @@
       >
         <template #default>
           <span v-pre>可用占位符：{{partyA}} {{employeeName}} {{genderLabel}} {{idCard}} {{employeeCode}} {{phone}}
-          {{contractTypeLabel}} {{startDate}} {{endDate}} {{bankName}} {{bankBranch}} {{bankCardNo}} {{printDate}}</span>
+          {{contractTypeLabel}} {{startDate}} {{endDate}} {{bankName}} {{bankBranch}} {{bankCardNo}}
+          {{partyACompany}} {{partyAAddress}} {{partyALegal}} {{printDate}}</span>
         </template>
       </el-alert>
       <el-table :data="templateList" border class="template-table">
@@ -274,7 +389,7 @@
 <script setup name="PeopleContract" lang="ts">
 import { computed, onMounted, reactive, ref, toRefs } from 'vue';
 import { contractApi } from '@/api/panjia/contract';
-import type { ContractTemplateVO } from '@/api/panjia/contract';
+import type { ContractTemplateVO, ContractPartyVO, ContractPartyForm } from '@/api/panjia/contract';
 import { employeeApi } from '@/api/panjia/employee';
 import type { Contract, Employee } from '@/api/panjia/types';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
@@ -307,6 +422,8 @@ const isExpiringSoon = (endDate: string) => {
 
 /** 扫描件有效 URL 列表（过滤元数据已删除的空位；row 为表格 DefaultRow，弱类型取值） */
 const idCardUrls = (row: any): string[] => ((row?.idCardUrls ?? []) as (string | null)[]).filter(Boolean) as string[];
+/** 合同签署扫描件有效 URL 列表 */
+const contractUrls = (row: any): string[] => ((row?.contractUrls ?? []) as (string | null)[]).filter(Boolean) as string[];
 
 const getList = async () => {
   loading.value = true;
@@ -495,8 +612,19 @@ const handlePrint = async (row: Contract) => {
     // 员工详情获取失败时仍可打印（缺身份证号等以留空呈现）
   }
   const genderDict: Record<string, string> = { MALE: '男', FEMALE: '女' };
+  // 甲方三要素：按员工部门映射（部门精确 → 门店锚点 → 默认甲方）
+  let partyInfo = { companyName: '', regAddress: '', legalPerson: '' };
+  try {
+    const partyRes = await contractApi.resolveParty(row.employeeId);
+    partyInfo = (partyRes as any).data ?? partyInfo;
+  } catch {
+    // 甲方配置获取失败时仍可打印（三要素留空）
+  }
   const printData = {
     partyA: row.deptName ?? '',
+    partyACompany: partyInfo.companyName ?? '',
+    partyAAddress: partyInfo.regAddress ?? '',
+    partyALegal: partyInfo.legalPerson ?? '',
     employeeName: row.employeeName ?? '',
     genderLabel: employee?.gender ? genderDict[employee.gender] ?? employee.gender : '',
     idCard: employee?.idCard ?? '',
@@ -542,6 +670,99 @@ onMounted(() => {
   getList();
   loadTemplates();
 });
+
+// ==================== 导入合同扫描件（留底） ====================
+const importVisible = ref(false);
+const importSaving = ref(false);
+const importRow = ref<Contract | null>(null);
+const importOssIds = ref<string[]>([]);
+
+const openImport = (row: Contract) => {
+  importRow.value = row;
+  importOssIds.value = [...((row as any).contractOssIds ?? [])];
+  importVisible.value = true;
+};
+
+const submitImport = async () => {
+  if (!importRow.value) return;
+  importSaving.value = true;
+  try {
+    await contractApi.update(importRow.value.contractId, { contractOssIds: importOssIds.value });
+    modal.msgSuccess('已保存');
+    importVisible.value = false;
+    await getList();
+  } finally {
+    importSaving.value = false;
+  }
+};
+
+// ==================== 甲方（用人单位）配置 ====================
+const partyVisible = ref(false);
+const partyFormVisible = ref(false);
+const partyLoading = ref(false);
+const partySaving = ref(false);
+const partyList = ref<ContractPartyVO[]>([]);
+const partyForm = reactive<ContractPartyForm>({
+  partyId: null,
+  deptId: null,
+  companyName: '',
+  regAddress: '',
+  legalPerson: '',
+  remark: ''
+});
+
+const openPartyManager = async () => {
+  partyVisible.value = true;
+  partyLoading.value = true;
+  try {
+    const res = await contractApi.listParty();
+    partyList.value = (res as any).data ?? [];
+  } finally {
+    partyLoading.value = false;
+  }
+};
+
+const openPartyEdit = (row: ContractPartyVO | null) => {
+  partyForm.partyId = row?.partyId ?? null;
+  // 默认甲方（deptId=0）在编辑时显示为空（=不选部门）
+  partyForm.deptId = row && row.deptId !== 0 ? row.deptId : null;
+  partyForm.companyName = row?.companyName ?? '';
+  partyForm.regAddress = row?.regAddress ?? '';
+  partyForm.legalPerson = row?.legalPerson ?? '';
+  partyForm.remark = row?.remark ?? '';
+  partyFormVisible.value = true;
+};
+
+const submitPartyForm = async () => {
+  if (!partyForm.companyName?.trim()) {
+    modal.msgWarning('单位（甲方）名称不能为空');
+    return;
+  }
+  partySaving.value = true;
+  try {
+    const body: ContractPartyForm = {
+      ...partyForm,
+      deptId: partyForm.deptId ? Number(partyForm.deptId) : 0
+    };
+    if (partyForm.partyId) {
+      await contractApi.updateParty(body);
+    } else {
+      await contractApi.addParty(body);
+    }
+    modal.msgSuccess('已保存');
+    partyFormVisible.value = false;
+    await openPartyManager();
+  } finally {
+    partySaving.value = false;
+  }
+};
+
+const handlePartyDelete = async (row: ContractPartyVO) => {
+  await modal.confirm(`确认删除「${row.deptName}」的甲方映射（${row.companyName}）？删除后该部门将使用默认甲方。`);
+  await contractApi.deleteParty(row.partyId);
+  modal.msgSuccess('已删除');
+  await openPartyManager();
+};
 
 // ==================== 合同模板管理 ====================
 const templateVisible = ref(false);
@@ -601,6 +822,9 @@ const previewTemplate = (row: any) => {
   const tpl = row as ContractTemplateVO;
   const sample = {
     partyA: '示例门店（甲方）',
+    partyACompany: '成都市人居天街房地产经纪有限公司',
+    partyAAddress: '成都市金牛区花照壁中横街88号1层',
+    partyALegal: '廖明',
     employeeName: '张三',
     genderLabel: '男',
     idCard: '110101199001011234',
