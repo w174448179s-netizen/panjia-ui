@@ -532,6 +532,15 @@ const loadDetailList = async () => {
       contractNos: detailDialog.bizKey,
     });
     detailList.value = res.data ?? [];
+    // 期间以合同实际归属月为准（取明细行最新 period），避免未选期间时显示空白、且调整单期间与明细期间保持一致
+    const actualPeriod = detailList.value
+      .map(r => r.period)
+      .filter((p): p is string => !!p)
+      .sort()
+      .pop();
+    if (actualPeriod) {
+      detailDialog.period = actualPeriod;
+    }
   } catch (e) {
     console.error('[performance-contract] 明细加载失败', e);
   } finally {
