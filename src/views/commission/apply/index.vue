@@ -84,6 +84,17 @@
             </el-button>
           </template>
         </el-table-column>
+        <!-- 实收金额：实收调整（含结佣联动）生效时展示「原值 → 调整后值」 -->
+        <el-table-column label="实收金额" align="right" width="210">
+          <template #default="{ row }">
+            <template v-if="row.receivedAmountAdjusted && row.originalReceivedAmount != null">
+              <span class="amount-strike">¥{{ formatAmount(row.originalReceivedAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
+            </template>
+            <span v-else class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="结佣业绩" align="right" width="180" fixed="left">
           <template #default="{ row }">
             <el-tooltip
@@ -94,17 +105,6 @@
               <span class="amount amount-zero">¥0.00</span>
             </el-tooltip>
             <span v-else class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
-          </template>
-        </el-table-column>
-        <!-- 实收金额：实收调整（含结佣联动）生效时展示「原值 → 调整后值」 -->
-        <el-table-column label="实收金额" align="right" width="210">
-          <template #default="{ row }">
-            <template v-if="row.receivedAmountAdjusted && row.originalReceivedAmount != null">
-              <span class="amount-strike">¥{{ formatAmount(row.originalReceivedAmount) }}</span>
-              <span class="amount-arrow">→</span>
-              <span class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
-            </template>
-            <span v-else class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="150">
@@ -332,11 +332,6 @@
         <el-table-column label="占比" align="center" width="80">
           <template #default="{ row }">{{ row.shareRatio != null ? (Number(row.shareRatio) * 100).toFixed(1) + '%' : '—' }}</template>
         </el-table-column>
-        <el-table-column label="新签业绩" align="right" width="120">
-          <template #default="{ row }">
-            <span :class="['amount', num(row.amount) < 0 ? 'amount-negative' : 'amount-ink']">{{ formatAmount(row.amount) }}</span>
-          </template>
-        </el-table-column>
         <el-table-column label="实收金额" align="right" width="200">
           <template #default="{ row }">
             <template v-if="row.originalReceivedAmount != null && num(row.originalReceivedAmount) !== num(row.receivedAmount)">
@@ -345,6 +340,11 @@
               <span class="amount amount-received">{{ formatAmount(row.receivedAmount) }}</span>
             </template>
             <span v-else class="amount amount-received">{{ formatAmount(row.receivedAmount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="新签业绩" align="right" width="120">
+          <template #default="{ row }">
+            <span :class="['amount', num(row.amount) < 0 ? 'amount-negative' : 'amount-ink']">{{ formatAmount(row.amount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="120">

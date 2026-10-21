@@ -94,6 +94,18 @@
           <el-table-column label="角色占比" align="center" width="90">
             <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
           </el-table-column>
+          <!-- 实收金额：同合同+员工+角色 当前 ACTIVE 实收明细金额合计（客户实际到账，跨期）；
+               实收调整（含结佣联动）生效时展示「原值 → 调整后值」 -->
+          <el-table-column label="实收金额" align="right" width="200">
+            <template #default="scope">
+              <template v-if="isRealAdjusted(scope.row)">
+                <span class="amount-strike">¥{{ formatAmount(scope.row.originalReceivedAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount amount-received">¥{{ formatAmount(scope.row.receivedAmount) }}</span>
+              </template>
+              <span v-else class="amount amount-received">¥{{ formatAmount(scope.row.receivedAmount) }}</span>
+            </template>
+          </el-table-column>
           <!-- 结佣业绩：审批中调整优先展示「当前 → 调整后(+差额)」；已生效调整展示「原值 → 调整后值」 -->
           <el-table-column label="结佣业绩" align="right" width="220">
             <template #default="scope">
@@ -118,18 +130,7 @@
               <span v-if="scope.row.manualAdjust" class="new-member-delta">（新增）</span>
             </template>
           </el-table-column>
-          <!-- 实收金额：同合同+员工+角色 当前 ACTIVE 实收明细金额合计（客户实际到账，跨期）；
-               实收调整（含结佣联动）生效时展示「原值 → 调整后值」 -->
-          <el-table-column label="实收金额" align="right" width="200">
-            <template #default="scope">
-              <template v-if="isRealAdjusted(scope.row)">
-                <span class="amount-strike">¥{{ formatAmount(scope.row.originalReceivedAmount) }}</span>
-                <span class="amount-arrow">→</span>
-                <span class="amount amount-received">¥{{ formatAmount(scope.row.receivedAmount) }}</span>
-              </template>
-              <span v-else class="amount amount-received">¥{{ formatAmount(scope.row.receivedAmount) }}</span>
-            </template>
-          </el-table-column>
+
           <el-table-column label="折算后" align="right" width="190">
             <template #default="scope">
               <template v-if="isReceivedAdjusted(scope.row)">

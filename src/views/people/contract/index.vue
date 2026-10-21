@@ -742,7 +742,8 @@ const submitPartyForm = async () => {
   try {
     const body: ContractPartyForm = {
       ...partyForm,
-      deptId: partyForm.deptId ? Number(partyForm.deptId) : 0
+      // 部门 ID 为雪花 ID（>2^53），必须按字符串原样提交，Number() 会丢精度导致存错部门
+      deptId: partyForm.deptId ? String(partyForm.deptId) : 0
     };
     if (partyForm.partyId) {
       await contractApi.updateParty(body);

@@ -136,6 +136,11 @@
 
     <div class="el-login-footer">
       <span>Copyright © 2018-{{ currentYear }} 疯狂的狮子Li All Rights Reserved.</span>
+      <div class="beian-links">
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">蜀ICP备2026062411号-1</a>
+        <span class="beian-sep">|</span>
+        <a href="https://beian.mps.gov.cn/#/query/webSearch?code=51010602003742" target="_blank" rel="noreferrer">川公网安备51010602003742号</a>
+      </div>
     </div>
   </div>
 </template>
@@ -607,8 +612,13 @@ onMounted(() => {
 }
 
 .el-login-footer {
-  height: 40px;
-  line-height: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  line-height: 20px;
+  padding: 8px 0;
   position: fixed;
   bottom: 0;
   width: 100%;
@@ -616,6 +626,26 @@ onMounted(() => {
   color: rgba(226, 232, 240, 0.68);
   font-size: 12px;
   letter-spacing: 0.08em;
+
+  .beian-links {
+    display: flex;
+    align-items: center;
+
+    a {
+      color: rgba(226, 232, 240, 0.68);
+      text-decoration: none;
+      transition: color 0.2s;
+
+      &:hover {
+        color: #fff;
+      }
+    }
+  }
+
+  .beian-sep {
+    margin: 0 8px;
+    color: rgba(226, 232, 240, 0.4);
+  }
 }
 
 .login-code-img {
