@@ -169,15 +169,27 @@ const { load: loadEmployees, name: employeeName } = useEmployeeMap();
 /** 头部「折算后合计」：按明细逐行折算后金额求和，与表格同源，避免合计与明细对不上 */
 const totalConvertedAmount = computed(() => items.value.reduce((s, it) => s + num(it.convertedAmount), 0));
 const totalExpectedConvertedAmount = computed(() => items.value.reduce((s, it) => s + num(it.expectedConvertedAmount), 0));
-/** 实收合计：按明细逐行实收金额求和（同表格列口径） */
-const totalReceivedAmount = computed(() => items.value.reduce((s, it) => s + num(it.receivedAmount), 0));
+/**
+ * 实收金额是「同合同+员工+角色」维度的聚合值（跨期），同人同角色有多条结佣明细时
+ * （如原新签事实 + 冲正新增事实）逐行求和会重复计数，故合计必须先按（员工+角色）去重。
+ */
+const distinctRealRows = computed(() => {
+  const map = new Map<string, CommissionItemDetail>();
+  for (const it of items.value) {
+    const key = `${it.employeeCode ?? it.employeeId ?? ''}|${it.roleType ?? it.roleName ?? ''}`;
+    if (!map.has(key)) map.set(key, it);
+  }
+  return [...map.values()];
+});
+/** 实收合计：按（员工+角色）去重后求和（同表格列口径，但只计一次） */
+const totalReceivedAmount = computed(() => distinctRealRows.value.reduce((s, it) => s + num(it.receivedAmount), 0));
 /**
  * 实收合计「原值 → 调整后值」：实收调整 / 结佣联动 supersede rd 事实后，
- * 逐行 originalReceivedAmount（链最早值，未调整行=receivedAmount）求和为原值合计。
+ * 逐行 originalReceivedAmount（链最早值，未调整行=receivedAmount）按（员工+角色）去重求和为原值合计。
  * 命名区分应收业绩口径的合计。
  */
 const totalOriginalRealAmount = computed(() =>
-  items.value.reduce((s, it) => s + num(it.originalReceivedAmount ?? it.receivedAmount), 0));
+  distinctRealRows.value.reduce((s, it) => s + num(it.originalReceivedAmount ?? it.receivedAmount), 0));
 const isRealAmountAdjusted = computed(() =>
   items.value.some((it) => it.originalReceivedAmount != null && num(it.originalReceivedAmount) !== num(it.receivedAmount)));
 /** 行级实收金额是否按「原值 → 调整后值」展示：原值与当前值不等即为已调整 */

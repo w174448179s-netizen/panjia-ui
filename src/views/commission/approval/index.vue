@@ -110,8 +110,9 @@
             <span v-else class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
           </template>
         </el-table-column>
-        <!-- 结佣业绩 -->
-        <el-table-column label="结佣业绩" align="right" width="220" fixed="left">
+        <!-- 结佣业绩：紧随「实收金额」之后；不可设 fixed，否则被冻结到「合同号」右侧，
+             视觉顺序变成「结佣业绩→实收→折算」，易被误解成实收的折算 -->
+        <el-table-column label="结佣业绩" align="right" width="220">
           <template #default="{ row }">
             <el-tooltip
               v-if="num(row.amount) === 0"
