@@ -12,7 +12,6 @@
 export const FLOW_TYPE_TABS = [
   { label: '全部', code: '' },
   { label: '结佣审批', code: 'commission_apply' },
-  { label: '结佣调整', code: 'commission_adjust' },
   { label: '业绩调整', code: 'perf_adjust' },
   { label: '实收调整', code: 'perf_received_adjust' },
   { label: '实收审批', code: 'perf_received' },
@@ -29,7 +28,6 @@ type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger';
 /** 流程类型 -> 标签配色 */
 const TAG_TYPE_MAP: Record<string, ElTagType> = {
   commission_apply: 'primary',
-  commission_adjust: 'warning',
   perf_adjust: 'warning',
   perf_received_adjust: 'danger',
   perf_received: 'success',

@@ -74,7 +74,6 @@ const { taskOperating, passTask, rejectTask } = useWorkflowTask();
 const DETAIL_LOADERS: Record<string, () => Promise<any>> = {
   perf_received: () => import('./details/ReceivedDetail.vue'),
   commission_apply: () => import('./details/CommissionApplyDetail.vue'),
-  commission_adjust: () => import('./details/CommissionAdjustDetail.vue'),
   perf_adjust: () => import('./details/PerfAdjustDetail.vue'),
   perf_received_adjust: () => import('./details/ReceivedAdjustDetail.vue'),
   bonus_apply: () => import('./details/BonusDetail.vue'),

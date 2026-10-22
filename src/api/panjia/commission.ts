@@ -1,95 +1,6 @@
 import panjiaRequest from './index';
 import type { PageQuery, PageResult } from './types';
 
-export interface CommissionAdjust {
-  id: number;
-  adjustNo: string;
-  applicationId: number;
-  itemId?: number;
-  period?: string;
-  adjustType: string;    // AMOUNT / ADD_MEMBER
-  adjustScope?: string;  // CONTRACT / DETAIL
-  /** 调整对象合同号 */
-  contractNo?: string;
-  /** 事实口径（PERF_REAL / PERF_EXPECT） */
-  factType?: string;
-  /** 明细级调整对应业绩事实 ID（合同级为空） */
-  factId?: number;
-  /** 调整前金额（AMOUNT 调整，从业绩事实/明细快照） */
-  originalAmount?: number;
-  /** 调整后金额（AMOUNT 调整，= originalAmount + deltaAmount） */
-  newAmount?: number;
-  /** 调整差额（= newAmount - originalAmount） */
-  diffAmount?: number;
-  // —— 旧字段，历史数据兼容 ——
-  convertedNewAmount?: number;
-  convertedDiffAmount?: number;
-  targetPeriod?: string;
-  reason: string;
-  status: string;        // SUBMITTED / APPROVED / REJECTED / CANCELLED / EXECUTED
-  processInstanceId?: string;
-  applicantId?: number;
-  applicantName?: string;   // 后端 @Translation 翻译产物（非入库字段）
-  approverId?: number;
-  createTime: string;
-  updateTime?: string;
-  // ==================== 展示字段（列表批量回填 / 详情填充，不入库） ====================
-  /** 订单号（申请单冗余） */
-  orderNo?: string;
-  /** 房源地址（申请单冗余） */
-  propertyAddress?: string;
-  /** 受影响明细条数 */
-  detailCount?: number;
-  /** 明细级调整目标员工姓名 */
-  employeeName?: string;
-  /** 明细级调整目标员工工号 */
-  employeeCode?: string;
-  /** 归属门店/组别名称（明细级取明细部门，合同级取申请单部门） */
-  deptName?: string;
-  /** 折算后调整前金额（originalAmount × 折算因子） */
-  convertedOriginalAmount?: number;
-  /** 受影响明细行（含调整前/变动/调整后预演） */
-  details?: CommissionItemDetail[];
-}
-
-export interface CommissionAdjustQuery extends PageQuery {
-  adjustType?: string;
-  status?: string;
-  period?: string;
-  applicationId?: number | string;   // 19 位雪花 ID 以字符串下发/输入
-  deptId?: string;
-  employeeId?: string;
-  bizType?: string;
-  keyword?: string;
-}
-
-export interface CommissionAdjustCreateDTO {
-  applicationId: number | string;    // 雪花 ID 以字符串透传，禁止 Number() 丢精度
-  itemId?: number | string;          // 明细级必填，合同级为空
-  adjustScope: string;               // CONTRACT / DETAIL
-  adjustType: string;                // AMOUNT / ADD_MEMBER
-  targetAmount?: number;             // 调整后金额（AMOUNT 用，前端 = 当前 + 差额）
-  reason: string;
-  /** 合同级逐行指定目标（可编辑表格模式，镜像新签调整） */
-  detailTargets?: CommissionAdjustDetailTarget[];
-  /** 增加角色人（ADD_MEMBER 用） */
-  newMember?: CommissionAdjustNewMember;
-}
-
-export interface CommissionAdjustDetailTarget {
-  itemId: number | string;           // 结佣明细 ID（雪花 ID 字符串透传）
-  targetAmount: number;              // 调整后金额
-  shareRatio?: number;               // 调整后角色占比（空=不变）
-}
-
-export interface CommissionAdjustNewMember {
-  employeeId: number | string;       // 新员工 ID（雪花 ID 字符串透传）
-  deptId?: number;                   // 归属部门（空=员工档案部门）
-  roleType?: string;                 // 角色类型（默认合作人）
-  amount: number;                    // 新角色人业绩金额
-  shareRatio?: number;               // 新角色人角色占比（可选）
-}
-
 // ==================== 结佣明细 ====================
 
 export interface CommissionApplication {
@@ -166,42 +77,16 @@ export interface CommissionItemDetail {
   manualAdjust?: boolean;
   /** 调整前新签业绩（同 sourceKey 最早一条 REVERSED 的 PERF_EXPECT；无调整时 = expectedAmount） */
   originalExpectedAmount?: number;
-  /** 结佣业绩（结佣调整后为新事实金额） */
+  /** 结佣业绩 */
   amount: number;
-  /** 结佣原值（调整前，同 sourceKey 最早一条 PERF_REAL；未调整时 = amount） */
-  originalAmount?: number;
-  /** 该行结佣业绩已被调整（同 sourceKey 存在 REVERSED 的 PERF_REAL 事实） */
-  receivedAdjusted?: boolean;
   /** 新签业绩折算后金额（expectedAmount × 当前生效折算因子） */
   expectedConvertedAmount?: number;
   /** 调整前新签业绩折算后金额（originalExpectedAmount × 当前生效折算因子） */
   originalConvertedAmount?: number;
   /** 结佣业绩折算后金额（amount × 当前生效折算因子） */
   convertedAmount?: number;
-  /** 调整前结佣业绩折算后金额（originalAmount × 当前生效折算因子） */
-  originalReceivedConvertedAmount?: number;
   feeItem?: string;
   status: string;        // DRAFT / PENDING / APPROVED / REVERSED
-  // —— 结佣调整详情预演字段（普通申请单查询为 null） ——
-  /** 预演变动额（调整后 − 调整前，正增负减） */
-  deltaAmount?: number;
-  /** 预演调整后金额 */
-  afterAmount?: number;
-  /** 预演调整后折算金额（afterAmount × 折算因子） */
-  convertedAfterAmount?: number;
-  /** 是否本单调整目标行 */
-  target?: boolean;
-  // —— 在途调整预演（审批中调整单回填） ——
-  /** 存在审批中的结佣调整单 */
-  adjustPending?: boolean;
-  /** 审批中调整类型 AMOUNT / ADD_MEMBER */
-  adjustPendingType?: string;
-  /** 审批中调整后金额（预演） */
-  adjustPendingAmount?: number;
-  /** 审批中调整变动额（正增负减） */
-  adjustPendingDelta?: number;
-  /** 增加角色人虚拟行标记（审批中新角色人尚无明细行，后端合成） */
-  newMemberPending?: boolean;
   /** 实收金额（同合同+员工+角色 当前 ACTIVE 实收明细金额合计） */
   receivedAmount?: number;
   /** 实收金额原值（调整前：配对 rd 行 sourceKey 链最早 REVERSED 金额，实收加人新人行按 0；未调整时 = receivedAmount） */
@@ -236,14 +121,8 @@ export interface CommissionContractVO {
   propertyAddress?: string;
   businessDate?: string;
   amount: number;
-  /** 调整前结佣合计（事实链最早 PERF_REAL 金额合计；仅 receivedAdjusted=true 时有值） */
-  originalAmount?: number;
-  /** 结佣业绩已被调整（结佣调整 AMOUNT 生效；划转金额不变不置标记） */
-  receivedAdjusted?: boolean;
   /** 结佣业绩折算后金额（amount × 当前生效折算因子） */
   convertedAmount?: number;
-  /** 调整前结佣折算后金额（originalAmount × 当前生效折算因子） */
-  originalReceivedConvertedAmount?: number;
   expectedAmount?: number;   // 应收合计
   /** 新签业绩折算后金额（expectedAmount × 当前生效折算因子） */
   expectedConvertedAmount?: number;
@@ -269,7 +148,7 @@ export interface CommissionContractVO {
   receivedAmount?: number;
   /** 实收金额原值合计（调整前：实收事实链最早 REVERSED 金额求和；仅 receivedAmountAdjusted=true 时有值） */
   originalReceivedAmount?: number;
-  /** 实收金额已被实收调整（含联动）改过（区别于结佣业绩链标记 receivedAdjusted） */
+  /** 实收金额已被实收调整（含联动）改过 */
   receivedAmountAdjusted?: boolean;
 }
 
@@ -320,16 +199,6 @@ export const commissionApi = {
       contractNos,
     }, { timeout: 300000 }),
 
-  // 结佣调整
-  listAdjusts: (params: CommissionAdjustQuery) =>
-    panjiaRequest.get<PageResult<CommissionAdjust>>('/commission/adjust/list', params),
-  getAdjust: (id: number | string) =>
-    panjiaRequest.get<CommissionAdjust>(`/commission/adjust/${id}`),
-  createAdjust: (data: CommissionAdjustCreateDTO) =>
-    panjiaRequest.post<number>('/commission/adjust', data),
-  // 预检：指定订单是否存在审批中的结佣调整单（前端打开调整弹窗前禁用提交；同合同他订单不阻塞）
-  checkAdjustInFlight: (contractNo: string, orderNo?: string) =>
-    panjiaRequest.get<boolean>('/commission/adjust/in-flight-check', { contractNo, orderNo }),
   // 预检：指定合同当月是否存在审批中的结佣申请单（前端单行提交/批量发起前拦截）
   checkApplyInFlight: (period: string, contractNo: string) =>
     panjiaRequest.get<boolean>('/commission/apply/in-flight-check', { period, contractNo }),

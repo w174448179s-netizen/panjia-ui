@@ -1,7 +1,7 @@
 <template>
   <div v-loading="loading" class="wf-detail-body">
     <el-alert v-if="loadError" type="error" :title="loadError" :closable="false" show-icon />
-    <template v-if="detail && !adjustOnly">
+    <template v-if="detail">
       <el-descriptions :column="3" border size="small" class="detail-desc">
         <el-descriptions-item label="审批单号">{{ detail.applyNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="期间">{{ detail.period || '—' }}</el-descriptions-item>
@@ -14,20 +14,11 @@
         <el-descriptions-item label="发起人">{{ applicantName(detail.applicantName, detail.applicantId) }}</el-descriptions-item>
         <el-descriptions-item label="审批人">{{ detail.approverName || '—' }}</el-descriptions-item>
         <el-descriptions-item label="审批时间">{{ formatDateTime(detail.approveTime) }}</el-descriptions-item>
-        <!-- 结佣合计：结佣调整 AMOUNT 生效时展示「原值 → 调整后值」，折算后同形式（口径同每人明细） -->
+        <!-- 结佣合计（折算后同值） -->
         <el-descriptions-item label="结佣合计">
-          <template v-if="detailReceivedAdjusted">
-            <span class="amount-strike">¥{{ formatAmount(totalOriginalReceivedAmount) }}</span>
-            <span class="amount-arrow">→</span>
-            <span class="amount amount-red">¥{{ formatAmount(detail.totalAmount) }}</span>
-          </template>
-          <span v-else class="amount amount-red">¥{{ formatAmount(detail.totalAmount) }}</span>
+          <span class="amount amount-red">¥{{ formatAmount(detail.totalAmount) }}</span>
           <span class="converted-inline">
             折算后
-            <template v-if="detailReceivedAdjusted">
-              <span class="amount-strike">¥{{ formatAmount(totalOriginalReceivedConvertedAmount) }}</span>
-              <span class="amount-arrow">→</span>
-            </template>
             <span class="amount amount-ink">¥{{ formatAmount(totalConvertedAmount) }}</span>
           </span>
         </el-descriptions-item>
@@ -84,8 +75,6 @@
             <template #default="scope">
               <span class="person-name">{{ scope.row.employeeName || employeeName(scope.row.employeeId) }}</span>
               <el-tag v-if="scope.row.manualAdjust" type="success" size="small" effect="dark" style="margin-left: 4px">新增角色人</el-tag>
-              <el-tag v-else-if="scope.row.newMemberPending" type="success" size="small" effect="plain" style="margin-left: 4px">新增角色人</el-tag>
-              <el-tag v-else-if="scope.row.adjustPending" type="warning" size="small" effect="plain" style="margin-left: 4px">调整审批中</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="所属角色" align="center" min-width="100">
@@ -106,39 +95,17 @@
               <span v-else class="amount amount-received">¥{{ formatAmount(scope.row.receivedAmount) }}</span>
             </template>
           </el-table-column>
-          <!-- 结佣业绩：审批中调整优先展示「当前 → 调整后(+差额)」；已生效调整展示「原值 → 调整后值」 -->
+          <!-- 结佣业绩 -->
           <el-table-column label="结佣业绩" align="right" width="220">
             <template #default="scope">
-              <template v-if="scope.row.adjustPending">
-                <span class="amount">¥{{ formatAmount(scope.row.amount ?? 0) }}</span>
-                <template v-if="scope.row.adjustPendingAmount != null">
-                  <span class="amount-arrow">→</span>
-                  <span class="amount amount-warn">¥{{ formatAmount(scope.row.adjustPendingAmount) }}</span>
-                  <span
-                    v-if="scope.row.adjustPendingDelta != null && num(scope.row.adjustPendingDelta) !== 0"
-                    :class="num(scope.row.adjustPendingDelta) > 0 ? 'amount-positive' : 'amount-negative'"
-                    style="font-size: 12px; margin-left: 4px"
-                  >{{ num(scope.row.adjustPendingDelta) > 0 ? '+' : '' }}{{ num(scope.row.adjustPendingDelta).toFixed(2) }}</span>
-                </template>
-              </template>
-              <template v-else-if="isReceivedAdjusted(scope.row)">
-                <span class="amount-strike">¥{{ formatAmount(scope.row.originalAmount) }}</span>
-                <span class="amount-arrow">→</span>
-                <span class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
-              </template>
-              <span v-else class="amount" :class="scope.row.manualAdjust ? 'amount-positive' : 'amount-red'">¥{{ formatAmount(scope.row.amount) }}</span>
+              <span class="amount" :class="scope.row.manualAdjust ? 'amount-positive' : 'amount-red'">¥{{ formatAmount(scope.row.amount) }}</span>
               <span v-if="scope.row.manualAdjust" class="new-member-delta">（新增）</span>
             </template>
           </el-table-column>
 
           <el-table-column label="折算后" align="right" width="190">
             <template #default="scope">
-              <template v-if="isReceivedAdjusted(scope.row)">
-                <span class="amount-strike">¥{{ formatAmount(scope.row.originalReceivedConvertedAmount) }}</span>
-                <span class="amount-arrow">→</span>
-                <span class="amount amount-ink">¥{{ formatAmount(scope.row.convertedAmount) }}</span>
-              </template>
-              <span v-else class="amount amount-ink">¥{{ formatAmount(scope.row.convertedAmount) }}</span>
+              <span class="amount amount-ink">¥{{ formatAmount(scope.row.convertedAmount) }}</span>
             </template>
           </el-table-column>
           <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值；新增角色人行原值 0、金额绿色 -->
@@ -176,84 +143,19 @@
         </el-table>
       </div>
     </template>
-
-    <!-- 结佣调整弹窗（明细级）；合同级走 CommissionContractAdjustDialog 大弹窗（与新签调整一致） -->
-    <el-dialog v-model="adjustDialog.visible" title="结佣调整（明细级）" width="520px" append-to-body destroy-on-close @close="onAdjustDialogClose">
-      <el-form ref="adjustFormRef" :model="adjustForm" :rules="adjustRules" label-width="110px">
-        <el-form-item label="调整类型" prop="adjustType">
-          <el-radio-group v-model="adjustForm.adjustType">
-            <el-radio-button value="AMOUNT">金额调整</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="当前金额">
-          <span class="amount amount-red">¥{{ formatAmount(adjustDialog.currentAmount) }}</span>
-        </el-form-item>
-        <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整金额" prop="adjustAmount">
-          <el-input-number
-            v-model="adjustForm.adjustAmount"
-            :precision="2"
-            :step="100"
-            :min="-num(adjustDialog.currentAmount)"
-            controls-position="right"
-            style="width: 100%"
-            placeholder="正数增加，负数减少"
-            @change="onAdjustDeltaChange"
-          />
-        </el-form-item>
-        <el-form-item v-if="adjustForm.adjustType === 'AMOUNT'" label="调整后业绩" prop="targetAmount">
-          <el-input-number
-            v-model="adjustForm.targetAmount"
-            :precision="2"
-            :step="100"
-            :min="0"
-            controls-position="right"
-            style="width: 100%"
-            placeholder="直接录入目标金额"
-            @change="onAdjustTargetChange"
-          />
-          <div class="form-tip adjust-preview">
-            <span>当前：<span class="amount">¥{{ formatAmount(adjustDialog.currentAmount) }}</span></span>
-            <span :class="adjustDeltaClass(adjustForm.adjustAmount)">
-              {{ (adjustForm.adjustAmount ?? 0) >= 0 ? '+' : '' }}{{ formatAmount(adjustForm.adjustAmount ?? 0) }}
-            </span>
-            <span>→ 调整后：<span class="amount">¥{{ formatAmount(adjustTargetAmount) }}</span></span>
-          </div>
-        </el-form-item>
-        <el-form-item label="调整原因" prop="reason">
-          <el-input v-model="adjustForm.reason" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请输入调整原因" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="adjustDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="adjustSubmitting" @click="submitAdjust">提交</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 结佣调整（合同级）：与新签「合同业绩调整」同款大弹窗，支持逐行编辑 + 增加角色人 -->
-    <CommissionContractAdjustDialog
-      ref="contractAdjustDialogRef"
-      @submitted="onContractAdjustSubmitted"
-      @closed="onAdjustDialogClose"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, onMounted, watch } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import type { FormInstance } from 'element-plus';
 import { commissionApi, type CommissionApplication, type CommissionItemDetail } from '@/api/panjia/commission';
 import { useEmployeeMap } from '../useEmployeeMap';
-import CommissionContractAdjustDialog from './CommissionContractAdjustDialog.vue';
 
 const props = defineProps<{
   /** 结佣申请单 businessId（工作流查看/办理、结佣明细页详情） */
   businessId?: string | number;
-  /** 从列表「调整」入口进入：详情加载后自动弹出合同级调整弹窗（仅 LOCKED 生效） */
-  autoAdjust?: boolean;
-  /** 仅调整模式：不渲染详情内容，只展示调整弹窗（配合 autoAdjust 使用） */
-  adjustOnly?: boolean;
-  /** 该期间是否已封账（封账后隐藏作废/调整按钮） */
+  /** 该期间是否已封账（封账后隐藏作废按钮） */
   periodClosed?: boolean;
 }>();
 
@@ -272,7 +174,7 @@ const totalReceivedAmount = computed(() => items.value.reduce((s, it) => s + num
 /**
  * 实收合计「原值 → 调整后值」：实收调整 / 结佣联动 supersede rd 事实后，
  * 逐行 originalReceivedAmount（链最早值，未调整行=receivedAmount）求和为原值合计。
- * 命名避开结佣业绩口径的 totalOriginalReceivedAmount。
+ * 命名区分应收业绩口径的合计。
  */
 const totalOriginalRealAmount = computed(() =>
   items.value.reduce((s, it) => s + num(it.originalReceivedAmount ?? it.receivedAmount), 0));
@@ -287,18 +189,6 @@ const totalOriginalExpectedConvertedAmount = computed(() =>
   items.value.reduce((s, it) => s + num(it.originalConvertedAmount), 0));
 
 /**
- * 结佣合计「原值 → 调整后值」：头部原值不在申请单快照中（结佣调整直接 supersede 事实），
- * 与现有 totalConvertedAmount 一样按每人明细同源求和；任一行被结佣金额调整即展示。
- * 未调整行回退取当前金额，保证合计与表格逐行一致。
- */
-const detailReceivedAdjusted = computed(() =>
-  items.value.some((it) => !!it.receivedAdjusted && it.originalAmount != null));
-const totalOriginalReceivedAmount = computed(() =>
-  items.value.reduce((s, it) => s + num(it.receivedAdjusted ? it.originalAmount : it.amount), 0));
-const totalOriginalReceivedConvertedAmount = computed(() =>
-  items.value.reduce((s, it) => s + num(it.receivedAdjusted ? it.originalReceivedConvertedAmount : it.convertedAmount), 0));
-
-/**
  * 是否按「原值 → 调整后值」展示：需后端 expectedAdjusted 标记与调整前值同时成立。
  * 两者缺一（如差额行无关联业绩事实）就退回单值展示，避免出现「0.00 → 12000.00」这类误导。
  * 详情头部（CommissionApplication）与每人明细行（CommissionItemDetail）共用同一判定。
@@ -307,14 +197,6 @@ const isAdjusted = (
   row: { expectedAdjusted?: boolean | null; originalExpectedAmount?: number | string | null } | null | undefined,
 ): boolean => !!row?.expectedAdjusted && row.originalExpectedAmount != null;
 const detailAdjusted = computed(() => isAdjusted(detail.value));
-
-/**
- * 结佣业绩（PERF_REAL）是否按「原值 → 调整后值」展示：需后端 receivedAdjusted 标记与
- * 调整前值同时成立（结佣调整 AMOUNT 生效）。
- */
-const isReceivedAdjusted = (
-  row: { receivedAdjusted?: boolean | null; originalAmount?: number | string | null } | null | undefined,
-): boolean => !!row?.receivedAdjusted && row.originalAmount != null;
 
 const num = (v: number | string | null | undefined): number => {
   if (v === undefined || v === null || v === '') return 0;
@@ -363,142 +245,11 @@ const applicantName = (name?: string | null, userId?: number | string | null) =>
   return '—';
 };
 
-/** 新增角色人行高亮（已生效 MANUAL-ADJ/CADJ 或审批中新增）：浅绿底，一眼可辨 */
+/** 新增角色人行高亮（已生效 MANUAL-ADJ/CADJ）：浅绿底，一眼可辨 */
 const itemRowClassName = ({ row }: { row: any }): string =>
-  row.manualAdjust || row.newMemberPending ? 'new-member-row' : '';
+  row.manualAdjust ? 'new-member-row' : '';
 
-// ==================== 结佣调整弹窗 ====================
-
-const adjustDialog = reactive({
-  visible: false,
-  scope: 'CONTRACT' as 'CONTRACT' | 'DETAIL',
-  currentAmount: 0,
-  itemId: undefined as number | string | undefined,
-});
-
-const adjustForm = reactive({
-  adjustType: 'AMOUNT',
-  adjustAmount: undefined as number | undefined,
-  targetAmount: undefined as number | undefined,
-  reason: '',
-});
-
-/** 当前基准金额（合同级=合计，明细级=该行金额） */
-const adjustBaseAmount = computed(() => num(adjustDialog.currentAmount));
-
-const adjustTargetAmount = computed(() =>
-  Math.round((adjustBaseAmount.value + num(adjustForm.adjustAmount)) * 100) / 100);
-
-/** 录调整金额 → 自动算调整后业绩 */
-const onAdjustDeltaChange = () => {
-  if (adjustForm.adjustAmount != null && !Number.isNaN(Number(adjustForm.adjustAmount))) {
-    const next = adjustBaseAmount.value + Number(adjustForm.adjustAmount);
-    adjustForm.targetAmount = Math.round(next * 100) / 100;
-  }
-};
-
-/** 录调整后业绩 → 自动算调整金额 */
-const onAdjustTargetChange = () => {
-  if (adjustForm.targetAmount != null && !Number.isNaN(Number(adjustForm.targetAmount))) {
-    const next = Number(adjustForm.targetAmount) - adjustBaseAmount.value;
-    adjustForm.adjustAmount = Math.round(next * 100) / 100;
-  }
-};
-const adjustSubmitting = ref(false);
-const adjustFormRef = ref<FormInstance>();
-const contractAdjustDialogRef = ref<InstanceType<typeof CommissionContractAdjustDialog> | null>(null);
-
-const adjustRules = {
-  reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
-  adjustAmount: [
-    {
-      validator: (_r: unknown, v: number | undefined, cb: (e?: Error) => void) => {
-        if (adjustForm.adjustType === 'AMOUNT' && (v === undefined || v === null)) cb(new Error('请输入调整金额'));
-        else cb();
-      },
-      trigger: 'blur',
-    },
-  ],
-  targetAmount: [
-    {
-      validator: (_r: unknown, v: number | undefined, cb: (e?: Error) => void) => {
-        if (adjustForm.adjustType === 'AMOUNT' && (v === undefined || v === null)) cb(new Error('请输入调整后业绩'));
-        else cb();
-      },
-      trigger: 'blur',
-    },
-  ],
-};
-
-const adjustDeltaClass = (v: number | undefined) => {
-  const d = num(v);
-  return d > 0 ? 'amount-positive' : d < 0 ? 'amount-negative' : '';
-};
-
-const emit = defineEmits(['adjusted', 'cancelled', 'adjust-closed']);
-
-const openAdjust = (scope: 'CONTRACT' | 'DETAIL', row?: any) => {
-  if (!detail.value) return;
-  if (scope === 'CONTRACT') {
-    // 合同级：与新签「合同业绩调整」同款大弹窗（逐行编辑 + 增加角色人）
-    contractAdjustDialogRef.value?.open({
-      applicationId: detail.value.id,
-      info: {
-        contractNo: detail.value.contractNo || detail.value.orderNo || '',
-        bizType: items.value[0]?.bizType,
-        propertyAddress: detail.value.propertyAddress,
-        businessDate: detail.value.businessDate,
-        period: detail.value.period,
-      },
-      rows: items.value,
-    });
-    return;
-  }
-  adjustDialog.scope = scope;
-  adjustDialog.itemId = row?.itemId;
-  adjustDialog.currentAmount = num(row?.amount);
-  adjustForm.adjustType = 'AMOUNT';
-  adjustForm.adjustAmount = undefined;
-  adjustForm.targetAmount = adjustDialog.currentAmount; // 默认=当前金额，提示「不变」
-  adjustForm.reason = '';
-  adjustDialog.visible = true;
-};
-
-/** 合同级调整提交成功：刷新详情并通知父组件 */
-const onContractAdjustSubmitted = () => {
-  emit('adjusted');
-};
-
-const submitAdjust = async () => {
-  if (!adjustFormRef.value || !detail.value) return;
-  try {
-    await adjustFormRef.value.validate();
-  } catch {
-    return;
-  }
-  adjustSubmitting.value = true;
-  try {
-    const payload: any = {
-      applicationId: detail.value.id,
-      adjustScope: adjustDialog.scope,
-      adjustType: adjustForm.adjustType,
-      reason: adjustForm.reason,
-    };
-    if (adjustDialog.scope === 'DETAIL') payload.itemId = adjustDialog.itemId;
-    if (adjustForm.adjustType === 'AMOUNT') payload.targetAmount = adjustTargetAmount.value;
-    await commissionApi.createAdjust(payload);
-    ElMessage.success('调整单已提交，等待审批');
-    adjustDialog.visible = false;
-    emit('adjusted');
-  } finally {
-    adjustSubmitting.value = false;
-  }
-};
-
-/** 调整弹窗关闭（含取消/点 X）：通知父组件清理状态 */
-const onAdjustDialogClose = () => {
-  emit('adjust-closed');
-};
+const emit = defineEmits(['cancelled']);
 
 /** 作废已锁定申请单：冲销全部明细，不再计入工资，可重新发起 */
 const onCancel = async () => {
@@ -518,13 +269,6 @@ const onCancel = async () => {
     emit('cancelled');
   } catch { /* 拦截器处理 */ }
 };
-
-/** 列表「调整」入口：详情加载完成且已锁定时，自动弹出合同级调整弹窗 */
-watch(() => detail.value, (d) => {
-  if (props.autoAdjust && d && d.status === 'LOCKED') {
-    openAdjust('CONTRACT');
-  }
-});
 
 /** 加载申请单详情 + 每人明细 */
 const loadDetail = async () => {
@@ -562,43 +306,8 @@ onMounted(loadDetail);
   font-weight: 400;
 }
 .amount-positive { color: #67c23a; font-weight: 600; }
-.amount-negative { color: #f56c6c; font-weight: 600; }
-.amount-warn { color: #e6a23c; font-weight: 600; }
 /* 实收金额：客户实际到账，醒目橙色（与列表页「实收金额」列同色系） */
 .amount-received { color: #e6a23c; }
-.form-tip {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 4px;
-}
-/* 结佣调整「差额 → 调整后」预览：金额放大加粗 + 浅底色块，差额红绿着色放大 */
-.form-tip.adjust-preview {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 10px;
-  font-size: 13px;
-  color: #606266;
-  margin-top: 6px;
-  padding: 8px 12px;
-  background: #f5f7fa;
-  border-radius: 6px;
-}
-.form-tip.adjust-preview .amount {
-  font-size: 17px;
-  font-weight: 700;
-  color: #303133;
-}
-.form-tip.adjust-preview .delta-up {
-  font-size: 15px;
-  font-weight: 700;
-  color: #67c23a;
-}
-.form-tip.adjust-preview .delta-down {
-  font-size: 15px;
-  font-weight: 700;
-  color: #f56c6c;
-}
 .detail-table-wrap {
   margin-top: 16px;
 }

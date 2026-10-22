@@ -124,7 +124,6 @@ const getList = () => {
 /** 流程类型 -> 标签配色 */
 const TAG_TYPE_MAP: Record<string, string> = {
   commission_apply: 'primary',
-  commission_adjust: 'warning',
   perf_adjust: 'warning',
   perf_received_adjust: 'danger',
   perf_received: 'success',

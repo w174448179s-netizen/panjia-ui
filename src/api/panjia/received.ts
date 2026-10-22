@@ -22,7 +22,7 @@ export interface ReceivedApply {
   expectedConvertedAmount?: number;
   /** 调整前新签业绩的折算后金额（originalExpectedAmount × 同一折算因子） */
   originalExpectedConvertedAmount?: number;
-  /** 实收（结佣调整）已被调整：当前 ACTIVE PERF_REAL 合计 ≠ 事实链最早值 */
+  /** 实收已被实收调整：当前 ACTIVE PERF_REAL 合计 ≠ 事实链最早值 */
   receivedAdjusted?: boolean;
   /** 调整前实收合计（事实链最早 PERF_REAL 金额合计；仅 receivedAdjusted=true 时有值） */
   originalReceivedAmount?: number;
@@ -70,7 +70,7 @@ export interface ReceivedFact {
   originalExpectedAmount?: number;
   /** 该行应收已被调整（同 sourceKey 存在 REVERSED 的 PERF_EXPECT 事实） */
   expectedAdjusted?: boolean;
-  /** 实收业绩（PERF_REAL 事实金额，已含结佣调整） */
+  /** 实收业绩（PERF_REAL 事实金额，已含实收调整） */
   amount: number;
   /** 实收原值（调整前；未调整时 = amount） */
   originalAmount?: number;

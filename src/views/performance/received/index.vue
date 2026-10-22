@@ -239,7 +239,7 @@
           </template>
           <template v-else>—</template>
         </el-descriptions-item>
-        <!-- 实收合计：结佣调整生效时展示「原值 → 调整后值」（实收不做折算） -->
+        <!-- 实收合计：实收调整生效时展示「原值 → 调整后值」（实收不做折算） -->
         <el-descriptions-item label="实收合计">
           <template v-if="detailReceivedAdjusted">
             <span class="amount-strike">¥{{ formatAmount(detailApp.originalReceivedAmount) }}</span>
@@ -555,7 +555,7 @@ const isAdjusted = (
 
 /**
  * 实收业绩（PERF_REAL）是否按「原值 → 调整后值」展示：需后端 receivedAdjusted 标记与
- * 调整前合计同时成立（结佣调整 AMOUNT 生效）。
+ * 调整前合计同时成立（实收调整生效）。
  */
 const isReceivedAdjusted = (
   row: { receivedAdjusted?: boolean | null; originalReceivedAmount?: number | string | null } | null | undefined,

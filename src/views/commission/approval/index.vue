@@ -110,42 +110,23 @@
             <span v-else class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
           </template>
         </el-table-column>
-        <!-- 结佣业绩：结佣调整生效时展示「原值 → 调整后值」，未调整只展示一个值 -->
+        <!-- 结佣业绩 -->
         <el-table-column label="结佣业绩" align="right" width="220" fixed="left">
           <template #default="{ row }">
-            <template v-if="isReceivedAdjusted(row)">
-              <span class="amount-strike">¥{{ formatAmount(row.originalAmount) }}</span>
-              <span class="amount-arrow">→</span>
-              <span class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
-            </template>
             <el-tooltip
-              v-else-if="num(row.amount) === 0"
+              v-if="num(row.amount) === 0"
               content="新签业绩缺失，请先导入或补录该合同新签"
               placement="top"
             >
               <span class="amount amount-zero">¥0.00</span>
             </el-tooltip>
             <span v-else class="amount amount-red">¥{{ formatAmount(row.amount) }}</span>
-            <!-- 在途合同级 业绩调整/扣减/增加：展示审批中调整后合计 -->
-            <div v-if="row.adjustPending && ['AMOUNT', 'DEDUCT', 'INCREASE'].includes(row.adjustPendingType ?? '') && row.adjustPendingAmount != null" class="pending-line">
-              <span class="amount-arrow">→</span>
-              <span class="amount amount-warn">¥{{ formatAmount(row.adjustPendingAmount) }}</span>
-              <el-tag type="warning" size="small" effect="plain" style="margin-left: 4px">审批中</el-tag>
-            </div>
-            <div v-else-if="row.adjustPending && row.adjustPendingType === 'ADD_MEMBER'" class="pending-line">
-              <el-tag type="success" size="small" effect="plain">增加角色人审批中</el-tag>
-            </div>
           </template>
         </el-table-column>
 
         <el-table-column label="折算后" align="right" width="190">
           <template #default="{ row }">
-            <template v-if="isReceivedAdjusted(row)">
-              <span class="amount-strike">¥{{ formatAmount(row.originalReceivedConvertedAmount) }}</span>
-              <span class="amount-arrow">→</span>
-              <span class="amount amount-ink">¥{{ formatAmount(row.convertedAmount) }}</span>
-            </template>
-            <span v-else class="amount amount-ink">¥{{ formatAmount(row.convertedAmount) }}</span>
+            <span class="amount amount-ink">¥{{ formatAmount(row.convertedAmount) }}</span>
           </template>
         </el-table-column>
         <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值（同实收明细）；含增加角色人时打标 -->
@@ -196,7 +177,6 @@
         <el-table-column label="状态" align="center" width="120">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row as CommissionContractVO) }}</el-tag>
-            <el-tag v-if="row.adjustPending" type="warning" size="small" effect="plain" style="margin-left: 4px">调整审批中</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="发起人" align="center" width="100">
@@ -206,8 +186,6 @@
           <template #default="{ row }">
             <div class="table-actions">
               <el-button link type="primary" @click="viewDetail(row as CommissionContractVO)">详情</el-button>
-              <!-- 结佣调整：仅已锁定（LOCKED）且已发起、期间未封账的行可发起；权限仅限财务/总监 -->
-              <el-button v-if="row.status === 'LOCKED' && row.applicationId && !row.periodClosed && checkPermi(['commission:adjust:add'])" link type="warning" @click="onAdjust(row as CommissionContractVO)">调整</el-button>
               <el-button v-if="row.status === 'SUBMITTED' && row.applicationId && checkPermi(['workflow:task:edit'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.applicationId)">审批</el-button>
               <!-- 可作废：审批中 / 已驳回 / 已锁定；封账期间不可作废 -->
               <el-button v-if="['SUBMITTED', 'REJECTED', 'LOCKED'].includes(row.status) && canCancel(row as CommissionContractVO) && !row.periodClosed" link type="info" @click="cancel(row as CommissionContractVO)">作废</el-button>
@@ -246,17 +224,6 @@
         <el-button @click="showDetail = false">关闭</el-button>
       </template>
     </el-dialog>
-
-    <!-- 结佣调整弹窗：直接打开合同级调整，不经过详情页 -->
-    <CommissionApplyDetail
-      v-if="adjustApplicationId"
-      :business-id="adjustApplicationId"
-      :auto-adjust="true"
-      :adjust-only="true"
-      :period-closed="adjustPeriodClosed"
-      @adjusted="onAdjusted"
-      @adjust-closed="adjustApplicationId = null"
-    />
 
     <!-- 批量审批弹窗：勾选/录入合同号 → 等待处理完成 → 展示结果 -->
     <el-dialog v-model="showBatchApprove" title="批量审批" width="600px" @close="resetBatchApproveDialog">
@@ -421,14 +388,6 @@ const formatAmount = (n: number | string | null | undefined) =>
 const isAdjusted = (
   row: { expectedAdjusted?: boolean | null; originalExpectedAmount?: number | string | null } | null | undefined,
 ): boolean => !!row?.expectedAdjusted && row.originalExpectedAmount != null;
-
-/**
- * 结佣业绩（PERF_REAL）是否按「原值 → 调整后值」展示：需后端 receivedAdjusted 标记与
- * 调整前合计同时成立（结佣调整 AMOUNT 生效）。
- */
-const isReceivedAdjusted = (
-  row: { receivedAdjusted?: boolean | null; originalAmount?: number | string | null } | null | undefined,
-): boolean => !!row?.receivedAdjusted && row.originalAmount != null;
 
 // 合同号/订单号合并展示：一手房、房产金融、家装荐客以订单号为准，其它以合同号为准（空则回退）
 const contractOrOrderNo = (row: CommissionContractVO): string =>
@@ -654,31 +613,13 @@ const cancel = async (row: CommissionContractVO) => {
 const showDetail = ref(false);
 // 传给 CommissionApplyDetail 的业务 ID
 const detailApplicationId = ref<number | string | null>(null);
-// 选中行的期间封账状态（封账后详情弹窗内隐藏作废/调整按钮）
+// 选中行的期间封账状态（封账后详情弹窗内隐藏作废按钮）
 const detailPeriodClosed = ref(false);
 
 const viewDetail = (row: CommissionContractVO) => {
   detailApplicationId.value = row.applicationId ?? null;
   detailPeriodClosed.value = !!row.periodClosed;
   showDetail.value = true;
-};
-
-/** 结佣调整入口（仅 LOCKED）：直接弹出合同级调整弹窗，不经过详情页 */
-// applicationId 可能为大整数字符串（后端 BigNumberSerializer 超范围序列化为 string），禁止 Number() 转换以免丢精度
-const adjustApplicationId = ref<string | number | null>(null);
-const adjustPeriodClosed = ref(false);
-const onAdjust = (row: CommissionContractVO) => {
-  if (row.status !== 'LOCKED' || !row.applicationId) {
-    ElMessage.warning('仅已锁定的结佣单可发起调整');
-    return;
-  }
-  adjustApplicationId.value = row.applicationId;
-  adjustPeriodClosed.value = !!row.periodClosed;
-};
-/** 调整提交后关闭调整弹窗并刷新列表 */
-const onAdjusted = () => {
-  adjustApplicationId.value = null;
-  getList();
 };
 
 /** 详情弹窗内作废后：关闭弹窗并刷新列表 */
@@ -823,16 +764,8 @@ onMounted(async () => {
   .amount-ink {
     color: #303133;
   }
-  .amount-warn {
-    color: #e6a23c;
-  }
   .amount-received {
     color: #e6a23c;
-  }
-  .pending-line {
-    font-size: 12px;
-    line-height: 1.4;
-    margin-top: 2px;
   }
 }
 
