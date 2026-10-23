@@ -55,7 +55,7 @@
           <div class="table-heading">
             <span class="panel-kicker">Performance Score Monthly</span>
             <h3>绩效积分汇总</h3>
-            <p>共 {{ total }} 条记录，一员工一月一行；来自积分日报导入聚合，平均分 = 总积分 / 出勤天数。</p>
+            <p>共 {{ total }} 条记录，一员工一月一行；来自积分日报导入聚合，平均分 = 总积分 / 考勤出勤天数（考勤缺失时回退积分填报天数）。</p>
           </div>
           <div class="toolbar-actions">
             <div class="approval-bar">

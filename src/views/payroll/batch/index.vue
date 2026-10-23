@@ -466,6 +466,18 @@
             <el-table-column label="绩效提成点" width="100" align="center">
               <template #default="{ row }">{{ row.perfDeduct != null ? (Number(row.perfDeduct) * 100).toFixed(2) + '%' : '' }}</template>
             </el-table-column>
+            <el-table-column label="提成点人工调整" width="120" align="center">
+              <template #default="{ row }">
+                <el-tooltip
+                  v-if="row.manualAdjust != null && Number(row.manualAdjust) !== 0"
+                  :content="parseRateAdjustJson(row.rateAdjustJson)"
+                  placement="top"
+                >
+                  <span class="deduct-text">{{ (Number(row.manualAdjust) * 100).toFixed(2) }}%</span>
+                </el-tooltip>
+                <span v-else class="muted">—</span>
+              </template>
+            </el-table-column>
             <el-table-column label="所有扣点合计" width="110" align="center">
               <template #default="{ row }">{{ row.totalDeduct != null ? (Number(row.totalDeduct) * 100).toFixed(2) + '%' : '' }}</template>
             </el-table-column>
@@ -590,6 +602,31 @@ const statusLabel = (s: string) => STATUS_LABEL[s] || s;
 const statusTag = (s: string): TagType => STATUS_TAG[s] || 'info';
 const canCalc = (s: string) => ['DRAFT', 'CALCULATED', 'FAILED', 'REVIEWING'].includes(s);
 const roleLabel = (r: string) => ({ AGENT: '经纪人', MANAGER: '店长', DIRECTOR: '总监' }[r] || r);
+
+/** 解析后端 rate_adjust_json：[{"type","rate","reason","source"}...]，生成「类型：原因 -X%」友好文本供 tooltip 显示 */
+const parseRateAdjustJson = (raw: string | null | undefined): string => {
+  if (!raw) return '';
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr) || !arr.length) return '';
+    const typeFallback: Record<string, string> = {
+      NO_SOCIAL: '未买社保扣点',
+      PHONE_CHECK: '电话考核扣点',
+      PERSONAL: '个人调整扣点',
+    };
+    return arr
+      .map((it: any) => {
+        const type = typeFallback[it.type] ?? it.type ?? '人工扣点';
+        const rate = it.rate != null ? (Number(it.rate) * 100).toFixed(2) + '%' : '';
+        const reason = it.reason ? `：${it.reason}` : '';
+        const sign = Number(it.rate) >= 0 ? '+' : '';
+        return `${type}${reason} ${sign}${rate}`;
+      })
+      .join('\n');
+  } catch {
+    return raw;
+  }
+};
 const fmt = (n: number | null) => (n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const num = (v: any) => (v == null || v === '' ? '' : Number(v).toFixed(2));
 const neg = (v: any) => {
@@ -1108,6 +1145,14 @@ onMounted(() => {
 
 <style scoped>
 .payroll-batch { padding: 12px; }
+
+.deduct-text {
+  color: #c0392b;
+  font-weight: 600;
+}
+.muted {
+  color: var(--el-text-color-placeholder);
+}
 
 .table-actions {
   display: inline-flex;
