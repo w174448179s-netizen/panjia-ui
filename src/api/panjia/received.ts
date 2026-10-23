@@ -6,6 +6,8 @@ export interface ReceivedApply {
   id: string;
   applyNo: string;            // RCV 前缀
   period: string;
+  /** 未选期间时同一合同多期单据合并为一行：合并的期间串（如「2026-08、2026-09、2026-10」） */
+  periods?: string;
   contractNo: string;
   orderNo?: string;
   propertyAddress?: string;
@@ -55,6 +57,8 @@ export interface ReceivedApply {
 /** 审批单内每人实收明细（ReceivedFactDetailDTO，列口径对齐合同业绩明细） */
 export interface ReceivedFact {
   factId: string;
+  /** 归属期间（跨期详情逐笔展示：8、9、10 月各一行） */
+  period?: string;
   employeeId?: string;
   employeeCode?: string;
   employeeName?: string;
@@ -118,6 +122,9 @@ export const receivedApi = {
     panjiaRequest.get<string[]>('/performance/received/periods'),
   getDetail: (id: string | number) =>
     panjiaRequest.get<ReceivedDetail>(`/performance/received/${id}`),
+  /** 按合同/订单跨期间查实收明细（列表未选期间时合并行的详情，每行带期间） */
+  getContractDetail: (contractNo?: string, orderNo?: string) =>
+    panjiaRequest.get<ReceivedDetail>('/performance/received/contract-detail', { contractNo, orderNo }),
   /** 按审批单 ID 查流程实例 ID（绕过 workflow:instance:query 权限） */
   getInstanceId: (id: string | number) =>
     panjiaRequest.get<{ instanceId: string | number }>(`/performance/received/${id}/instance`),

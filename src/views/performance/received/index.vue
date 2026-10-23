@@ -69,7 +69,7 @@
       <div class="summary-bar">
         <div class="summary-left">
           <span class="summary-text">
-            共 <b>{{ total }}</b> 张实收审批单 ·
+            共 <b>{{ total }}</b> {{ queryParams.period ? '张实收审批单' : '个合同（跨期合并）' }} ·
             <!-- 按员工筛选时后端返回该员工明细合计（员工口径），否则为单据级实收合计 -->
             {{ queryParams.employeeId ? '员工实收合计' : '实收合计' }}<span class="summary-month">（{{ summaryPeriodLabel }}）</span> <b class="amount-red">{{ formatAmount(summaryAmount) }}</b>
             <span class="summary-sep">｜</span>
@@ -86,6 +86,15 @@
       <!-- 审批单表格 -->
       <el-table border class="data-table" :data="applyList" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="50" :selectable="(row: ReceivedApply) => row.status === 'SUBMITTED'" />
+        <!-- 期间：未选期间时同合同多期单据合并为一行，展示合并期间串（8、9、10 月）；已退单时标注退单落账月 -->
+        <el-table-column label="期间" align="center" width="160" fixed="left">
+          <template #default="{ row }">
+            <div>{{ (row as ReceivedApply).periods || (row as ReceivedApply).period || '—' }}</div>
+            <el-tag v-if="refundedPeriod(row as ReceivedApply)" type="danger" size="small" effect="plain" class="adjust-tag">
+              已退单 {{ refundedPeriod(row as ReceivedApply) }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="合同号/订单号" align="center" min-width="180" fixed="left">
           <template #default="{ row }">
             <el-button type="primary" link class="contract-link" @click="viewDetail(row)">{{ contractOrOrderNo(row) }}</el-button>
@@ -177,11 +186,17 @@
           <template #default="{ row }">
             <div class="table-actions">
               <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
-              <el-button v-if="row.status === 'SUBMITTED' && checkPermi(['perf:received:approve'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.id)">审批</el-button>
-              <el-button v-if="!isAgent && row.status === 'APPROVED'" link type="warning" @click="openReceivedAdjust(row)">调整</el-button>
-              <el-button v-if="row.status === 'DRAFT' && checkPermi(['perf:fact:supplement'])" link type="success" @click="openExpectSupplement(row)">补录</el-button>
-              <el-button v-if="row.status === 'REJECTED' || (row.status === 'DRAFT' && Number(row.expectedAmount) !== 0)" link type="warning" @click="resubmit(row)">重提</el-button>
-              <el-button v-if="(row.status === 'DRAFT' || row.status === 'SUBMITTED') && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
+              <!-- 合并行（未选期间、跨多期）不提供单期操作：审批/调整/作废均以审批单为粒度，需先在「期间」筛选到具体月份 -->
+              <template v-if="!row.periods">
+                <el-button v-if="row.status === 'SUBMITTED' && checkPermi(['perf:received:approve'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.id)">审批</el-button>
+                <el-button v-if="!isAgent && row.status === 'APPROVED' && !isRefundRow(row as ReceivedApply)" link type="warning" @click="openReceivedAdjust(row)">调整</el-button>
+                <el-button v-if="row.status === 'DRAFT' && checkPermi(['perf:fact:supplement'])" link type="success" @click="openExpectSupplement(row)">补录</el-button>
+                <el-button v-if="row.status === 'REJECTED' || (row.status === 'DRAFT' && Number(row.expectedAmount) !== 0)" link type="warning" @click="resubmit(row)">重提</el-button>
+                <el-button v-if="(row.status === 'DRAFT' || row.status === 'SUBMITTED') && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
+              </template>
+              <el-tooltip v-else content="同一合同跨多期合并展示，请在上方「期间」筛选到具体月份后操作" placement="top">
+                <span class="cell-sub">按期间操作</span>
+              </el-tooltip>
             </div>
           </template>
         </el-table-column>
@@ -218,7 +233,7 @@
       />
       <el-descriptions v-if="detailApp" :column="3" border size="small" class="detail-desc">
         <el-descriptions-item label="审批单号">{{ detailApp.applyNo }}</el-descriptions-item>
-        <el-descriptions-item label="期间">{{ detailApp.period }}</el-descriptions-item>
+        <el-descriptions-item label="期间">{{ detailApp.periods || detailApp.period }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="statusTagType(detailApp.status)" size="small">{{ statusLabel(detailApp.status) }}</el-tag>
         </el-descriptions-item>
@@ -276,6 +291,9 @@
         <div class="detail-table-title">每人实收明细（{{ detailFacts.length }} 条）</div>
         <el-table :data="detailFacts" border max-height="420" class="detail-facts-table">
 
+          <el-table-column label="期间" align="center" width="90" fixed="left">
+            <template #default="scope">{{ scope.row.period || '—' }}</template>
+          </el-table-column>
           <el-table-column label="门店/组别" align="left" min-width="150">
             <template #default="scope">
               <span v-if="scope.row.deptPath" class="dept-wrap" :title="scope.row.deptPath">
@@ -379,7 +397,9 @@
               <el-table-column label="合同号/订单号" align="center" min-width="160" show-overflow-tooltip>
                 <template #default="{ row }">{{ contractOrOrderNo(row) }}</template>
               </el-table-column>
-              <el-table-column label="期间" align="center" width="90" prop="period" />
+              <el-table-column label="期间" align="center" width="150">
+                <template #default="{ row }">{{ row.periods || row.period }}</template>
+              </el-table-column>
               <el-table-column label="实收业绩" align="right" width="120">
                 <template #default="{ row }">{{ formatAmount(row.receivedAmount) }}</template>
               </el-table-column>
@@ -389,12 +409,12 @@
 
           <!-- 录入模式 -->
           <el-form v-else label-width="80px">
-            <el-form-item label="结算月" required>
+            <el-form-item label="结算月">
               <el-date-picker
                 v-model="manualForm.period"
                 type="month"
                 value-format="YYYY-MM"
-                placeholder="请选择月份"
+                placeholder="留空则全部期间一并审批"
                 style="width: 100%"
               />
             </el-form-item>
@@ -434,6 +454,7 @@ import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Loading } from '@element-plus/icons-vue';
 import { receivedApi, type ReceivedApply, type ReceivedFact, type BatchApproveResult } from '@/api/panjia/received';
+import { perfRefundApi } from '@/api/panjia/refund';
 import { performanceApi } from '@/api/panjia/performance';
 import { employeeApi } from '@/api/panjia/employee';
 import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
@@ -496,6 +517,12 @@ const onBizApprove = (businessId: string | number) =>
 const loading = ref(false);
 const applyList = ref<ReceivedApply[]>([]);
 const total = ref(0);
+/** 合同号 → 最近一次已执行退单的落账月（「已退单」标记） */
+const refundedMap = ref<Record<string, string>>({});
+const refundedPeriod = (row: ReceivedApply): string =>
+  row.contractNo ? (refundedMap.value[row.contractNo] ?? '') : '';
+/** 退单冲减单（单号 TD 前缀，金额为负数镜像）：不可再调整/补录 */
+const isRefundRow = (row: ReceivedApply): boolean => !!row.applyNo && row.applyNo.startsWith('TD');
 // 后端全量汇总（与查询条件一致、不随分页变化）：totalReceivedAmount=实收合计
 const pageSummary = ref<Record<string, number | string> | null>(null);
 
@@ -678,10 +705,21 @@ const getList = async () => {
     applyList.value = res.data?.rows ?? [];
     total.value = res.data?.total ?? 0;
     pageSummary.value = res.data?.summary ?? null;
+    // 「已退单」标记：批量查这些合同最近一次已执行退单的落账月（无权限时静默忽略，不影响列表）
+    const contractNos = Array.from(new Set(applyList.value
+      .map((row) => row.contractNo)
+      .filter((no): no is string => !!no)));
+    refundedMap.value = {};
+    if (contractNos.length) {
+      try {
+        refundedMap.value = (await perfRefundApi.refundedPeriods(contractNos)).data ?? {};
+      } catch { /* 无 perf:refund:list 权限时不展示标记 */ }
+    }
   } catch {
     applyList.value = [];
     total.value = 0;
     pageSummary.value = null;
+    refundedMap.value = {};
   } finally {
     loading.value = false;
   }
@@ -739,7 +777,12 @@ const viewDetail = async (row: ReceivedApply) => {
   detailFacts.value = [];
   await loadEmployeeMap();
   try {
-    const res: any = await receivedApi.getDetail(row.id);
+    // 未选期间：合同维度跨期详情（8、9、10 月逐笔展开，退单月为负数）；
+    // 选定期：该期单据详情（退单月展示冲减单）
+    const crossPeriod = !queryParams.period && !!(row.contractNo || row.orderNo);
+    const res: any = crossPeriod
+      ? await receivedApi.getContractDetail(row.contractNo || undefined, row.orderNo || undefined)
+      : await receivedApi.getDetail(row.id);
     detailApp.value = res.data?.apply ?? row;
     detailFacts.value = res.data?.facts ?? [];
   } catch { /* 拦截器处理 */ }
@@ -818,17 +861,11 @@ const doBatchApprove = async () => {
       ElMessage.warning('请至少勾选一张待审批单据');
       return;
     }
-    // 跨期间校验：批量审批接口按期间处理，不允许跨期间
+    // 期间推导：所选单据同期间且非合并行时按该期间审批；含跨期合并行/多期间混选时
+    // 传空期间，由后端把合同下所有期间的 SUBMITTED 单一并审批（多期实收一次审完）
+    const hasMergedRow = selectedRows.value.some((r) => !!r.periods);
     const periods = [...new Set(selectedRows.value.map((r) => r.period).filter(Boolean))];
-    if (periods.length > 1) {
-      ElMessage.warning(`所选单据跨多个期间（${periods.join('、')}），请按期间分别批量审批`);
-      return;
-    }
-    period = periods[0] ?? '';
-    if (!period) {
-      ElMessage.warning('所选单据无有效期间');
-      return;
-    }
+    period = !hasMergedRow && periods.length === 1 ? periods[0] : '';
     // 提取合同号/订单号：优先订单号（精确），无订单号用合同号（展开全部订单）
     contractNos = selectedRows.value
       .map((row) => row.orderNo || row.contractNo)
@@ -838,10 +875,6 @@ const doBatchApprove = async () => {
       return;
     }
   } else {
-    if (!manualForm.period) {
-      ElMessage.warning('请选择结算月');
-      return;
-    }
     contractNos = manualForm.contractNosText
       .split(/[\n,，\s]+/)
       .map((s) => s.trim())
@@ -850,7 +883,8 @@ const doBatchApprove = async () => {
       ElMessage.warning('请输入至少一个合同号');
       return;
     }
-    period = manualForm.period;
+    // 结算月留空 = 全部期间一并审批
+    period = manualForm.period || '';
   }
   batchWaitingCount.value = contractNos.length;
   batchApproveLoading.value = true;

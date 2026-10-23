@@ -36,7 +36,7 @@
             :disabled-date="disableFutureMonth"
             @update:model-value="loadPreview"
           />
-          <span class="form-tip">负新签 / 负实收均落在该月；已封账（已发薪）月份不可退单</span>
+          <span class="form-tip">负新签 / 负实收 / 负结佣均落在该月；仅要求该月未封账，原归属月已发薪不影响</span>
         </el-form-item>
         <el-form-item label="退单原因" required>
           <el-input

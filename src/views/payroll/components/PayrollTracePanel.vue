@@ -291,7 +291,23 @@ const schemeLabel = (row: PayrollDetail): string => {
 };
 
 /* ───────────── 结佣提成跨月回溯分笔过程（引擎落地 commissionCalcProcess：[{month,perf,rate,income}]） ───────────── */
-interface CommissionCalcStep { month: string; perf: number; rate: number; income: number }
+interface CommissionCalcStep {
+  month: string;
+  perf: number;
+  rate: number;
+  income: number;
+  /** 命中自购单合同号的折算业绩（存在时单独按加成后提点计算） */
+  spPerf?: number;
+  /** 自购单加成金额（业绩 × 加点点数） */
+  spIncome?: number;
+  /** 自购单加点点数（如 0.10 = +10 个百分点） */
+  spBonus?: number;
+}
+
+/** 分笔过程文案：自购单加成单独标注，其余按当期快照提点 */
+const stepText = (s: CommissionCalcStep, prefix = '结佣业绩'): string =>
+  `${prefix} ¥${fmt(s.perf)} × ${s.month}快照提点 ${(Number(s.rate) * 100).toFixed(1)}% = ¥${fmt(s.income)}`
+  + (Number(s.spPerf) ? `（含自购单加成 ¥${fmt(s.spPerf)} × +${(Number(s.spBonus) * 100).toFixed(1)} 个点 = +¥${fmt(s.spIncome)}）` : '');
 
 const calcSteps = (row: PayrollDetail): CommissionCalcStep[] => {
   try {
@@ -309,7 +325,7 @@ const guaranteeSteps = (row: PayrollDetail): string[] => {
     if (!gp || typeof gp !== 'object') return [];
     const lines: string[] = [`保底 ¥${fmt(gp.minSalary)} vs ${gp.compareLabel} ¥${fmt(gp.compareValue)}`];
     for (const s of gp.newsignSteps || []) {
-      lines.push(`新签业绩 ¥${fmt(s.perf)} × ${s.month}快照提点 ${(Number(s.rate) * 100).toFixed(1)}% = ¥${fmt(s.income)}`);
+      lines.push(stepText(s, '新签业绩'));
     }
     if ((gp.newsignSteps || []).length > 0) {
       lines.push(`+${fmt(gp.compareValue)}（按新签月分笔）`);
@@ -335,8 +351,7 @@ const incomeItems = INCOME_COLS
     source: resolveSource(c, props.row),
     // 业绩提成有跨月回溯过程时逐笔展示，否则回落到单行口径说明
     steps: c.prop === 'commissionIncome'
-      ? calcSteps(props.row).map((s) =>
-          `结佣业绩 ¥${fmt(s.perf)} × ${s.month}快照提点 ${(Number(s.rate) * 100).toFixed(1)}% = ¥${fmt(s.income)}`)
+      ? calcSteps(props.row).map((s) => stepText(s))
       : c.prop === 'guaranteeFill'
         ? guaranteeSteps(props.row)
         : [] as string[],

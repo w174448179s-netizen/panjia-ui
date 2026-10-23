@@ -90,7 +90,15 @@
 
       <!-- 合同维度表格 -->
       <el-table border class="data-table" :data="contractList" :empty-text="emptyText" @selection-change="onSelectionChange">
-        <el-table-column type="selection" width="50" :selectable="(row: CommissionContractVO) => row.status === 'SUBMITTED'" />
+        <el-table-column type="selection" width="50" :selectable="(row: CommissionContractVO) => !row.periods && row.status === 'SUBMITTED'" />
+        <el-table-column label="期间" align="center" width="130">
+          <template #default="{ row }">
+            <div>{{ row.periods || row.period || '—' }}</div>
+            <el-tag v-if="refundedPeriod(row as CommissionContractVO)" type="danger" size="small" effect="plain">
+              已退单 {{ refundedPeriod(row as CommissionContractVO) }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="{ row }">
             <!-- 点击打开结佣申请详情 -->
@@ -187,9 +195,15 @@
           <template #default="{ row }">
             <div class="table-actions">
               <el-button link type="primary" @click="viewDetail(row as CommissionContractVO)">详情</el-button>
-              <el-button v-if="row.status === 'SUBMITTED' && row.applicationId && checkPermi(['workflow:task:edit'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.applicationId)">审批</el-button>
-              <!-- 可作废：审批中 / 已驳回 / 已锁定；封账期间不可作废 -->
-              <el-button v-if="['SUBMITTED', 'REJECTED', 'LOCKED'].includes(row.status) && canCancel(row as CommissionContractVO) && !row.periodClosed" link type="info" @click="cancel(row as CommissionContractVO)">作废</el-button>
+              <!-- 合并行（未选期间、跨多期）不提供单期操作：审批/作废以申请单为粒度，需先在「期间」筛选到具体月份 -->
+              <template v-if="!row.periods">
+                <el-button v-if="row.status === 'SUBMITTED' && row.applicationId && checkPermi(['workflow:task:edit'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.applicationId)">审批</el-button>
+                <!-- 可作废：审批中 / 已驳回 / 已锁定；封账期间不可作废 -->
+                <el-button v-if="['SUBMITTED', 'REJECTED', 'LOCKED'].includes(row.status) && canCancel(row as CommissionContractVO) && !row.periodClosed" link type="info" @click="cancel(row as CommissionContractVO)">作废</el-button>
+              </template>
+              <el-tooltip v-else content="同一合同跨多期合并展示，请在上方「期间」筛选到具体月份后操作" placement="top">
+                <span class="cell-sub">按期间操作</span>
+              </el-tooltip>
             </div>
           </template>
         </el-table-column>
@@ -218,6 +232,8 @@
       <CommissionApplyDetail
         v-if="showDetail"
         :business-id="detailApplicationId ?? undefined"
+        :contract-no="detailContractNo"
+        :order-no="detailOrderNo"
         :period-closed="detailPeriodClosed"
         @cancelled="onDetailCancelled"
       />
@@ -318,6 +334,7 @@ import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Loading } from '@element-plus/icons-vue';
 import { commissionApi, type CommissionContractVO, type BatchResultDTO } from '@/api/panjia/commission';
+import { perfRefundApi } from '@/api/panjia/refund';
 import { performanceApi } from '@/api/panjia/performance';
 import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
@@ -355,6 +372,10 @@ const onBizApprove = (businessId: string | number) =>
 const loading = ref(false);
 const contractList = ref<CommissionContractVO[]>([]);
 const total = ref(0);
+/** 合同号 → 最近一次已执行退单的落账月（「已退单」标记） */
+const refundedMap = ref<Record<string, string>>({});
+const refundedPeriod = (row: CommissionContractVO): string =>
+  row.contractNo ? (refundedMap.value[row.contractNo] ?? '') : '';
 
 const queryParams = reactive({
   pageNum: 1,
@@ -467,9 +488,20 @@ const getList = async () => {
       totalExpectedConvertedAmount: num(data?.summary?.totalExpectedConvertedAmount),
       totalReceivedAmount: num(data?.summary?.totalReceivedAmount),
     };
+    // 「已退单」标记：批量查这些合同最近一次已执行退单的落账月（无权限时静默忽略，不影响列表）
+    const contractNos = Array.from(new Set(contractList.value
+      .map((row) => row.contractNo)
+      .filter((no): no is string => !!no)));
+    refundedMap.value = {};
+    if (contractNos.length) {
+      try {
+        refundedMap.value = (await perfRefundApi.refundedPeriods(contractNos)).data ?? {};
+      } catch { /* 无 perf:refund:list 权限时不展示标记 */ }
+    }
   } catch {
     contractList.value = [];
     total.value = 0;
+    refundedMap.value = {};
     summary.value = emptySummary();
   } finally {
     loading.value = false;
@@ -614,11 +646,16 @@ const cancel = async (row: CommissionContractVO) => {
 const showDetail = ref(false);
 // 传给 CommissionApplyDetail 的业务 ID
 const detailApplicationId = ref<number | string | null>(null);
+/** 未选期间时按合同跨期展示详情（8、9、10 月逐笔），选定期则按该期申请单展示 */
+const detailContractNo = ref<string | undefined>(undefined);
+const detailOrderNo = ref<string | undefined>(undefined);
 // 选中行的期间封账状态（封账后详情弹窗内隐藏作废按钮）
 const detailPeriodClosed = ref(false);
 
 const viewDetail = (row: CommissionContractVO) => {
   detailApplicationId.value = row.applicationId ?? null;
+  detailContractNo.value = queryParams.period ? undefined : (row.contractNo || undefined);
+  detailOrderNo.value = queryParams.period ? undefined : (row.orderNo || undefined);
   detailPeriodClosed.value = !!row.periodClosed;
   showDetail.value = true;
 };

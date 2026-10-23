@@ -270,6 +270,9 @@
 
       <!-- 明细列表 -->
       <el-table border class="data-table" :data="detailList" v-loading="detailLoading" max-height="480">
+        <el-table-column label="期间" align="center" width="90" fixed="left">
+          <template #default="scope">{{ scope.row.period || '—' }}</template>
+        </el-table-column>
         <el-table-column label="门店/组别" align="left" min-width="100">
           <template #default="scope">
             <span v-if="scope.row.deptPath" class="dept-wrap" :title="scope.row.deptPath">

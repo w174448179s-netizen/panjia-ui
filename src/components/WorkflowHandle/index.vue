@@ -83,6 +83,7 @@ const DETAIL_LOADERS: Record<string, () => Promise<any>> = {
   rate_adjust_approval: () => import('./details/RateAdjustApprovalDetail.vue'),
   attendance_rectify: () => import('./details/AttendanceRectifyDetail.vue'),
   perf_refund: () => import('./details/PerfRefundDetail.vue'),
+  self_purchase_approval: () => import('./details/SelfPurchaseDetail.vue'),
 };
 
 const visible = ref(false);

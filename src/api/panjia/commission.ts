@@ -54,6 +54,8 @@ export interface CommissionItem {
 export interface CommissionItemDetail {
   itemId: number;
   factId?: number;
+  /** 结佣明细归属期间 YYYY-MM（跨期详情逐笔展示：8、9、10 月各一行） */
+  period?: string;
   employeeId?: number;
   employeeCode?: string;
   employeeName?: string;
@@ -137,6 +139,8 @@ export interface CommissionContractVO {
   employeeCount: number;
   detailCount: number;
   period: string;
+  /** 未选期间时合同行跨期合并：合并的期间串（如「2026-08、2026-09、2026-10」） */
+  periods?: string;
   /** 该期间是否已封账（封账后不可作废/调整） */
   periodClosed?: boolean;
   deptId?: number;
@@ -181,6 +185,12 @@ export const commissionApi = {
   /** 按申请单 ID 查流程实例 ID（绕过 workflow:instance:query 权限） */
   getInstanceId: (id: number | string) =>
     panjiaRequest.get<{ instanceId: string | number }>(`/commission/apply/${id}/instance`),
+  /** 按合同/订单跨期间查结佣明细（列表未选期间时合并行的详情，每行带期间） */
+  getContractDetail: (contractNo?: string, orderNo?: string) =>
+    panjiaRequest.get<{ application: CommissionApplication; items: CommissionItemDetail[] }>(
+      '/commission/apply/contract-detail',
+      { contractNo, orderNo },
+    ),
   createApplication: (data: CommissionApplyCreateDTO) =>
     panjiaRequest.post<number>('/commission/apply', data),
   /** 作废结佣申请单 */

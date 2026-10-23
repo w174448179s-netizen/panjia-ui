@@ -77,6 +77,9 @@
       <!-- 合同维度表格 -->
       <el-table border class="data-table" :data="contractList" :empty-text="emptyText" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="50" />
+        <el-table-column label="期间" align="center" width="130" fixed="left">
+          <template #default="{ row }">{{ row.periods || row.period || '—' }}</template>
+        </el-table-column>
         <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="{ row }">
             <el-button type="primary" link class="contract-link" @click="openDetail(row as CommissionContractVO)">
@@ -95,7 +98,7 @@
             <span v-else class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="结佣业绩" align="right" width="180" fixed="left">
+        <el-table-column label="结佣业绩" align="right" width="180">
           <template #default="{ row }">
             <el-tooltip
               v-if="num(row.amount) === 0"

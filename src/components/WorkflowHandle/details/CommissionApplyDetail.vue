@@ -36,10 +36,10 @@
           <template v-if="detailAdjusted">
             <span class="amount-strike">¥{{ formatAmount(detail.originalExpectedAmount) }}</span>
             <span class="amount-arrow">→</span>
-            <span class="amount amount-red">¥{{ formatAmount(detail.expectedAmount) }}</span>
+            <span class="amount amount-red">¥{{ formatAmount(totalExpectedAmount) }}</span>
           </template>
           <template v-else>
-            <span class="amount amount-red">¥{{ formatAmount(detail.expectedAmount) }}</span>
+            <span class="amount amount-red">¥{{ formatAmount(totalExpectedAmount) }}</span>
           </template>
           <span class="converted-inline">
             折算后
@@ -55,10 +55,13 @@
       <div class="detail-table-wrap">
         <div class="detail-table-title">
           <span>每人结佣明细（{{ items.length }} 条）</span>
-          <el-button v-if="detail && detail.status === 'LOCKED' && !props.periodClosed" type="danger" size="small" @click="onCancel">作废</el-button>
+          <el-button v-if="detail && detail.status === 'LOCKED' && !props.periodClosed && !props.contractNo && !props.orderNo" type="danger" size="small" @click="onCancel">作废</el-button>
         </div>
         <el-table :data="items" border max-height="420" class="detail-facts-table" :row-class-name="itemRowClassName">
           <el-table-column label="序号" type="index" width="55" align="center" />
+          <el-table-column label="期间" align="center" width="90" fixed="left">
+            <template #default="scope">{{ scope.row.period || '—' }}</template>
+          </el-table-column>
           <el-table-column label="门店/组别" align="left" min-width="150">
             <template #default="scope">
               <span v-if="scope.row.deptPath" class="dept-wrap" :title="scope.row.deptPath">
@@ -83,7 +86,7 @@
           <el-table-column label="角色占比" align="center" width="90">
             <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
           </el-table-column>
-          <!-- 实收金额：同合同+员工+角色 当前 ACTIVE 实收明细金额合计（客户实际到账，跨期）；
+          <!-- 实收金额：同合同+员工+角色维度，正数行=累计到本行期间、负数退单行=当期负部；
                实收调整（含结佣联动）生效时展示「原值 → 调整后值」 -->
           <el-table-column label="实收金额" align="right" width="200">
             <template #default="scope">
@@ -155,6 +158,9 @@ import { useEmployeeMap } from '../useEmployeeMap';
 const props = defineProps<{
   /** 结佣申请单 businessId（工作流查看/办理、结佣明细页详情） */
   businessId?: string | number;
+  /** 未选期间时按合同跨期展示（8、9、10 月逐笔，含退单冲减单）；与 businessId 同时传时优先跨期 */
+  contractNo?: string;
+  orderNo?: string;
   /** 该期间是否已封账（封账后隐藏作废按钮） */
   periodClosed?: boolean;
 }>();
@@ -169,19 +175,23 @@ const { load: loadEmployees, name: employeeName } = useEmployeeMap();
 /** 头部「折算后合计」：按明细逐行折算后金额求和，与表格同源，避免合计与明细对不上 */
 const totalConvertedAmount = computed(() => items.value.reduce((s, it) => s + num(it.convertedAmount), 0));
 const totalExpectedConvertedAmount = computed(() => items.value.reduce((s, it) => s + num(it.expectedConvertedAmount), 0));
+/** 头部「新签合计」：同样按明细行 expectedAmount 求和——退单 TD 冲减单的申请单快照为 0，
+ *  若用快照会出现「新签合计 0 但折算后 -420.34」的自相矛盾 */
+const totalExpectedAmount = computed(() => items.value.reduce((s, it) => s + num(it.expectedAmount), 0));
 /**
- * 实收金额是「同合同+员工+角色」维度的聚合值（跨期），同人同角色有多条结佣明细时
- * （如原新签事实 + 冲正新增事实）逐行求和会重复计数，故合计必须先按（员工+角色）去重。
+ * 实收金额是「同合同+员工+角色+期间」维度的聚合值（正数行=累计到本行期间，负数退单行=当期负部），
+ * 同人同角色跨期有多条结佣明细时（如正常期 + 退单冲减期）逐行求和会重复计数，
+ * 故合计必须先按（员工+角色+期间）去重。
  */
 const distinctRealRows = computed(() => {
   const map = new Map<string, CommissionItemDetail>();
   for (const it of items.value) {
-    const key = `${it.employeeCode ?? it.employeeId ?? ''}|${it.roleType ?? it.roleName ?? ''}`;
+    const key = `${it.employeeCode ?? it.employeeId ?? ''}|${it.roleType ?? it.roleName ?? ''}|${it.period ?? ''}`;
     if (!map.has(key)) map.set(key, it);
   }
   return [...map.values()];
 });
-/** 实收合计：按（员工+角色）去重后求和（同表格列口径，但只计一次） */
+/** 实收合计：按（员工+角色+期间）去重后求和（同表格列口径，但同组只计一次） */
 const totalReceivedAmount = computed(() => distinctRealRows.value.reduce((s, it) => s + num(it.receivedAmount), 0));
 /**
  * 实收合计「原值 → 调整后值」：实收调整 / 结佣联动 supersede rd 事实后，
@@ -282,12 +292,18 @@ const onCancel = async () => {
   } catch { /* 拦截器处理 */ }
 };
 
-/** 加载申请单详情 + 每人明细 */
+/** 加载申请单详情 + 每人明细（未选期间时按合同跨期合并，明细逐笔带期间） */
 const loadDetail = async () => {
-  if (props.businessId == null || props.businessId === '') return;
+  const crossPeriod = !!(props.contractNo || props.orderNo);
+  if (!crossPeriod && (props.businessId == null || props.businessId === '')) return;
   loading.value = true;
   try {
-    const [res] = await Promise.all([commissionApi.getApplication(props.businessId), loadEmployees()]);
+    const [res] = await Promise.all([
+      crossPeriod
+        ? commissionApi.getContractDetail(props.contractNo, props.orderNo)
+        : commissionApi.getApplication(props.businessId as string | number),
+      loadEmployees(),
+    ]);
     const data = (res as any).data ?? {};
     detail.value = data.application ?? null;
     items.value = data.items ?? [];
