@@ -63,6 +63,7 @@
           >
             <el-option label="有效" value="ACTIVE" />
             <el-option label="已作废" value="VOIDED" />
+            <el-option label="已退单" value="REFUNDED" />
             <el-option label="全部" value="ALL" />
           </el-select>
         </el-form-item>
@@ -103,6 +104,13 @@
             <el-button type="primary" link class="contract-link" @click="goDetail(scope.row as PerformanceManageContract)">
               {{ contractOrOrderNo(scope.row as PerformanceManageContract) }}
             </el-button>
+            <el-tag
+              v-if="refundedPeriod(scope.row as PerformanceManageContract)"
+              type="danger"
+              size="small"
+              effect="dark"
+              class="refunded-tag"
+            >已退单 {{ refundedPeriod(scope.row as PerformanceManageContract) }}</el-tag>
           </template>
         </el-table-column>
         <!-- 新签业绩：未调整只显示本值；已调整显示「原值 → 调整后业绩」；审批通过但总额不变的调整（金额相等）只加「已调整」标识；有审批中调整单显示「当前 → 目标金额 + 审批中标记」；已生效加人调整显示「新增角色人」 -->
@@ -160,6 +168,7 @@
         <el-table-column label="状态" align="center" width="110">
           <template #default="scope">
             <el-tag v-if="scope.row.factStatus === 'VOIDED'" type="info" size="small">已作废</el-tag>
+            <el-tag v-else-if="refundedPeriod(scope.row as PerformanceManageContract)" type="danger" size="small">已退单</el-tag>
             <el-tag v-else type="success" size="small">有效</el-tag>
             <el-tag v-if="scope.row.adjustPending" type="warning" size="small" effect="plain" style="margin-left: 4px">调整审批中</el-tag>
           </template>
@@ -171,6 +180,7 @@
               <el-button size="small" link type="primary" @click="goDetail(scope.row as PerformanceManageContract)">详情</el-button>
               <el-button v-if="!isBroker && scope.row.factStatus !== 'VOIDED'" size="small" link type="warning" @click="openAdjustDialog(scope.row as PerformanceManageContract)">调整</el-button>
               <el-button v-if="!isBroker && scope.row.factStatus !== 'VOIDED'" size="small" link type="primary" @click="openOffsetDialog(scope.row as PerformanceManageContract)">冲正</el-button>
+              <el-button v-if="!isBroker && scope.row.factStatus !== 'VOIDED' && !refundedPeriod(scope.row as PerformanceManageContract)" size="small" link type="danger" @click="openRefundDialog(scope.row as PerformanceManageContract)">退单</el-button>
               <el-dropdown @command="(cmd: string) => handleRowCommand(cmd, scope.row as PerformanceManageContract)">
                 <el-button size="small" link type="primary">更多<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
                 <template #dropdown>
@@ -404,6 +414,8 @@
 
     <!-- 业绩冲正/补录弹窗 -->
     <ContractOffsetDialog ref="offsetDialogRef" @submitted="getList" />
+    <!-- 合同退单弹窗（全额冲退，审批通过生成负新签+负实收） -->
+    <ContractRefundDialog ref="refundDialogRef" @submitted="getList" />
   </div>
 </template>
 
@@ -412,10 +424,12 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { ArrowDown } from '@element-plus/icons-vue';
 import { performanceApi } from '@/api/panjia/performance';
 import type { PerformanceManageContract, PerformanceManageRow } from '@/api/panjia/performance';
+import { perfRefundApi } from '@/api/panjia/refund';
 import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import ContractAdjustDialog from './components/ContractAdjustDialog.vue';
 import ContractOffsetDialog from './components/ContractOffsetDialog.vue';
+import ContractRefundDialog from './components/ContractRefundDialog.vue';
 import { useUserStore } from '@/store/modules/user';
 import { resolveBizNo } from '@/utils/panjiaBiz';
 import { checkPermi } from '@/utils/permission';
@@ -817,6 +831,13 @@ const getList = async () => {
     totalContracts.value = page?.total ?? 0;
     summary.value = page?.summary ?? emptySummary();
     bizTypeOptions.value = page?.bizTypes ?? [];
+    // 「已退单」标记：批量查这些合同最近一次已执行退单的落账月
+    const contractNos = contractData.value
+      .map((row) => row.contractNo)
+      .filter((no): no is string => !!no);
+    refundedMap.value = contractNos.length
+      ? (await perfRefundApi.refundedPeriods(Array.from(new Set(contractNos)))).data ?? {}
+      : {};
   } finally {
     loading.value = false;
   }
@@ -866,6 +887,17 @@ const openOffsetDialog = (row: PerformanceManageContract) => {
     bizType: row.bizType,
     propertyAddress: row.propertyAddress,
   });
+};
+
+// ==================== 退单弹窗 ====================
+const refundDialogRef = ref();
+/** 合同号 → 最近退单落账月（「已退单」标记） */
+const refundedMap = ref<Record<string, string>>({});
+// 后端已按退单表回填 refundPeriod；旧接口结果作为兜底（兼容后端未升级）
+const refundedPeriod = (row: PerformanceManageContract) =>
+  row.refundPeriod ?? refundedMap.value[row.contractNo] ?? '';
+const openRefundDialog = (row: PerformanceManageContract) => {
+  refundDialogRef.value?.open(row);
 };
 
 onMounted(async () => {
@@ -1003,6 +1035,11 @@ onMounted(async () => {
   .contract-link {
     font-weight: 600;
     padding: 0;
+  }
+
+  .refunded-tag {
+    margin-left: 6px;
+    vertical-align: middle;
   }
 
   .amount {

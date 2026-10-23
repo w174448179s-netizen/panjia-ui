@@ -287,6 +287,8 @@ export interface PerformanceManageContract {
   unsettledCount: number;    // 未结算条数
   factStatus?: string;       // 聚合状态（ACTIVE 有任一有效 / VOIDED 全部作废）
   hasAddMember?: boolean;    // 是否存在已生效的「新增角色人」调整
+  refundPeriod?: string;     // 合同退单落账月（存在已执行退单时有值）
+  refunded?: boolean;        // 合同是否已退单（退单表即合同退单状态源）
 }
 
 /** 合同明细懒加载查询参数（展开合同时按合同号查） */
