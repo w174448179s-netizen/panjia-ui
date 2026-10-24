@@ -67,6 +67,19 @@
             <el-option label="全部" value="ALL" />
           </el-select>
         </el-form-item>
+        <el-form-item label="退单">
+          <el-select
+            v-model="queryParams.refundFilter"
+            placeholder="全部"
+            clearable
+            style="width: 120px"
+            @change="handleQuery"
+          >
+            <el-option label="全部" value="" />
+            <el-option label="仅退单" value="REFUND" />
+            <el-option label="仅正常" value="NORMAL" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
           <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -99,7 +112,11 @@
       <!-- 合同列表（扁平表格，点击合同号跳转明细页） -->
       <el-table border class="data-table" :data="contractData" @selection-change="handleSelectionChange">
         <el-table-column v-if="canSubmitReceived" type="selection" width="45" align="center" />
-        <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
+        <!-- 期间：第一列；单期间筛选=该期间，未选期间时同合同跨期合并为一行展示合并期间串（同实收列表口径） -->
+        <el-table-column label="期间" align="center" width="130" show-overflow-tooltip>
+          <template #default="scope">{{ scope.row.period || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip>
           <template #default="scope">
             <el-button type="primary" link class="contract-link" @click="goDetail(scope.row as PerformanceManageContract)">
               {{ contractOrOrderNo(scope.row as PerformanceManageContract) }}
@@ -114,7 +131,7 @@
           </template>
         </el-table-column>
         <!-- 新签业绩：未调整只显示本值；已调整显示「原值 → 调整后业绩」；审批通过但总额不变的调整（金额相等）只加「已调整」标识；有审批中调整单显示「当前 → 目标金额 + 审批中标记」；已生效加人调整显示「新增角色人」 -->
-        <el-table-column label="新签业绩" align="right" width="230" fixed="left">
+        <el-table-column label="新签业绩" align="right" width="230">
           <template #default="scope">
             <template v-if="isAdjusted(scope.row)">
               <span class="amount-strike">{{ formatAmount(scope.row.originalAmount) }}</span>
@@ -140,7 +157,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="折算后" align="right" width="170" fixed="left">
+        <el-table-column label="折算后" align="right" width="170">
           <template #default="scope">
             <template v-if="isAdjusted(scope.row)">
               <span class="amount-strike">{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
@@ -174,7 +191,7 @@
           </template>
         </el-table-column>
         <!-- 操作列：详情 + 合同级调整 + 提交实收 + 合同级作废/恢复（作废以合同为维度，不区分人员） -->
-        <el-table-column label="操作" align="center" width="300" fixed="right">
+        <el-table-column label="操作" align="center" width="300">
           <template #default="scope">
             <div class="action-btns">
               <el-button size="small" link type="primary" @click="goDetail(scope.row as PerformanceManageContract)">详情</el-button>
@@ -459,6 +476,7 @@ const queryParams = reactive<{
   bizType: string;
   keyword: string | undefined;
   factStatus: string;
+  refundFilter: string;
 }>({
   period: '',
   deptId: defaultDeptId(),
@@ -466,6 +484,7 @@ const queryParams = reactive<{
   bizType: '',
   keyword: undefined,
   factStatus: '',
+  refundFilter: '',
 });
 
 // ==================== 数据 ====================
@@ -826,6 +845,7 @@ const getList = async () => {
       bizType: queryParams.bizType || undefined,
       keyword: queryParams.keyword?.trim() || undefined,
       factStatus: queryParams.factStatus || undefined,
+      refundFilter: queryParams.refundFilter || undefined,
       pageNum: pageNum.value,
       pageSize: pageSize.value
     });
@@ -861,6 +881,7 @@ const resetQuery = () => {
   queryParams.bizType = '';
   queryParams.keyword = undefined;
   queryParams.factStatus = '';
+  queryParams.refundFilter = '';
   pageNum.value = 1;
   getList();
 };

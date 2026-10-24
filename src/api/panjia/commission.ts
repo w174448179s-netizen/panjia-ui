@@ -104,6 +104,8 @@ export interface CommissionApplyQuery extends PageQuery {
   currentNode?: string;
   keyword?: string;
   applicationId?: number | string;
+  /** 退单三态筛选：REFUND=仅退单 / NORMAL=仅正常 / 空=全部 */
+  refundFilter?: string;
 }
 
 export interface CommissionApplyCreateDTO {

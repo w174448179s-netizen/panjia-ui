@@ -49,6 +49,13 @@
             <el-option v-for="opt in statusOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="退单">
+          <el-select v-model="queryParams.refundFilter" placeholder="全部" clearable style="width: 120px" @change="handleQuery">
+            <el-option value="" label="全部" />
+            <el-option value="REFUND" label="仅退单" />
+            <el-option value="NORMAL" label="仅正常" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="关键字">
           <el-input
             v-model="queryParams.keyword"
@@ -538,6 +545,7 @@ const queryParams = reactive({
   deptId: defaultDeptId(),
   employeeId: undefined as string | undefined,
   bizType: undefined as string | undefined,
+  refundFilter: '',
 });
 
 const num = (v: number | string | null | undefined): number => {
@@ -699,6 +707,7 @@ const getList = async () => {
       deptId: queryParams.deptId || undefined,
       employeeId: queryParams.employeeId || undefined,
       bizType: queryParams.bizType || undefined,
+      refundFilter: queryParams.refundFilter || undefined,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
     });
@@ -755,7 +764,7 @@ const contractOrOrderNo = (row: ReceivedApply): string =>
   resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—';
 const resetQuery = () => {
   Object.assign(queryParams, {
-    status: '', keyword: '',
+    status: '', keyword: '', refundFilter: '',
     deptId: defaultDeptId(), pageNum: 1,
     employeeId: undefined, bizType: undefined,
   });

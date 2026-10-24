@@ -226,6 +226,7 @@ export interface ManageQuery {
   settled?: boolean;
   keyword?: string;          // 员工号/姓名/合同号/订单号/房源地址/角色/门店/店组
   factStatus?: string;       // ACTIVE / VOIDED / ALL（不传默认 ACTIVE）
+  refundFilter?: string;     // 退单三态筛选：REFUND=仅退单 / NORMAL=仅正常 / 空=全部
   pageNum?: number;
   pageSize?: number;
 }
@@ -272,6 +273,7 @@ export interface PerformanceManageContract {
   contractNo: string;        // 合同号
   orderNo?: string;          // 订单号
   bizType?: string;          // 业务类型
+  period?: string;           // 归属期间（单期间筛选=该期间；未选期间跨期合并=全部期间「、」拼接）
   propertyAddress?: string;  // 房源地址
   businessDate?: string;     // 签约/认购日期
   amount: number;            // 合同金额合计（调整后，PERF_EXPECT=应收 / PERF_REAL=实收）
@@ -445,7 +447,7 @@ export const performanceApi = {
       '/performance/received/manual-batch-submit', data),
 
   // 完整业绩查询（合同维度；传 employeeId 时金额仅汇总该员工个人份额）
-  searchByContract: (params: { period?: string; deptId?: string; bizType?: string; keyword?: string; employeeId?: string; settled?: boolean; pageNum?: number; pageSize?: number }) =>
+  searchByContract: (params: { period?: string; deptId?: string; bizType?: string; keyword?: string; employeeId?: string; settled?: boolean; refundFilter?: string; pageNum?: number; pageSize?: number }) =>
     panjiaRequest.get<PageResult<PerformanceFactSearch>>('/perf/fact/search', params),
 
   // 完整业绩查询·业务类型下拉选项（数据范围与 searchByContract 一致）

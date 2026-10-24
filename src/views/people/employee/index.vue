@@ -489,10 +489,10 @@
                 type="month"
                 format="YYYY-MM"
                 value-format="YYYY-MM-DD"
-                placeholder="改算薪配置必填；仅改基本信息请留空"
+                placeholder="改算薪配置必填；改状态/离职、基本信息请留空"
                 style="width: 100%"
               />
-              <span class="form-tip" style="margin-left:8px">留空则仅保存基本信息，算薪配置不变</span>
+              <span class="form-tip" style="margin-left:8px">留空则仅保存基本信息与状态变更，算薪配置不变</span>
             </el-form-item>
           </el-col>
         </el-row>

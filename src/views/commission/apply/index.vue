@@ -43,6 +43,13 @@
             @clear="handleQuery"
           />
         </el-form-item>
+        <el-form-item label="退单">
+          <el-select v-model="queryParams.refundFilter" placeholder="全部" clearable style="width: 120px" @change="handleQuery">
+            <el-option value="" label="全部" />
+            <el-option value="REFUND" label="仅退单" />
+            <el-option value="NORMAL" label="仅正常" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
           <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -223,18 +230,18 @@
           </template>
 
           <el-form label-width="90px" style="margin-top: 16px">
-            <el-form-item label="结佣期间" required>
+            <el-form-item label="结佣期间">
               <el-date-picker
                 v-model="batchApplyForm.period"
                 type="month"
                 value-format="YYYY-MM"
-                placeholder="请选择结佣月份"
+                placeholder="不选=全部未结佣业绩"
                 style="width: 200px"
               />
             </el-form-item>
           </el-form>
           <div class="batch-hint">
-            将按所选结佣期间逐张发起结佣申请并提交审批。<b>已有未完结单的订单会跳过。</b>
+            不选结佣期间 = 结佣该合同<b>全部未结佣业绩</b>（跨期正负合并），落账到当前月；选了期间则只结该月及之前。<b>已有未完结单的订单会跳过。</b>
           </div>
         </div>
       </template>
@@ -255,16 +262,19 @@
         <el-form-item v-if="singleApplyForm.orderNo" label="订单号">
           <span class="single-contract-no">{{ singleApplyForm.orderNo }}</span>
         </el-form-item>
-        <el-form-item label="结佣期间" required>
+        <el-form-item label="结佣期间">
           <el-date-picker
             v-model="singleApplyForm.period"
             type="month"
             value-format="YYYY-MM"
-            placeholder="请选择结佣月份"
+            placeholder="不选=全部未结佣业绩"
+            clearable
             style="width: 220px"
           />
         </el-form-item>
-        <div class="single-hint">发起后将提交审批；历史实收已审批通过且未结佣的业绩均可计入所选期间。</div>
+        <div class="single-hint">
+          不选期间 = 结佣该合同全部未结佣业绩（跨期正负合并），落账到当前月；选了期间则只结该月及之前。发起后提交审批。
+        </div>
       </el-form>
       <template #footer>
         <el-button @click="singleApplyForm.visible = false">取消</el-button>
@@ -389,6 +399,7 @@ const queryParams = reactive({
   employeeId: undefined as string | undefined,
   bizType: undefined as string | undefined,
   keyword: '' as string,
+  refundFilter: '' as string,
 });
 
 // 汇总统计：后端按过滤后全集返回（跨页全局，不随分页变化）
@@ -447,6 +458,7 @@ const getList = async () => {
       employeeId: queryParams.employeeId || undefined,
       bizType: queryParams.bizType || undefined,
       keyword: queryParams.keyword || undefined,
+      refundFilter: queryParams.refundFilter || undefined,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
     });
@@ -487,19 +499,13 @@ const emptyText = computed(() => {
 
 const resetQuery = () => {
   Object.assign(queryParams, {
-    deptId: defaultDeptId(), employeeId: undefined, bizType: undefined, keyword: '', pageNum: 1,
+    deptId: defaultDeptId(), employeeId: undefined, bizType: undefined, keyword: '', refundFilter: '', pageNum: 1,
   });
   loadBizTypes().then(getList);
 };
 
 // 按钮 loading 状态（以 contractNo 为 key）
 const submittingMap = reactive<Record<string, boolean>>({});
-
-// 当前月份 YYYY-MM（弹框默认值）
-const currentPeriod = (): string => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
 
 // 批量发起：勾选/录入合同号 → 确认 → 等待 → 展示结果
 const showBatchApply = ref(false);
@@ -524,7 +530,7 @@ const batchApplyForm = reactive({
 const openBatchApply = () => {
   resetBatchApply();
   batchMode.value = selectedRows.value.length > 0 ? 'select' : 'manual';
-  batchApplyForm.period = currentPeriod();
+  // 结佣期间默认不选中：留空 = 结佣全部未结佣业绩（落账当前月）
   showBatchApply.value = true;
 };
 const batchApplySummary = computed(() => {
@@ -545,10 +551,6 @@ const closeBatchApply = () => {
   getList();
 };
 const doBatchApply = async () => {
-  if (!batchApplyForm.period) {
-    ElMessage.warning('请选择结佣期间');
-    return;
-  }
   let contractNos: string[] = [];
   if (batchMode.value === 'select') {
     if (selectedRows.value.length === 0) {
@@ -612,14 +614,10 @@ const onSubmit = (row: CommissionContractVO) => {
   // 合同号必填、订单号有则同传（老数据无订单号时后台退合同号口径并做多订单防串单校验）
   singleApplyForm.contractNo = row.contractNo || no;
   singleApplyForm.orderNo = row.orderNo || undefined;
-  singleApplyForm.period = currentPeriod();
+  singleApplyForm.period = '';
   singleApplyForm.visible = true;
 };
 const doSingleApply = async () => {
-  if (!singleApplyForm.period) {
-    ElMessage.warning('请选择结佣期间');
-    return;
-  }
   const no = singleApplyForm.bizNo;
   if (submittingMap[no]) return;
   submittingMap[no] = true;

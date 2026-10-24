@@ -98,6 +98,8 @@ export interface ReceivedQuery extends PageQuery {
   employeeId?: string;
   /** 业务类型 */
   bizType?: string;
+  /** 退单三态筛选：REFUND=仅退单 / NORMAL=仅正常 / 空=全部 */
+  refundFilter?: string;
 }
 
 export type ReceivedPage = PageResult<ReceivedApply>;
