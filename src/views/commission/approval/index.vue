@@ -49,6 +49,12 @@
             <el-option v-for="opt in statusOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="退单">
+          <el-select v-model="queryParams.refundFilter" placeholder="全部" clearable style="width: 110px" @change="handleQuery">
+            <el-option label="仅退单" value="REFUND" />
+            <el-option label="仅正常" value="NORMAL" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="关键字">
           <el-input
             v-model="queryParams.keyword"
@@ -385,6 +391,7 @@ const queryParams = reactive({
   employeeId: undefined as string | undefined,
   bizType: undefined as string | undefined,
   status: '' as string,
+  refundFilter: '' as string,
   keyword: '' as string,
 });
 
@@ -471,6 +478,7 @@ const getList = async () => {
       employeeId: queryParams.employeeId || undefined,
       bizType: queryParams.bizType || undefined,
       status: queryParams.status || undefined,
+      refundFilter: queryParams.refundFilter || undefined,
       keyword: queryParams.keyword || undefined,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
@@ -519,7 +527,7 @@ const emptyText = computed(() => '该条件下暂无可结佣合同');
 const resetQuery = () => {
   Object.assign(queryParams, {
     // 受限角色重置回本部门默认值，不能清空为"全部"；期间保持当前选择不清空
-    deptId: defaultDeptId(), employeeId: undefined, bizType: undefined, status: '', keyword: '', pageNum: 1,
+    deptId: defaultDeptId(), employeeId: undefined, bizType: undefined, status: '', refundFilter: '', keyword: '', pageNum: 1,
   });
   loadBizTypes().then(getList);
 };
