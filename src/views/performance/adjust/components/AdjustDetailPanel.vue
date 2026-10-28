@@ -89,12 +89,13 @@
         </div>
       </div>
 
-      <!-- 合同信息（仅合同元数据，金额已在上方概览条展示，不再重复） -->
-      <div v-if="detail.contractNo" class="detail-block">
+      <!-- 合同信息（仅合同元数据，金额已在上方概览条展示，不再重复）；
+           无合同号业务（一手房/家装荐客等）以订单号为锚点，contractNo 为空也要展示 -->
+      <div v-if="detail.contractNo || detail.orderNo" class="detail-block">
         <div class="block-title">合同信息</div>
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item label="合同号">
-            <span class="contract-no">{{ detail.contractNo }}</span>
+            <span class="contract-no">{{ detail.contractNo || '—' }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="订单号">{{ detail.orderNo || '—' }}</el-descriptions-item>
           <el-descriptions-item label="签约/认购时间">{{ detail.businessDate || '—' }}</el-descriptions-item>
@@ -112,7 +113,7 @@
               （审批通过后在冲正期间 {{ detail.period }} 生成以下记录；正数补录、负数冲正）
             </template>
             <template v-else-if="isSupplement">
-              （审批通过后在新签结算月 {{ detail.period }} 生成以下新签业绩记录）
+              （审批通过后在新签结算月 {{ detail.period }} 生成以下新签业绩记录；实收金额列为同工号同角色的实收到账，新签合计不得超过实收）
             </template>
             <template v-else-if="isAddMemberView">
               （增加角色人：既有角色人按快照扣减/调整后金额预演，新角色人调整前业绩为 0；{{
@@ -141,6 +142,11 @@
             <el-table-column label="角色占比" width="100" align="right">
               <template #default="scope">
                 <span>{{ formatRatio(scope.row.shareRatio) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column v-if="isSupplement" label="实收金额" width="120" align="right">
+              <template #default="scope">
+                <span class="amount amount-received">{{ formatNumber(scope.row.receivedAmount) }}</span>
               </template>
             </el-table-column>
             <el-table-column :label="isReceivedAdjust ? '实收业绩' : '新签业绩'" width="120" align="right">
@@ -502,6 +508,11 @@ onMounted(async () => {
 }
 .amount-negative {
   color: var(--el-color-danger);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.amount-received {
+  color: #e6a23c;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }

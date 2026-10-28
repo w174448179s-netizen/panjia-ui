@@ -102,6 +102,7 @@ export interface AdjustFactDetailVO {
   afterAmount?: number;
   convertedAmount?: number;    // 折算后当前金额（amount × factor）
   convertedAfterAmount?: number; // 折算后调整后金额（afterAmount × factor）
+  receivedAmount?: number; // 仅新签补录单：同工号同角色的实收到账金额（无匹配为 0）
   deltaAmount?: number;
   target?: boolean;
   factStatus?: string;

@@ -119,6 +119,7 @@
         <div style="margin-top: 8px">
           <el-button type="primary" plain size="small" @click="addRow">+ 增加角色人</el-button>
           <span class="total-amount">新签合计：¥{{ formatAmount(totalExpectAmount) }}</span>
+          <span class="received-cap">实收合计：¥{{ formatAmount(form.receivedAmount) }}（新签合计不可超过实收）</span>
         </div>
       </el-form-item>
     </el-form>
@@ -169,6 +170,7 @@ const form = reactive({
   feeItem: '',
   businessDate: '',
   applyId: '' as string | number,
+  receivedAmount: 0,          // 实收合计（新签补录金额上限，2026-10-28 校验规则）
   items: [] as SupplementRow[],
 });
 
@@ -201,6 +203,7 @@ const open = async (row: ReceivedApply) => {
   form.bizType = row.bizType || '';
   form.propertyAddress = row.propertyAddress || '';
   form.applyId = row.id;
+  form.receivedAmount = num(row.receivedAmount);
   // 加载实收明细获取角色人列表
   loading.value = true;
   try {
@@ -313,6 +316,13 @@ const submit = async () => {
     ElMessage.warning('请至少录入一条新签金额');
     return;
   }
+  // 校验：新签补录合计不得超过该实收单的实收合计（后端 createSupplement 同口径兜底）
+  if (totalExpectAmount.value > round2(form.receivedAmount)) {
+    ElMessage.error(
+      `新签合计 ¥${formatAmount(totalExpectAmount.value)} 超过实收合计 ¥${formatAmount(form.receivedAmount)}，请调整后再提交`,
+    );
+    return;
+  }
   for (const r of validItems) {
     if (r.isNew && (!r.employeeId || !r.roleType)) {
       ElMessage.warning('新增角色人需选择员工并填写角色类型');
@@ -365,6 +375,7 @@ const reset = () => {
   form.feeItem = '';
   form.businessDate = '';
   form.applyId = '';
+  form.receivedAmount = 0;
   form.items = [];
   totalInput.value = null;
 };
@@ -378,4 +389,5 @@ defineExpose({ open });
 .batch-hint { color: #909399; font-size: 12px; margin-left: 8px; }
 .amount-received { color: #e6a23c; }
 .total-amount { margin-left: 16px; font-weight: bold; color: #409eff; }
+.received-cap { margin-left: 16px; font-size: 12px; color: #e6a23c; }
 </style>
