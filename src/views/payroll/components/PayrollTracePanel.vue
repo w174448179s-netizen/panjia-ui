@@ -298,16 +298,20 @@ interface CommissionCalcStep {
   income: number;
   /** 命中自购单合同号的折算业绩（存在时单独按加成后提点计算） */
   spPerf?: number;
-  /** 自购单加成金额（业绩 × 加点点数） */
+  /** 自购单部分提成合计（业绩 × 当期提点 + 加成金额） */
   spIncome?: number;
-  /** 自购单加点点数（如 0.10 = +10 个百分点） */
+  /** 自购单加成金额（¥，引擎落地值；点数 = spBonus ÷ spPerf） */
   spBonus?: number;
 }
 
 /** 分笔过程文案：自购单加成单独标注，其余按当期快照提点 */
-const stepText = (s: CommissionCalcStep, prefix = '结佣业绩'): string =>
-  `${prefix} ¥${fmt(s.perf)} × ${s.month}快照提点 ${(Number(s.rate) * 100).toFixed(1)}% = ¥${fmt(s.income)}`
-  + (Number(s.spPerf) ? `（含自购单加成 ¥${fmt(s.spPerf)} × +${(Number(s.spBonus) * 100).toFixed(1)} 个点 = +¥${fmt(s.spIncome)}）` : '');
+const stepText = (s: CommissionCalcStep, prefix = '结佣业绩'): string => {
+  const base = `${prefix} ¥${fmt(s.perf)} × ${s.month}快照提点 ${(Number(s.rate) * 100).toFixed(1)}% = ¥${fmt(s.income)}`;
+  if (!Number(s.spPerf)) return base;
+  // 引擎落地 spBonus 为加成金额（¥），加点数 = 加成金额 ÷ 自购单业绩
+  const points = (Number(s.spBonus) / Number(s.spPerf)) * 100;
+  return `${base}（含自购单加成 ¥${fmt(s.spPerf)} 按 ${(Number(s.rate) * 100).toFixed(1)}% + ${points.toFixed(1)} 个点 = ¥${fmt(s.spIncome)}）`;
+};
 
 const calcSteps = (row: PayrollDetail): CommissionCalcStep[] => {
   try {
