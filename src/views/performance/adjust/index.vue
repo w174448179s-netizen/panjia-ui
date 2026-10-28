@@ -411,7 +411,8 @@ const adjustTypeMap: Record<string, string> = {
   DEDUCT: '业绩扣减',
   INCREASE: '业绩增加',
   ADD_MEMBER: '增加角色人', // 历史单保留展示/筛选；2026-10-14 起已并入三类，禁止新建
-  MANUAL_OFFSET: '业绩冲正'
+  MANUAL_OFFSET: '业绩冲正',
+  SUPPLEMENT: '新签补录' // 2026-10-28 起补录走审批（从实收单发起）
 };
 const adjustTypeOptions = Object.entries(adjustTypeMap).map(([value, label]) => ({ value, label }));
 /** 新建可选类型：本弹窗为明细级调整，仅支持业绩调整；合同级三类（含加人）请从合同业绩页发起 */

@@ -49,7 +49,7 @@ export interface PerformanceAdjust {
   employeeName?: string;
   deptId: string;
   deptName?: string;
-  adjustType: string;         // AMOUNT / DEDUCT / INCREASE / ADD_MEMBER(历史) / MANUAL_OFFSET
+  adjustType: string;         // AMOUNT / DEDUCT / INCREASE / ADD_MEMBER(历史) / MANUAL_OFFSET / SUPPLEMENT
   adjustTypeName?: string;
   adjustScope?: string;      // CONTRACT / DETAIL
   contractNo?: string;

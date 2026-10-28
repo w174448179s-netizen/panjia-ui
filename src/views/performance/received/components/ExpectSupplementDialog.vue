@@ -344,7 +344,7 @@ const submit = async () => {
   submitting.value = true;
   try {
     const res: any = await supplementExpect(bo);
-    ElMessage.success(`已补录 ${res?.data ?? items.length} 条新签业绩`);
+    ElMessage.success('补录申请已提交，等待总监审批通过后生效');
     visible.value = false;
     emit('submitted');
   } catch {

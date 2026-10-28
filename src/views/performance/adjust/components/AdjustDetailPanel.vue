@@ -106,10 +106,13 @@
       <!-- 受影响明细 -->
       <div v-if="detail.details && detail.details.length" class="detail-block">
         <div class="block-title">
-          {{ isOffset ? '冲正明细' : '受影响明细' }}
+          {{ isOffset ? '冲正明细' : isSupplement ? '补录明细' : '受影响明细' }}
           <span class="block-subtitle">
             <template v-if="isOffset">
               （审批通过后在冲正期间 {{ detail.period }} 生成以下记录；正数补录、负数冲正）
+            </template>
+            <template v-else-if="isSupplement">
+              （审批通过后在新签结算月 {{ detail.period }} 生成以下新签业绩记录）
             </template>
             <template v-else-if="isAddMemberView">
               （增加角色人：既有角色人按快照扣减/调整后金额预演，新角色人调整前业绩为 0；{{
@@ -173,6 +176,7 @@
             <el-table-column label="状态" width="90" align="center">
               <template #default="scope">
                 <el-tag v-if="isNewMemberRow(scope.row)" type="success" size="small" effect="dark">新增角色人</el-tag>
+                <el-tag v-else-if="isSupplement && scope.row.target" type="success" size="small" effect="dark">补录记录</el-tag>
                 <el-tag v-else-if="isOffset && scope.row.target" type="warning" size="small" effect="dark">冲正记录</el-tag>
                 <el-tag v-else-if="scope.row.target" type="danger" size="small" effect="dark">调整行</el-tag>
                 <el-tag v-else type="info" size="small" effect="plain">参考行</el-tag>
@@ -219,23 +223,29 @@ const ADJUST_TYPE_MAP: Record<string, string> = {
   INCREASE: '业绩增加',
   ADD_MEMBER: '增加角色人',
   MANUAL_OFFSET: '业绩冲正',
-  RECEIVED_AMOUNT: '实收调整'
+  RECEIVED_AMOUNT: '实收调整',
+  SUPPLEMENT: '新签补录'
 };
 const adjustTypeLabel = (t: string) => ADJUST_TYPE_MAP[t] ?? t ?? '—';
 
 /** 历史增加角色人单（2026-10-14 起禁止新建，仅历史展示） */
 const isAddMember = computed(() => detail.value?.adjustType === 'ADD_MEMBER');
 
-/** 明细行中是否含新增角色人行（在途虚拟行 amount=null / 已执行新人 amount=0 且正变动） */
+/** 业绩冲正单：明细为待生成的冲正记录清单（正数补录/负数冲正） */
+const isOffset = computed(() => detail.value?.adjustType === 'MANUAL_OFFSET');
+
+/** 新签补录单：明细为待生成的新签业绩记录清单（审批通过后落 PERF_EXPECT 事实） */
+const isSupplement = computed(() => detail.value?.adjustType === 'SUPPLEMENT');
+
+/** 明细行中是否含新增角色人行（在途虚拟行 amount=null / 已执行新人 amount=0 且正变动）；
+ *  补录单（SUPPLEMENT）明细行同为 amount=0 正变动，须排除以免误判为新增角色人 */
 const hasMemberRows = computed(() =>
+  !isSupplement.value &&
   (detail.value?.details ?? []).some(r =>
     r.target && (r.amount == null || (Number(r.amount) === 0 && (r.deltaAmount ?? 0) > 0))));
 
 /** 增加角色人视图：历史 ADD_MEMBER 单，或业绩调整/扣减/增加新单中含新增角色人行（三类均可加人） */
 const isAddMemberView = computed(() => isAddMember.value || hasMemberRows.value);
-
-/** 业绩冲正单：明细为待生成的冲正记录清单（正数补录/负数冲正） */
-const isOffset = computed(() => detail.value?.adjustType === 'MANUAL_OFFSET');
 
 /**
  * 实收调整单：金额口径为实收（pj_received_detail），标签不得再用「新签业绩」。
