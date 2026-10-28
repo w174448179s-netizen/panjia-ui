@@ -517,7 +517,7 @@ export interface ExpectSupplementBo {
   receivedPeriod: string;       // 实收月（查 DRAFT 单用）
   contractNo?: string;
   orderNo: string;
-  businessDate: string; // YYYY-MM-DD
+  businessDate: string; // yyyy-MM-dd HH:mm:ss
   bizType?: string;
   propertyAddress?: string;
   deptId?: number;
