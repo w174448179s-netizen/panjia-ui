@@ -498,7 +498,7 @@ export function createManualOffset(data: {
   return panjiaRequest.post<number>('/perf/fact/manual-offset', data);
 }
 
-// ========== 新签补录（DRAFT 待补新签单据手工补录 PERF_EXPECT 事实） ==========
+// ========== 新签补录（「待匹配新签」到账行：该订单当期无新签，手工补录 PERF_EXPECT 事实） ==========
 
 /** 新签补录单条明细 */
 export interface ExpectSupplementItem {
@@ -515,7 +515,7 @@ export interface ExpectSupplementItem {
 /** 新签补录请求参数 */
 export interface ExpectSupplementBo {
   period: string;               // 新签结算月
-  receivedPeriod: string;       // 实收月（查 DRAFT 单用）
+  receivedPeriod: string;       // 实收归属月（定位待匹配到账组）
   contractNo?: string;
   orderNo: string;
   businessDate: string; // yyyy-MM-dd HH:mm:ss

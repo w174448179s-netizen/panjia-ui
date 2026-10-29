@@ -161,7 +161,7 @@ interface SupplementRow {
 
 const form = reactive({
   period: '',               // 新签结算月（用户可编辑）
-  receivedPeriod: '',       // 实收月（只读，查 DRAFT 单用）
+  receivedPeriod: '',       // 实收月（只读，取实收行归属月）
   contractNo: '',
   orderNo: '',
   bizType: '',
@@ -204,11 +204,12 @@ const open = async (row: ReceivedApply) => {
   form.propertyAddress = row.propertyAddress || '';
   form.applyId = row.id;
   form.receivedAmount = num(row.receivedAmount);
-  // 加载实收明细获取角色人列表
+  // 加载实收明细获取角色人列表：待匹配新签（无审批单）走未绑定明细接口，其余走单据详情
   loading.value = true;
   try {
-    const res: any = await receivedApi.getDetail(row.id);
-    const facts: ReceivedFact[] = res?.data?.facts ?? [];
+    const facts: ReceivedFact[] = row.pendingMatch
+      ? ((await receivedApi.pendingDetail(row.orderNo || row.contractNo, row.period))?.data ?? [])
+      : (((await receivedApi.getDetail(row.id)) as any)?.data?.facts ?? []);
     form.items = facts.map((f) => ({
       employeeId: f.employeeId || '',
       employeeExternalCode: f.employeeCode || '',

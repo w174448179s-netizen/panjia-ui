@@ -168,7 +168,7 @@
         </el-table-column>
         <el-table-column label="状态" align="center" width="130">
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+            <el-tag :type="statusTagType(rowStatusValue(row as ReceivedApply))" size="small">{{ statusLabel(rowStatusValue(row as ReceivedApply)) }}</el-tag>
             <!-- 自动发起结佣留痕：系统自动审批通过且非二手买卖时，结佣域已自动建单并提交 -->
             <el-tooltip
               v-if="row.autoCommissionApplyNo"
@@ -197,9 +197,10 @@
               <template v-if="!row.periods">
                 <el-button v-if="row.status === 'SUBMITTED' && checkPermi(['perf:received:approve'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.id)">审批</el-button>
                 <el-button v-if="!isAgent && row.status === 'APPROVED' && !isRefundRow(row as ReceivedApply)" link type="warning" @click="openReceivedAdjust(row)">调整</el-button>
-                <el-button v-if="row.status === 'DRAFT' && checkPermi(['perf:fact:supplement'])" link type="success" @click="openExpectSupplement(row)">补录</el-button>
-                <el-button v-if="row.status === 'REJECTED' || (row.status === 'DRAFT' && Number(row.expectedAmount) !== 0)" link type="warning" @click="resubmit(row)">重提</el-button>
-                <el-button v-if="(row.status === 'DRAFT' || row.status === 'SUBMITTED') && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
+                <!-- 待匹配新签（该订单当期无新签、无审批单）：唯一操作是补录新签 -->
+                <el-button v-if="row.pendingMatch && checkPermi(['perf:fact:supplement'])" link type="success" @click="openExpectSupplement(row as ReceivedApply)">补录</el-button>
+                <el-button v-if="row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重提</el-button>
+                <el-button v-if="row.status === 'SUBMITTED' && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
               </template>
               <el-tooltip v-else content="同一合同跨多期合并展示，请在上方「期间」筛选到具体月份后操作" placement="top">
                 <span class="cell-sub">按期间操作</span>
@@ -239,10 +240,10 @@
         style="margin-bottom: 12px"
       />
       <el-descriptions v-if="detailApp" :column="3" border size="small" class="detail-desc">
-        <el-descriptions-item label="审批单号">{{ detailApp.applyNo }}</el-descriptions-item>
+        <el-descriptions-item label="审批单号">{{ detailApp.applyNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="期间">{{ detailApp.periods || detailApp.period }}</el-descriptions-item>
         <el-descriptions-item label="状态">
-          <el-tag :type="statusTagType(detailApp.status)" size="small">{{ statusLabel(detailApp.status) }}</el-tag>
+          <el-tag :type="statusTagType(rowStatusValue(detailApp))" size="small">{{ statusLabel(rowStatusValue(detailApp)) }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="合同号">{{ detailApp.contractNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="订单号">{{ detailApp.orderNo || '—' }}</el-descriptions-item>
@@ -450,7 +451,7 @@
 
     <!-- 实收调整弹窗（RECEIVED_AMOUNT，合同级）：入口在实收明细页，审批通过的单据才可调整 -->
     <ReceivedAdjustDialog ref="receivedAdjustDialogRef" @submitted="getList" />
-    <!-- 新签补录弹窗（DRAFT 待补新签状态）：手工录入 PERF_EXPECT 事实并触发 DRAFT 单重评 -->
+    <!-- 新签补录弹窗：入口为「待匹配新签」到账行（该订单当期无新签），提交总监审批后自动补建实收单 -->
     <ExpectSupplementDialog ref="expectSupplementDialogRef" @submitted="getList" />
   </div>
 </template>
@@ -499,7 +500,7 @@ const openReceivedAdjust = (row: ReceivedApply) => {
   });
 };
 
-// ==================== 新签补录（DRAFT 待补新签） ====================
+// ==================== 新签补录（待匹配新签：该订单当期无新签） ====================
 const expectSupplementDialogRef = ref();
 const openExpectSupplement = (row: ReceivedApply) => {
   expectSupplementDialogRef.value?.open(row);
@@ -655,15 +656,19 @@ const summaryExpectedConvertedAmount = computed(() => num(pageSummary.value?.tot
 const summaryPeriodLabel = computed(() => queryParams.period || '全期间');
 
 const STATUS_MAP: Record<string, string> = {
-  DRAFT: '待补新签', SUBMITTED: '审批中', APPROVED: '已通过', REJECTED: '已驳回', CANCELLED: '已作废',
+  PENDING: '待匹配新签', SUBMITTED: '审批中', APPROVED: '已通过', REJECTED: '已驳回', CANCELLED: '已作废',
 };
-// DRAFT（待补新签）：实收导入时无对应新签，系统建 DRAFT 不启动工作流，等新签导入触发自动审批
+// PENDING（待匹配新签）：去草稿后无新签的到账只落库不建单，显示为无需审批的展示行，
+// 待补录新签并审批通过后由后端自动补建实收单
 const statusOptions = Object.entries(STATUS_MAP)
   .map(([value, label]) => ({ value, label }));
+/** 行状态：待匹配展示行无单据状态，映射为 PENDING（唯一显示条件 = pendingMatch） */
+const rowStatusValue = (row?: ReceivedApply | null) =>
+  row?.pendingMatch ? 'PENDING' : (row?.status || '');
 const statusLabel = (s: string) => STATUS_MAP[s] || s || '—';
 const statusTagType = (s: string) => {
   const map: Record<string, string> = {
-    DRAFT: 'info', SUBMITTED: 'warning', APPROVED: 'success', REJECTED: 'danger', CANCELLED: 'info',
+    PENDING: 'info', SUBMITTED: 'warning', APPROVED: 'success', REJECTED: 'danger', CANCELLED: 'info',
   };
   return (map as any)[s] || 'info';
 };
@@ -786,6 +791,13 @@ const viewDetail = async (row: ReceivedApply) => {
   detailFacts.value = [];
   await loadEmployeeMap();
   try {
+    // 待匹配新签（无审批单）：直接取该组未绑定明细
+    if (row.pendingMatch) {
+      const res: any = await receivedApi.pendingDetail(row.orderNo || row.contractNo, row.period);
+      detailApp.value = row;
+      detailFacts.value = res.data ?? [];
+      return;
+    }
     // 未选期间：合同维度跨期详情（8、9、10 月逐笔展开，退单月为负数）；
     // 选定期：该期单据详情（退单月展示冲减单）
     const crossPeriod = !queryParams.period && !!(row.contractNo || row.orderNo);

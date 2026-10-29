@@ -191,7 +191,9 @@
         <el-table-column label="行号" align="center" prop="rowNo" width="80">
           <template #default="scope">{{ scope.row.rowNo ?? '—' }}</template>
         </el-table-column>
-        <el-table-column label="问题类型" align="center" prop="issueType" width="140" show-overflow-tooltip />
+        <el-table-column label="问题类型" align="center" prop="issueType" width="140" show-overflow-tooltip>
+          <template #default="scope">{{ issueTypeLabel(scope.row.issueType) }}</template>
+        </el-table-column>
         <el-table-column label="字段" align="center" prop="fieldName" width="130">
           <template #default="scope">{{ scope.row.fieldName || '—' }}</template>
         </el-table-column>
@@ -274,7 +276,18 @@ const statusTagType = (status: string): TagType => {
   return map[status] ?? 'info';
 };
 
-// 问题状态映射
+// 问题类型映射（issueType -> 中文）
+const issueTypeLabel = (t: string): string =>
+  (({
+    REQUIRED_MISSING: '必填缺失',
+    EMPLOYEE_NOT_MATCH: '员工未匹配',
+    DUPLICATE_KEY: '重复键',
+    COLUMN_TYPE_ERR: '格式错误',
+    PERIOD_MISMATCH: '跨月不一致',
+    BATCH_ERROR: '批次级错误',
+    RECEIVED_MANUAL_APPROVAL: '实收转人工审批'
+  }) as Record<string, string>)[t] ?? t;
+
 const issueStatusMap: Record<string, string> = {
   OPEN: '未处理',
   RESOLVED: '已解决',

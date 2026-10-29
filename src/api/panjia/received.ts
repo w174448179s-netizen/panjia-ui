@@ -8,6 +8,12 @@ export interface ReceivedApply {
   period: string;
   /** 未选期间时同一合同多期单据合并为一行：合并的期间串（如「2026-08、2026-09、2026-10」） */
   periods?: string;
+  /**
+   * 「待匹配新签」展示行（无审批单）。
+   * <p>去草稿后无新签的到账只落库不建单：`id/applyNo/status` 为空、`expectedAmount` 为 0，
+   * `receivedAmount` 为未绑定明细合计；前端展示「待匹配新签」并提供「补录」入口。</p>
+   */
+  pendingMatch?: boolean;
   contractNo: string;
   orderNo?: string;
   propertyAddress?: string;
@@ -39,7 +45,8 @@ export interface ReceivedApply {
   bizType?: string;
   /** 涉及人数（列表接口回填：该合同本期间实收事实去重员工数） */
   employeeCount?: number;
-  status: string;             // DRAFT / SUBMITTED / APPROVED / REJECTED / CANCELLED
+  /** SUBMITTED / APPROVED / REJECTED / CANCELLED（查询条件另支持 PENDING=待匹配新签） */
+  status: string;
   currentNode?: string;       // FINANCE / DIRECTOR
   processInstanceId?: string;
   applicantId?: string;
@@ -127,6 +134,9 @@ export const receivedApi = {
   /** 按合同/订单跨期间查实收明细（列表未选期间时合并行的详情，每行带期间） */
   getContractDetail: (contractNo?: string, orderNo?: string) =>
     panjiaRequest.get<ReceivedDetail>('/performance/received/contract-detail', { contractNo, orderNo }),
+  /** 「待匹配新签」到账组的每人明细（无审批单），供补录弹窗装载角色人清单；bizKey=订单号(优先)/合同号 */
+  pendingDetail: (bizKey: string, period?: string) =>
+    panjiaRequest.get<ReceivedFact[]>('/performance/received/pending-detail', { bizKey, period }),
   /** 按审批单 ID 查流程实例 ID（绕过 workflow:instance:query 权限） */
   getInstanceId: (id: string | number) =>
     panjiaRequest.get<{ instanceId: string | number }>(`/performance/received/${id}/instance`),
