@@ -536,7 +536,8 @@ const openBatchApply = () => {
 const batchApplySummary = computed(() => {
   const r = batchApplyResult.value;
   if (!r) return '';
-  return `成功 ${r.success} 个，跳过 ${r.skipped} 个，失败 ${r.failed} 个`;
+  const generated = r.generatedApplications ? `（共生成 ${r.generatedApplications} 张结佣单）` : '';
+  return `成功 ${r.success} 个${generated}，跳过 ${r.skipped} 个，失败 ${r.failed} 个`;
 });
 const resetBatchApply = () => {
   batchApplyForm.period = '';
@@ -623,12 +624,18 @@ const doSingleApply = async () => {
   submittingMap[no] = true;
   singleApplyForm.submitting = true;
   try {
-    await commissionApi.createApplication({
+    const res: any = await commissionApi.createApplication({
       period: singleApplyForm.period,
       contractNo: singleApplyForm.contractNo,
       orderNo: singleApplyForm.orderNo,
     });
-    ElMessage.success('发起成功');
+    // 人工发起：该合同/订单未结佣新签合并成一张（全额退单净额为 0 时不建单）
+    const created: { period?: string; totalAmount?: number }[] = res?.data ?? [];
+    if (created.length === 0) {
+      ElMessage.info('该合同/订单新签已全额退单（净额为 0），无需结佣');
+    } else {
+      ElMessage.success('发起成功');
+    }
     singleApplyForm.visible = false;
     // 刷新不阻塞弹窗关闭（P0：列表查询数百 ms，用户感知「点了没反应」的主要来源）
     getList();

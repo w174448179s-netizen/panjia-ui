@@ -164,6 +164,8 @@ export interface BatchResultDTO {
   success: number;
   skipped: number;
   failed: number;
+  /** 实际生成的结佣申请单数（按新签归属月拆单，可能多于成功合同数） */
+  generatedApplications?: number;
   successContracts: string[];
   skippedContracts: string[];
   failedContracts: string[];
@@ -194,7 +196,7 @@ export const commissionApi = {
       { contractNo, orderNo },
     ),
   createApplication: (data: CommissionApplyCreateDTO) =>
-    panjiaRequest.post<number>('/commission/apply', data),
+    panjiaRequest.post<CommissionApplication[]>('/commission/apply', data),
   /** 作废结佣申请单 */
   cancelApplication: (id: number | string) =>
     panjiaRequest.post<void>(`/commission/apply/${id}/cancel`),
