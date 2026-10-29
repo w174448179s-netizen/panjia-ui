@@ -169,7 +169,7 @@
         <el-table-column label="状态" align="center" width="130">
           <template #default="{ row }">
             <el-tag :type="statusTagType(rowStatusValue(row as ReceivedApply))" size="small">{{ statusLabel(rowStatusValue(row as ReceivedApply)) }}</el-tag>
-            <!-- 自动发起结佣留痕：系统自动审批通过且非二手买卖时，结佣域已自动建单并提交 -->
+            <!-- 自动发起结佣留痕：审批通过（系统自动/人工终审）且非二手买卖时，结佣域已自动建单并提交 -->
             <el-tooltip
               v-if="row.autoCommissionApplyNo"
               :content="`已自动发起结佣：${row.autoCommissionApplyNo}`"
@@ -255,7 +255,7 @@
           {{ detailApp.approverName || '—' }}
         </el-descriptions-item>
         <el-descriptions-item label="审批时间">{{ formatDateTime(detailApp.approveTime) }}</el-descriptions-item>
-        <!-- 自动发起结佣留痕：系统自动审批通过且非二手买卖时由结佣域自动建单并提交 -->
+        <!-- 自动发起结佣留痕：审批通过（系统自动/人工终审）且非二手买卖时由结佣域自动建单并提交 -->
         <el-descriptions-item label="自动结佣">
           <template v-if="detailApp.autoCommissionApplyNo">
             已自动发起结佣（{{ detailApp.autoCommissionApplyNo }}）
