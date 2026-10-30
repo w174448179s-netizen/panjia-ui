@@ -8,6 +8,7 @@ import Layout from '@/layout/index.vue';
 import auth from '@/plugins/auth';
 import router, { constantRoutes, dynamicRoutes } from '@/router';
 import store from '@/store';
+import { useUserStore } from './user';
 import { createCustomNameComponent } from '@/utils/createCustomNameComponent';
 
 // 匹配views里面所有的.vue文件，预建查找表避免每次 O(n) 扫描
@@ -41,10 +42,22 @@ export const usePermissionStore = defineStore('permission', () => {
 
   const setRoutes = (newRoutes: RouteRecordRaw[]): void => {
     addRoutes.value = newRoutes;
-    routes.value = constantRoutes.concat(newRoutes);
+    routes.value = filterHomeForAgent().concat(newRoutes);
   };
   const setDefaultRoutes = (routes: RouteRecordRaw[]): void => {
-    defaultRoutes.value = constantRoutes.concat(routes);
+    defaultRoutes.value = filterHomeForAgent().concat(routes);
+  };
+
+  /** 经纪人角色过滤首页路由（隐藏 + 取消 affix） */
+  const filterHomeForAgent = (): RouteRecordRaw[] => {
+    const userStore = useUserStore();
+    if (!userStore.roles.includes('agent')) return constantRoutes;
+    return constantRoutes.map(r => {
+      if (r.path === '' && r.children) {
+        return { ...r, hidden: true, children: r.children.map(c => ({ ...c, meta: { ...c.meta, affix: false, hidden: true } })) };
+      }
+      return r;
+    });
   };
   const setTopbarRoutes = (routes: RouteRecordRaw[]): void => {
     topbarRouters.value = routes;
@@ -66,7 +79,8 @@ export const usePermissionStore = defineStore('permission', () => {
       router.addRoute(route);
     });
     setRoutes(rewriteRoutes);
-    setSidebarRouters(constantRoutes.concat(sidebarRoutes));
+    const baseRoutes = filterHomeForAgent();
+    setSidebarRouters(baseRoutes.concat(sidebarRoutes));
     setDefaultRoutes(sidebarRoutes);
     setTopbarRoutes(defaultRoutes);
     // 路由name重复检查

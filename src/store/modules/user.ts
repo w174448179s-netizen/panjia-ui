@@ -13,9 +13,12 @@ export const useUserStore = defineStore('user', () => {
   const name = ref('');
   const nickname = ref('');
   const userId = ref<string | number>('');
+  const deptId = ref<string | number>(''); // 用户归属部门 ID（门店/组别数据权限默认值）
   const avatar = ref('');
   const roles = ref<Array<string>>([]); // 用户角色编码集合 → 判断路由权限
   const permissions = ref<Array<string>>([]); // 用户权限编码集合 → 判断按钮权限
+  /** 首登强制改密标识（登录接口返回，密码=初始密码时为 true） */
+  const needChangePassword = ref(false);
 
   /**
    * 登录
@@ -31,6 +34,7 @@ export const useUserStore = defineStore('user', () => {
       }
       setToken(data.access_token);
       token.value = data.access_token;
+      needChangePassword.value = data.need_change_password === true;
       return Promise.resolve();
     }
     return Promise.reject(err);
@@ -58,6 +62,7 @@ export const useUserStore = defineStore('user', () => {
       nickname.value = user.nickName;
       avatar.value = profile;
       userId.value = user.userId;
+      deptId.value = user.deptId ?? '';
       return Promise.resolve();
     }
     return Promise.reject(err);
@@ -69,6 +74,8 @@ export const useUserStore = defineStore('user', () => {
     token.value = '';
     roles.value = [];
     permissions.value = [];
+    deptId.value = '';
+    needChangePassword.value = false;
     removeToken();
   };
 
@@ -78,11 +85,13 @@ export const useUserStore = defineStore('user', () => {
 
   return {
     userId,
+    deptId,
     token,
     nickname,
     avatar,
     roles,
     permissions,
+    needChangePassword,
     login,
     getInfo,
     logout,

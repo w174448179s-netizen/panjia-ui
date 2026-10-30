@@ -1,31 +1,219 @@
 import panjiaRequest from './index';
-import type { CommissionImport, CommissionRecord, CommissionQuery, PageResult } from './types';
+import type { PageQuery, PageResult } from './types';
+
+// ==================== 结佣明细 ====================
+
+export interface CommissionApplication {
+  id: number;
+  applyNo: string;
+  period: string;
+  contractNo?: string;
+  orderNo?: string;
+  propertyAddress?: string;
+  businessDate?: string;
+  deptId?: number;     // 跨门店合作单为空
+  itemCount: number;
+  totalAmount: number;
+  expectedAmount?: number;   // 应收合计（§3.4/3.5）
+  expectedAdjusted?: boolean; // 应收已被调整（当前值与快照不一致）
+  /** 调整前应收合计（提交快照；仅 expectedAdjusted=true 时有值，供展示「原值 → 调整后值」） */
+  originalExpectedAmount?: number;
+  currentNode?: string;      // DIRECTOR / FINANCE / null（T-04 后实收==应收时财务节点跳过，流程直接结束）
+  status: string;        // DRAFT / SUBMITTED / APPROVED / LOCKED / REJECTED / CANCELLED
+  approvedMonth?: string;
+  processInstanceId?: string;
+  applicantId?: number;
+  applicantName?: string;   // 后端 @Translation 翻译产物（非入库字段）
+  approverId?: number;
+  approverName?: string;    // 后端 @Translation 翻译产物：最近节点办理人
+  approveTime?: string;     // 审批时间（总监通过/终审锁定/驳回留痕）
+  lockTime?: string;
+  createTime: string;
+  updateTime?: string;
+}
+
+export interface CommissionItem {
+  id: number;
+  applicationId: number;
+  performanceFactId?: number;
+  period: string;
+  approvedMonth?: string;
+  employeeId?: number;
+  deptId?: number;
+  bizType?: string;
+  roleType?: string;
+  feeItem?: string;
+  amount: number;
+  status: string;        // DRAFT / PENDING / APPROVED / REVERSED
+  originReversed?: boolean;
+  adjustId?: number;
+  createTime: string;
+}
+
+/** 结佣申请单详情·每人明细行（列口径对齐实收明细详情） */
+export interface CommissionItemDetail {
+  itemId: number;
+  factId?: number;
+  /** 结佣明细归属期间 YYYY-MM（跨期详情逐笔展示：8、9、10 月各一行） */
+  period?: string;
+  employeeId?: number;
+  employeeCode?: string;
+  employeeName?: string;
+  /** 门店/组别（「集团-门店-组别」） */
+  deptPath?: string;
+  /** 归属部门 ID */
+  deptId?: number;
+  roleType?: string;
+  roleName?: string;
+  /** 角色占比 */
+  shareRatio?: number;
+  /** 业务类型（取折算因子的键） */
+  bizType?: string;
+  /** 新签业绩（同 sourceKey 的 PERF_EXPECT 事实金额） */
+  expectedAmount?: number;
+  /** 新签月份（应收对应的新签事实归属月，如 2026-06；跨月汇总时逗号分隔） */
+  expectPeriod?: string;
+  /** 该行应收已被调整（同 sourceKey 存在 REVERSED 的 PERF_EXPECT 事实） */
+  expectedAdjusted?: boolean;
+  /** 「增加角色人」产生的新人明细行（事实 sourceKey 带 MANUAL-ADJ/MANUAL-CADJ），新签业绩按 0→X 展示并打新人标记 */
+  manualAdjust?: boolean;
+  /** 调整前新签业绩（同 sourceKey 最早一条 REVERSED 的 PERF_EXPECT；无调整时 = expectedAmount） */
+  originalExpectedAmount?: number;
+  /** 结佣业绩 */
+  amount: number;
+  /** 新签业绩折算后金额（expectedAmount × 当前生效折算因子） */
+  expectedConvertedAmount?: number;
+  /** 调整前新签业绩折算后金额（originalExpectedAmount × 当前生效折算因子） */
+  originalConvertedAmount?: number;
+  /** 结佣业绩折算后金额（amount × 当前生效折算因子） */
+  convertedAmount?: number;
+  feeItem?: string;
+  status: string;        // DRAFT / PENDING / APPROVED / REVERSED
+  /** 实收金额（同合同+员工+角色 当前 ACTIVE 实收明细金额合计） */
+  receivedAmount?: number;
+  /** 实收金额原值（调整前：配对 rd 行 sourceKey 链最早 REVERSED 金额，实收加人新人行按 0；未调整时 = receivedAmount） */
+  originalReceivedAmount?: number;
+}
+
+export interface CommissionApplyQuery extends PageQuery {
+  period?: string;
+  deptId?: number | string;   // 19 位雪花 ID 由后端以字符串下发，禁止 Number() 转换
+  employeeId?: string;
+  bizType?: string;
+  status?: string;
+  currentNode?: string;
+  keyword?: string;
+  applicationId?: number | string;
+  /** 退单三态筛选：REFUND=仅退单 / NORMAL=仅正常 / 空=全部 */
+  refundFilter?: string;
+}
+
+export interface CommissionApplyCreateDTO {
+  period: string;
+  contractNo: string;       // 合同号（列表行同传，后台与订单号双键精确匹配）
+  orderNo?: string;         // 订单号（列表单个发起必传，以订单号为准；同合同多订单互不串单）
+  deptId?: number | string;   // 仅批量发起使用（19 位雪花 ID 以字符串下发）
+}
+
+// 结佣明细「合同」维度行
+export interface CommissionContractVO {
+  applicationId?: number;   // 结佣申请单 ID
+  applyNo?: string;
+  contractNo?: string;
+  orderNo?: string;
+  bizType?: string;
+  propertyAddress?: string;
+  businessDate?: string;
+  amount: number;
+  /** 结佣业绩折算后金额（amount × 当前生效折算因子） */
+  convertedAmount?: number;
+  expectedAmount?: number;   // 应收合计
+  /** 新签业绩折算后金额（expectedAmount × 当前生效折算因子） */
+  expectedConvertedAmount?: number;
+  /** 调整前应收合计（申请单提交快照；仅 expectedAdjusted=true 时有值，供展示「原值 → 调整后值」） */
+  originalExpectedAmount?: number;
+  /** 调整前应收的折算后金额（originalExpectedAmount × 当前生效折算因子） */
+  originalExpectedConvertedAmount?: number;
+  expectedAdjusted?: boolean; // 应收已被调整
+  /** 存在已生效的「增加角色人」（有 MANUAL-ADJ/MANUAL-CADJ 新人事实行），列表展示「新增角色人」标签 */
+  hasAddMember?: boolean;
+  currentNode?: string;      // DIRECTOR / FINANCE / null（T-04 后实收==应收时财务节点跳过，流程直接结束）
+  employeeCount: number;
+  detailCount: number;
+  period: string;
+  /** 未选期间时合同行跨期合并：合并的期间串（如「2026-08、2026-09、2026-10」） */
+  periods?: string;
+  /** 该期间是否已封账（封账后不可作废/调整） */
+  periodClosed?: boolean;
+  deptId?: number;
+  status: string;           // DRAFT / SUBMITTED / LOCKED / REJECTED / CANCELLED
+  receivedStatus?: string;   // 实收审批状态 APPROVED / SUBMITTED / DRAFT / null
+  applicantId?: number;
+  createTime?: string;
+  /** 实收金额合计（PERF_REAL 事实当前 ACTIVE 金额求和，即客户实际到账） */
+  receivedAmount?: number;
+  /** 实收金额原值合计（调整前：实收事实链最早 REVERSED 金额求和；仅 receivedAmountAdjusted=true 时有值） */
+  originalReceivedAmount?: number;
+  /** 实收金额已被实收调整（含联动）改过 */
+  receivedAmountAdjusted?: boolean;
+}
+
+/** 批量操作结果（批量发起 / 批量审批） */
+export interface BatchResultDTO {
+  total: number;
+  success: number;
+  skipped: number;
+  failed: number;
+  /** 实际生成的结佣申请单数（按新签归属月拆单，可能多于成功合同数） */
+  generatedApplications?: number;
+  successContracts: string[];
+  skippedContracts: string[];
+  failedContracts: string[];
+}
 
 export const commissionApi = {
-  // 导入批次列表
-  batchList(params: CommissionQuery) {
-    return panjiaRequest.get<PageResult<CommissionImport>>('/commission/batch/page', params);
-  },
-  // 导入贝壳数据
-  importFile(file: File) {
-    const formData = new FormData();
-    formData.append('file', file);
-    return panjiaRequest.post('/commission/import', formData);
-  },
-  // 佣金记录列表
-  recordList(params: CommissionQuery) {
-    return panjiaRequest.get<PageResult<CommissionRecord>>('/commission/record/page', params);
-  },
-  // 结佣审批列表
-  approvalList(params: CommissionQuery) {
-    return panjiaRequest.get<PageResult<CommissionRecord>>('/commission/approval/page', params);
-  },
-  // 审批通过
-  approve(id: string) {
-    return panjiaRequest.put(`/commission/approve/${id}`);
-  },
-  // 审批驳回
-  reject(id: string, reason: string) {
-    return panjiaRequest.put(`/commission/reject/${id}`, { reason });
-  }
+  // 结佣明细
+  listApplications: (params: CommissionApplyQuery) =>
+    panjiaRequest.get<PageResult<CommissionApplication>>('/commission/apply/list', params),
+  listContracts: (params: CommissionApplyQuery) =>
+    panjiaRequest.get<PageResult<CommissionContractVO>>('/commission/apply/contract-list', params),
+  /** 结佣发起页：查可发起合同（实收审批通过 + 未被结佣） */
+  listAvailableContracts: (params: CommissionApplyQuery) =>
+    panjiaRequest.get<PageResult<CommissionContractVO>>('/commission/apply/available-contracts', params),
+  /** 有结佣申请单的期间（倒序），用于默认选中最新有数据期间 */
+  listPeriods: () =>
+    panjiaRequest.get<string[]>('/commission/apply/periods'),
+  /** id 接受字符串：雪花 ID 由后端以字符串下发，Number() 转换 19 位会丢精度 */
+  getApplication: (id: number | string) =>
+    panjiaRequest.get<{ application: CommissionApplication; items: CommissionItemDetail[] }>(`/commission/apply/${id}`),
+  /** 按申请单 ID 查流程实例 ID（绕过 workflow:instance:query 权限） */
+  getInstanceId: (id: number | string) =>
+    panjiaRequest.get<{ instanceId: string | number }>(`/commission/apply/${id}/instance`),
+  /** 按合同/订单跨期间查结佣明细（列表未选期间时合并行的详情，每行带期间） */
+  getContractDetail: (contractNo?: string, orderNo?: string) =>
+    panjiaRequest.get<{ application: CommissionApplication; items: CommissionItemDetail[] }>(
+      '/commission/apply/contract-detail',
+      { contractNo, orderNo },
+    ),
+  createApplication: (data: CommissionApplyCreateDTO) =>
+    panjiaRequest.post<CommissionApplication[]>('/commission/apply', data),
+  /** 作废结佣申请单 */
+  cancelApplication: (id: number | string) =>
+    panjiaRequest.post<void>(`/commission/apply/${id}/cancel`),
+  /** 按合同号批量发起（CompletableFuture 挂起等待，返回每张单处理结果） */
+  batchApplyByContract: (period: string, contractNos: string[]) =>
+    panjiaRequest.post<BatchResultDTO>('/commission/apply/batch-apply-by-contract', {
+      period,
+      contractNos,
+    }, { timeout: 300000 }),
+  /** 按合同号批量审批（CompletableFuture 挂起等待，返回每张单处理结果） */
+  batchApproveByContract: (period: string, contractNos: string[]) =>
+    panjiaRequest.post<BatchResultDTO>('/commission/apply/batch-approve-by-contract', {
+      period,
+      contractNos,
+    }, { timeout: 300000 }),
+
+  // 预检：指定合同当月是否存在审批中的结佣申请单（前端单行提交/批量发起前拦截）
+  checkApplyInFlight: (period: string, contractNo: string) =>
+    panjiaRequest.get<boolean>('/commission/apply/in-flight-check', { period, contractNo }),
 };

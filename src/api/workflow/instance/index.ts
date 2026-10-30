@@ -17,6 +17,18 @@ export const pageByRunning = (query: FlowInstanceQuery): AxiosPromise<PageResult
 };
 
 /**
+ * 通过业务 ID 查询流程实例信息（含 instanceId、flowCode 等）
+ * @param businessId 业务单据 ID
+ * @returns FlowInstanceVO
+ */
+export const getInfo = (businessId: string | number): AxiosPromise<FlowInstanceVO> => {
+  return request({
+    url: `/workflow/instance/getInfo/${businessId}`,
+    method: 'get'
+  });
+};
+
+/**
  * 查询已完成实例列表
  * @param query
  * @returns {*}

@@ -1,0 +1,1230 @@
+<template>
+  <div class="performance-contract-page">
+    <el-card class="page-card" v-loading="loading">
+      <!-- 筛选条件（经纪人无任何查询项，后端强制限定本人业绩） -->
+      <el-form v-if="!isBroker" class="filter-form" :inline="true" :model="queryParams" @submit.prevent>
+        <el-form-item label="期间">
+          <el-date-picker
+            v-model="queryParams.period"
+            type="month"
+            value-format="YYYY-MM"
+            placeholder="全部期间（可按合同号搜）"
+            :clearable="true"
+            style="width: 170px"
+            @change="handleQuery"
+          />
+        </el-form-item>
+        <el-form-item label="门店/组别">
+          <PanjiaDeptSelect
+            v-model="queryParams.deptId"
+            :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
+            :clearable="!deptLocked"
+            width="210px"
+            @change="handleQuery"
+          />
+        </el-form-item>
+        <el-form-item v-if="!isBroker" label="员工" prop="employeeId">
+          <EmployeeSelect
+            v-model="queryParams.employeeId"
+            :dept-id="queryParams.deptId"
+            width="230px"
+            placeholder="姓名/工号搜索"
+            @change="handleQuery"
+          />
+        </el-form-item>
+        <el-form-item label="类型">
+          <el-select
+            v-model="queryParams.bizType"
+            placeholder="全部类型"
+            clearable
+            style="width: 130px"
+            @change="handleQuery"
+          >
+            <el-option v-for="t in bizTypeOptions" :key="t" :label="t" :value="t" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="关键字" prop="keyword">
+          <el-input
+            v-model.trim="queryParams.keyword"
+            placeholder="合同号/订单号/物业地址"
+            clearable
+            style="width: 260px"
+            @keyup.enter="handleQuery"
+            @clear="handleQuery"
+          />
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select
+            v-model="queryParams.factStatus"
+            placeholder="有效"
+            clearable
+            style="width: 120px"
+            @change="handleQuery"
+          >
+            <el-option label="有效" value="ACTIVE" />
+            <el-option label="已作废" value="VOIDED" />
+            <el-option label="已退单" value="REFUNDED" />
+            <el-option label="全部" value="ALL" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="退单">
+          <el-select
+            v-model="queryParams.refundFilter"
+            placeholder="全部"
+            clearable
+            style="width: 120px"
+            @change="handleQuery"
+          >
+            <el-option label="全部" value="" />
+            <el-option label="仅退单" value="REFUND" />
+            <el-option label="仅正常" value="NORMAL" />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
+          <el-button icon="Refresh" @click="resetQuery">重置</el-button>
+        </el-form-item>
+      </el-form>
+
+      <!-- 汇总条 -->
+      <div class="summary-bar">
+        <div class="summary-left">
+          <span class="summary-text">
+            共 <b>{{ summary.contractCount }}</b> 个合同 ·
+            涉及 <b>{{ summary.employeeCount }}</b> 人 ·
+            <b>{{ summary.detailCount }}</b> 条明细
+          </span>
+        </div>
+        <div class="summary-right">
+          <el-button
+            v-if="canSubmitReceived && selectedRows.length > 0"
+            type="primary"
+            :loading="batchSubmitting"
+            @click="openBatchReceivedDialog"
+          >批量提交实收（{{ selectedRows.length }}）</el-button>
+          <span class="summary-amount">
+            金额合计：<b>{{ formatAmount(summary.totalAmount) }}</b>
+            <span class="summary-sub">（折算后 {{ formatAmount(summary.totalConvertedAmount) }}）</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- 合同列表（扁平表格，点击合同号跳转明细页） -->
+      <el-table border class="data-table" :data="contractData" @selection-change="handleSelectionChange">
+        <el-table-column v-if="canSubmitReceived" type="selection" width="45" align="center" />
+        <!-- 期间：第一列；单期间筛选=该期间，未选期间时同合同跨期合并为一行展示合并期间串（同实收列表口径） -->
+        <el-table-column label="期间" align="center" width="130" show-overflow-tooltip>
+          <template #default="scope">{{ scope.row.period || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip>
+          <template #default="scope">
+            <el-button type="primary" link class="contract-link" @click="goDetail(scope.row as PerformanceManageContract)">
+              {{ contractOrOrderNo(scope.row as PerformanceManageContract) }}
+            </el-button>
+            <el-tag
+              v-if="refundedPeriod(scope.row as PerformanceManageContract)"
+              type="danger"
+              size="small"
+              effect="dark"
+              class="refunded-tag"
+            >已退单 {{ refundedPeriod(scope.row as PerformanceManageContract) }}</el-tag>
+          </template>
+        </el-table-column>
+        <!-- 新签业绩：未调整只显示本值；已调整显示「原值 → 调整后业绩」；审批通过但总额不变的调整（金额相等）只加「已调整」标识；有审批中调整单显示「当前 → 目标金额 + 审批中标记」；已生效加人调整显示「新增角色人」 -->
+        <el-table-column label="新签业绩" align="right" width="230">
+          <template #default="scope">
+            <template v-if="isAdjusted(scope.row)">
+              <span class="amount-strike">{{ formatAmount(scope.row.originalAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount" :class="deltaClass(scope.row.amount, scope.row.originalAmount) || 'amount-contract'">{{ formatAmount(scope.row.amount) }}</span>
+            </template>
+            <template v-else-if="scope.row.adjustPending">
+              <span>{{ formatAmount(scope.row.amount) }}</span>
+              <template v-if="scope.row.adjustPendingType === 'AMOUNT' && scope.row.adjustPendingAmount != null">
+                <span class="amount-arrow">→</span>
+                <span class="amount" :class="deltaClass(scope.row.adjustPendingAmount, scope.row.amount) || 'amount-contract'">{{ formatAmount(scope.row.adjustPendingAmount) }}</span>
+              </template>
+              <el-tag type="warning" size="small" effect="plain" style="margin-left: 6px">调整审批中</el-tag>
+            </template>
+            <!-- 审批通过但合同总额未变（如 AMOUNT 类重分配）：原值=现值，仍要明确标识「有过调整」 -->
+            <template v-else-if="scope.row.originalAmount != null">
+              <span class="amount-original">{{ formatAmount(scope.row.amount) }}</span>
+              <el-tag type="warning" size="small" effect="plain" style="margin-left: 6px">已调整</el-tag>
+            </template>
+            <span v-else class="amount-original">{{ formatAmount(scope.row.amount) }}</span>
+            <div v-if="scope.row.hasAddMember" class="cell-sub">
+              <el-tag type="warning" size="small" effect="plain">新增角色人</el-tag>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="折算后" align="right" width="170">
+          <template #default="scope">
+            <template v-if="isAdjusted(scope.row)">
+              <span class="amount-strike">{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount" :class="deltaClass(scope.row.convertedAmount, scope.row.originalConvertedAmount) || 'amount-ink'">{{ formatAmount(scope.row.convertedAmount) }}</span>
+            </template>
+            <span v-else class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="类型" align="center" width="100">
+          <template #default="scope">{{ scope.row.bizType || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="房源地址" align="left" min-width="200" show-overflow-tooltip>
+          <template #default="scope">{{ scope.row.propertyAddress || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="签约/认购时间" align="center" width="170">
+          <template #default="scope">{{ formatDateTime(scope.row.businessDate) }}</template>
+        </el-table-column>
+        <el-table-column label="涉及人数" align="center" width="80">
+          <template #default="scope">{{ scope.row.employeeCount ?? 0 }}</template>
+        </el-table-column>
+        <el-table-column label="明细条数" align="center" width="80">
+          <template #default="scope">{{ scope.row.detailCount ?? 0 }}</template>
+        </el-table-column>
+        <el-table-column label="状态" align="center" width="110">
+          <template #default="scope">
+            <el-tag v-if="scope.row.factStatus === 'VOIDED'" type="info" size="small">已作废</el-tag>
+            <el-tag v-else-if="refundedPeriod(scope.row as PerformanceManageContract)" type="danger" size="small">已退单</el-tag>
+            <el-tag v-else type="success" size="small">有效</el-tag>
+            <el-tag v-if="scope.row.adjustPending" type="warning" size="small" effect="plain" style="margin-left: 4px">调整审批中</el-tag>
+          </template>
+        </el-table-column>
+        <!-- 操作列：详情 + 合同级调整 + 提交实收 + 合同级作废/恢复（作废以合同为维度，不区分人员） -->
+        <el-table-column label="操作" align="center" width="300">
+          <template #default="scope">
+            <div class="action-btns">
+              <el-button size="small" link type="primary" @click="goDetail(scope.row as PerformanceManageContract)">详情</el-button>
+              <el-button v-if="!isBroker && scope.row.factStatus !== 'VOIDED'" size="small" link type="warning" @click="openAdjustDialog(scope.row as PerformanceManageContract)">调整</el-button>
+              <el-button v-if="!isBroker && scope.row.factStatus !== 'VOIDED'" size="small" link type="primary" @click="openOffsetDialog(scope.row as PerformanceManageContract)">冲正</el-button>
+              <el-button v-if="!isBroker && scope.row.factStatus !== 'VOIDED' && !refundedPeriod(scope.row as PerformanceManageContract)" size="small" link type="danger" @click="openRefundDialog(scope.row as PerformanceManageContract)">退单</el-button>
+              <el-dropdown @command="(cmd: string) => handleRowCommand(cmd, scope.row as PerformanceManageContract)">
+                <el-button size="small" link type="primary">更多<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item v-if="canSubmitReceived && scope.row.factStatus !== 'VOIDED'" command="submitReceived">提交实收</el-dropdown-item>
+                    <el-dropdown-item v-if="canVoid && scope.row.factStatus !== 'VOIDED'" command="void">作废</el-dropdown-item>
+                    <el-dropdown-item v-if="canVoid && scope.row.factStatus === 'VOIDED'" command="restore">恢复</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty description="该条件下暂无业绩数据" />
+        </template>
+      </el-table>
+
+      <!-- 按合同维度分页 -->
+      <div class="pager-bar">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="totalContracts"
+          :page-sizes="[10, 20, 50]"
+          v-model:current-page="pageNum"
+          v-model:page-size="pageSize"
+          @current-change="onPageChange"
+          @size-change="onSizeChange"
+        />
+      </div>
+    </el-card>
+
+    <!-- 合同业绩调整弹窗（类详情可编辑表格，统一提交审批） -->
+    <ContractAdjustDialog ref="adjustDialogRef" @submitted="getList" />
+
+    <!-- 合同业绩明细弹窗 -->
+    <el-dialog
+      v-model="detailDialog.visible"
+      title="合同业绩明细"
+      width="92%"
+      top="3vh"
+      class="contract-detail-dialog"
+      destroy-on-close
+    >
+      <!-- 合同信息 -->
+      <el-descriptions :column="3" border size="small" class="detail-desc">
+        <el-descriptions-item label="合同号">{{ detailDialog.contractNo }}</el-descriptions-item>
+        <el-descriptions-item label="订单号">{{ detailDialog.orderNo || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="业务类型">{{ detailDialog.bizType || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="房源地址" :span="3">{{ detailDialog.propertyAddress || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="签约/认购时间">{{ formatDateTime(detailDialog.businessDate) }}</el-descriptions-item>
+        <el-descriptions-item label="期间">{{ detailDialog.period }}</el-descriptions-item>
+        <el-descriptions-item label="口径">
+          新签业绩（应收）
+        </el-descriptions-item>
+      </el-descriptions>
+
+      <!-- 汇总条 -->
+      <div class="detail-summary-bar">
+        <span class="summary-text">
+          涉及 <b>{{ detailSummary.employeeCount }}</b> 人 ·
+          <b>{{ detailList.length }}</b> 条明细
+        </span>
+        <span class="summary-amount">
+          <!-- 存在已调整明细时，合计按「原合计 → 调整后合计」展示，与明细列同形式 -->
+          <template v-if="detailSummary.hasAdjustRow">
+            新签业绩合计：
+            <b class="summary-struck">{{ formatAmount(detailSummary.totalOriginalAmount) }}</b>
+            <span class="summary-arrow">→</span>
+            <b :class="deltaClass(detailSummary.totalAmount, detailSummary.totalOriginalAmount)">{{ formatAmount(detailSummary.totalAmount) }}</b>
+            <span class="summary-sep">|</span>
+            折算后：
+            <b class="summary-struck">{{ formatAmount(detailSummary.totalOriginalConvertedAmount) }}</b>
+            <span class="summary-arrow">→</span>
+            <b :class="deltaClass(detailSummary.totalConvertedAmount, detailSummary.totalOriginalConvertedAmount)">{{ formatAmount(detailSummary.totalConvertedAmount) }}</b>
+          </template>
+          <template v-else>
+            新签业绩合计：
+            <b :class="{ 'amount-negative': detailSummary.totalAmount < 0 }">{{ formatAmount(detailSummary.totalAmount) }}</b>
+            <span class="summary-sep">|</span>
+            折算后：
+            <b :class="{ 'amount-negative': detailSummary.totalConvertedAmount < 0 }">{{ formatAmount(detailSummary.totalConvertedAmount) }}</b>
+          </template>
+        </span>
+      </div>
+
+      <!-- 明细列表 -->
+      <el-table border class="data-table" :data="detailList" v-loading="detailLoading" max-height="480">
+        <el-table-column label="期间" align="center" width="90" fixed="left">
+          <template #default="scope">{{ scope.row.period || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="门店/组别" align="left" min-width="100">
+          <template #default="scope">
+            <span v-if="scope.row.deptPath" class="dept-wrap" :title="scope.row.deptPath">
+              <span class="dept-store">{{ deptStore(scope.row.deptPath) }}</span>
+              <span v-if="deptGroup(scope.row.deptPath)" class="dept-group"> · {{ deptGroup(scope.row.deptPath) }}</span>
+            </span>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="工号" align="center" width="150">
+          <template #default="scope">{{ scope.row.employeeCode || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="姓名" align="center" min-width="110">
+          <template #default="scope">
+            <span class="person-name">{{ scope.row.employeeName || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="所属角色" align="center" min-width="100">
+          <template #default="scope">{{ scope.row.roleType || scope.row.roleName || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="角色占比" align="center" width="90">
+          <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
+        </el-table-column>
+        <!-- 新签业绩：已调整时在原值后追加「→ 调整后业绩」；有审批中调整单显示「当前 → 目标金额 + 审批中标记」 -->
+        <el-table-column label="新签业绩" align="right" width="230">
+          <template #default="scope">
+            <template v-if="isAdjusted(scope.row)">
+              <span class="amount-strike">{{ formatAmount(scope.row.originalAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount" :class="scope.row.amount < 0 ? 'amount-redink' : deltaClass(scope.row.amount, scope.row.originalAmount)">{{ formatAmount(scope.row.amount) }}</span>
+              <span
+                v-if="scope.row.adjustDelta != null && Number(scope.row.adjustDelta) !== 0"
+                class="amount-delta"
+                :class="Number(scope.row.adjustDelta) > 0 ? 'amount-positive' : 'amount-negative'"
+              >({{ Number(scope.row.adjustDelta) > 0 ? '+' : '' }}{{ Number(scope.row.adjustDelta).toFixed(2) }})</span>
+              <el-tag v-if="scope.row.amount < 0" type="danger" size="small" effect="plain" class="redink-tag">红冲</el-tag>
+              <el-tag v-if="scope.row.manualAdjust" type="warning" size="small" effect="plain" class="redink-tag">新签调整</el-tag>
+            </template>
+            <template v-else-if="scope.row.adjustPending">
+              <!-- 增加角色人在途单：新角色人虚拟行当前业绩为空，按 0 展示（0 → X） -->
+              <span>{{ scope.row.amount == null ? '0.00' : formatAmount(scope.row.amount) }}</span>
+              <template
+                v-if="['AMOUNT', 'DEDUCT', 'INCREASE', 'ADD_MEMBER'].includes(scope.row.adjustPendingType)
+                  && scope.row.adjustPendingAmount != null"
+              >
+                <span class="amount-arrow">→</span>
+                <span class="amount" :class="deltaClass(scope.row.adjustPendingAmount, scope.row.amount)">{{ formatAmount(scope.row.adjustPendingAmount) }}</span>
+                <span
+                  v-if="scope.row.adjustPendingDelta != null && Number(scope.row.adjustPendingDelta) !== 0"
+                  class="amount-delta"
+                  :class="Number(scope.row.adjustPendingDelta) > 0 ? 'amount-positive' : 'amount-negative'"
+                >({{ Number(scope.row.adjustPendingDelta) > 0 ? '+' : '' }}{{ Number(scope.row.adjustPendingDelta).toFixed(2) }})</span>
+              </template>
+              <el-tag type="warning" size="small" effect="plain" style="margin-left: 6px">调整审批中</el-tag>
+            </template>
+            <span v-else class="amount-original">{{ formatAmount(scope.row.amount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="折算后" align="right" width="180">
+          <template #default="scope">
+            <template v-if="isAdjusted(scope.row)">
+              <span class="amount-strike">{{ formatAmount(scope.row.originalConvertedAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span class="amount" :class="deltaClass(scope.row.convertedAmount, scope.row.originalConvertedAmount) || 'amount-ink'">{{ formatAmount(scope.row.convertedAmount) }}</span>
+            </template>
+            <span v-else class="amount amount-ink">{{ formatAmount(scope.row.convertedAmount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" align="center" width="80">
+          <template #default="scope">
+            <el-tag v-if="scope.row.factStatus === 'VOIDED'" type="info" size="small">已作废</el-tag>
+            <el-tag v-else type="success" size="small">有效</el-tag>
+          </template>
+        </el-table-column>
+
+        <template #empty>
+          <el-empty description="该合同暂无明细数据" />
+        </template>
+      </el-table>
+      <!-- 明细弹窗保持纯只读：调整（含增加角色人）统一走列表行「调整」打开的可编辑弹窗 -->
+    </el-dialog>
+    <el-dialog
+      v-model="detailAdjustDialog.visible"
+      title="明细业绩调整"
+      width="480px"
+      destroy-on-close
+    >
+      <el-form
+        ref="detailAdjustFormRef"
+        :model="detailAdjustForm"
+        :rules="detailAdjustRules"
+        label-width="90px"
+      >
+        <el-form-item label="调整范围">
+          <el-tag type="info">明细级（单条调整）</el-tag>
+        </el-form-item>
+        <el-form-item label="员工">
+          <span>{{ detailAdjustDialog.employeeName }}</span>
+        </el-form-item>
+        <el-form-item label="新签业绩">
+          <!-- 当前明细的应收业绩（performance_amount），调后应收 = 新签业绩 + 调整金额 -->
+          <span class="amount-red">¥{{ formatAmount(detailAdjustDialog.amount) }}</span>
+        </el-form-item>
+        <el-form-item label="调整类型">
+          <el-select v-model="detailAdjustForm.adjustType" style="width: 100%">
+            <el-option label="业绩调整" value="AMOUNT" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="detailAdjustForm.adjustType === 'AMOUNT'" label="调整金额" prop="adjustAmount">
+          <el-input-number
+            v-model="detailAdjustForm.adjustAmount"
+            :precision="2"
+            :step="100"
+            :min="-Number(detailAdjustDialog.amount || 0)"
+            style="width: 100%"
+            placeholder="正数增加业绩，负数减少业绩"
+          />
+          <div class="form-tip adjust-preview">
+            <span>当前：<span class="amount">¥{{ formatAmount(detailAdjustDialog.amount) }}</span></span>
+            <span :class="adjustDeltaClass(detailAdjustForm.adjustAmount)">
+              {{ (detailAdjustForm.adjustAmount ?? 0) >= 0 ? '+' : '' }}{{ formatAmount(detailAdjustForm.adjustAmount ?? 0) }}
+            </span>
+            <span>→ 调整后：<span class="amount">¥{{ formatAmount(detailAdjustTargetAmount) }}</span></span>
+          </div>
+        </el-form-item>
+        <el-form-item label="调整原因" prop="reason">
+          <el-input
+            v-model="detailAdjustForm.reason"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入调整原因（审批必填）"
+            maxlength="500"
+            show-word-limit
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="detailAdjustDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="detailAdjustSubmitting" @click="submitDetailAdjust">提交审批</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 业绩冲正/补录弹窗 -->
+    <ContractOffsetDialog ref="offsetDialogRef" @submitted="getList" />
+    <!-- 合同退单弹窗（全额冲退，审批通过生成负新签+负实收） -->
+    <ContractRefundDialog ref="refundDialogRef" @submitted="getList" />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { ArrowDown } from '@element-plus/icons-vue';
+import { performanceApi } from '@/api/panjia/performance';
+import type { PerformanceManageContract, PerformanceManageRow } from '@/api/panjia/performance';
+import { perfRefundApi } from '@/api/panjia/refund';
+import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
+import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
+import ContractAdjustDialog from './components/ContractAdjustDialog.vue';
+import ContractOffsetDialog from './components/ContractOffsetDialog.vue';
+import ContractRefundDialog from './components/ContractRefundDialog.vue';
+import { useUserStore } from '@/store/modules/user';
+import { resolveBizNo } from '@/utils/panjiaBiz';
+import { checkPermi } from '@/utils/permission';
+import { useDeptScope } from '@/hooks/useDeptScope';
+
+const userStore = useUserStore();
+const isBroker = computed(() => userStore.roles.includes('agent'));
+const canVoid = computed(() => checkPermi(['perf:fact:void']));
+const canSubmitReceived = computed(() => checkPermi(['perf:received:submit']));
+// 表格多选（合同维度 checkbox，收集 factIds 用于批量提交实收）
+const selectedRows = ref<PerformanceManageContract[]>([]);
+const handleSelectionChange = (rows: PerformanceManageContract[]) => {
+  selectedRows.value = rows;
+};
+
+// ==================== 门店/组别筛选（全系统统一口径：所有用户查本部门及以下） ====================
+const { deptLocked, defaultDeptId } = useDeptScope();
+
+// ==================== 筛选 ====================
+const queryParams = reactive<{
+  period: string;
+  deptId: string | number | undefined;
+  employeeId: string | undefined;
+  bizType: string;
+  keyword: string | undefined;
+  factStatus: string;
+  refundFilter: string;
+}>({
+  period: '',
+  deptId: defaultDeptId(),
+  employeeId: undefined,
+  bizType: '',
+  keyword: undefined,
+  factStatus: '',
+  refundFilter: '',
+});
+
+// ==================== 数据 ====================
+const loading = ref(false);
+const contractData = ref<PerformanceManageContract[]>([]);
+const totalContracts = ref(0);
+
+const pageNum = ref(1);
+const pageSize = ref(20);
+
+const emptySummary = () => ({ employeeCount: 0, contractCount: 0, detailCount: 0, totalAmount: 0, totalConvertedAmount: 0 });
+const summary = ref(emptySummary());
+
+// ==================== 工具 ====================
+const formatDateTime = (val: string | undefined | null): string => {
+  if (!val) return '—';
+  return val.replace('T', ' ').substring(0, 19);
+};
+
+const formatAmount = (val: number | string | undefined | null): string => {
+  if (val === undefined || val === null || val === '') return '—';
+  const n = Number(val);
+  return Number.isNaN(n) ? String(val) : n.toFixed(2);
+};
+
+// 合同号/订单号合并展示：一手房、房产金融、家装荐客以订单号为准，其它以合同号为准（空则回退）
+const contractOrOrderNo = (row: PerformanceManageContract): string =>
+  resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—';
+
+// ==================== 合同明细弹窗 ====================
+const detailLoading = ref(false);
+const detailList = ref<PerformanceManageRow[]>([]);
+const detailDialog = reactive({
+  visible: false,
+  contractNo: '',
+  orderNo: '',
+  bizKey: '',   // 明细查询业务键（订单号优先），与展示用的合同号分离
+  bizType: '',
+  propertyAddress: '',
+  businessDate: '',
+  period: '',
+  factType: 'PERF_EXPECT' as 'PERF_EXPECT' | 'PERF_REAL',
+});
+
+const detailSummary = computed(() => {
+  // 合计仅统计有效（ACTIVE）行，已作废金额不计入
+  const list = detailList.value.filter(r => r.factStatus !== 'VOIDED');
+  return {
+    employeeCount: new Set(list.map(r => r.employeeId)).size,
+    totalAmount: list.reduce((sum, r) => sum + num(r.amount), 0),
+    totalOriginalAmount: list.reduce((sum, r) => sum + num(r.originalAmount), 0),
+    totalConvertedAmount: list.reduce((sum, r) => sum + num(r.convertedAmount), 0),
+    totalOriginalConvertedAmount: list.reduce((sum, r) => sum + num(r.originalConvertedAmount), 0),
+    hasAdjustRow: list.some(r => r.originalAmount != null && num(r.amount) !== num(r.originalAmount)),
+  };
+});
+
+const goDetail = async (row: PerformanceManageContract) => {
+  // 展示口径：合同号/订单号分列显示真实值；查询键用业务键（后端 contract_no/order_no 双匹配）
+  detailDialog.contractNo = row.contractNo || '';
+  detailDialog.orderNo = row.orderNo || '';
+  detailDialog.bizKey = resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '';
+  detailDialog.bizType = row.bizType || '';
+  detailDialog.propertyAddress = row.propertyAddress || '';
+  detailDialog.businessDate = row.businessDate ? String(row.businessDate) : '';
+  detailDialog.period = queryParams.period;
+  detailDialog.factType = 'PERF_EXPECT';
+  detailList.value = [];
+  detailDialog.visible = true;
+  await loadDetailList();
+};
+
+const loadDetailList = async () => {
+  // 明细按业务键查询；跨期搜索场景 period 可为空（查该合同全部期间明细）
+  if (!detailDialog.bizKey) return;
+  detailLoading.value = true;
+  try {
+    const res = await performanceApi.listManageContractDetails({
+      period: detailDialog.period || undefined,
+      factType: detailDialog.factType,
+      contractNos: detailDialog.bizKey,
+    });
+    detailList.value = res.data ?? [];
+    // 期间以合同实际归属月为准（取明细行最新 period），避免未选期间时显示空白、且调整单期间与明细期间保持一致
+    const actualPeriod = detailList.value
+      .map(r => r.period)
+      .filter((p): p is string => !!p)
+      .sort()
+      .pop();
+    if (actualPeriod) {
+      detailDialog.period = actualPeriod;
+    }
+  } catch (e) {
+    console.error('[performance-contract] 明细加载失败', e);
+  } finally {
+    detailLoading.value = false;
+  }
+};
+
+// ==================== 作废/恢复（合同级：整张合同业绩一次性作废/恢复，不区分人员/角色） ====================
+const handleVoidContract = async (row: PerformanceManageContract) => {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `将作废合同「${row.contractNo}」本期全部有效明细（共 ${row.detailCount} 条，不区分人员/角色），作废后不参与算薪/结佣。`,
+      '作废合同业绩',
+      {
+        confirmButtonText: '确定作废',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputPlaceholder: '必填，如：录入错误、重复录入等',
+        inputValidator: (v) => !!v?.trim() || '请输入作废原因',
+      },
+    );
+    await performanceApi.voidByContract(queryParams.period, 'PERF_EXPECT', row.contractNo, value.trim(), row.orderNo);
+    ElMessage.success('已作废');
+    getList();
+  } catch (e: any) {
+    if (e !== 'cancel' && e?.message !== 'cancel') {
+      ElMessage.error(e?.message || '作废失败');
+    }
+  }
+};
+
+const handleRestoreContract = async (row: PerformanceManageContract) => {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `将恢复合同「${row.contractNo}」本期全部已作废明细，恢复后业绩计入当前月。`,
+      '恢复合同业绩',
+      {
+        confirmButtonText: '确定恢复',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputPlaceholder: '必填，如：误操作作废等',
+        inputValidator: (v) => !!v?.trim() || '请输入恢复原因',
+      },
+    );
+    await performanceApi.restoreByContract(queryParams.period, 'PERF_EXPECT', row.contractNo, value.trim(), row.orderNo);
+    ElMessage.success('已恢复，业绩计入当前月');
+    getList();
+  } catch (e: any) {
+    if (e !== 'cancel' && e?.message !== 'cancel') {
+      ElMessage.error(e?.message || '恢复失败');
+    }
+  }
+};
+
+// ==================== 手工提交实收 ====================
+const batchSubmitting = ref(false);
+
+const doSubmitReceived = async (rows: PerformanceManageContract[]) => {
+  const bizKeys = rows
+    .map(r => r.contractNo || r.orderNo)
+    .filter(Boolean) as string[];
+  if (bizKeys.length === 0) {
+    ElMessage.warning('所选合同无有效业务键');
+    return;
+  }
+  batchSubmitting.value = true;
+  try {
+    const resp = await performanceApi.manualBatchSubmitReceived({
+      period: queryParams.period,
+      bizKeys,
+    });
+    const data = (resp as any)?.data ?? resp;
+    const skipped = Object.entries(data.skipped || {});
+    ElMessage.success(
+      `实收明细新建 ${data.createdRealCount} 条，审批单新建 ${data.createdApplyCount} 张`
+      + (skipped.length ? `，跳过 ${skipped.length} 条（${skipped[0]?.[1]}${skipped.length > 1 ? ' 等' : ''}）` : '')
+    );
+    selectedRows.value = [];
+    getList();
+  } catch (e: any) {
+    ElMessage.error(e?.message || '提交失败');
+  } finally {
+    batchSubmitting.value = false;
+  }
+};
+
+const openBatchReceivedDialog = async () => {
+  if (!selectedRows.value.length) return;
+  try {
+    await ElMessageBox.confirm(
+      `将为选中的 ${selectedRows.value.length} 个合同在实收域生成实收明细（pj_received_detail），\n`
+      + `并按订单号分组建实收审批单。金额默认取新签应收值。`,
+      '批量提交实收',
+      { type: 'warning', confirmButtonText: '确认提交', cancelButtonText: '取消' }
+    );
+    await doSubmitReceived(selectedRows.value);
+  } catch (e: any) {
+    if (e !== 'cancel' && e?.message !== 'cancel') ElMessage.error(e?.message || '提交失败');
+  }
+};
+
+const submitSingleReceived = async (row: PerformanceManageContract) => {
+  try {
+    await ElMessageBox.confirm(
+      `合同 ${row.contractNo || row.orderNo}：将按 ${row.detailCount} 条应收明细在实收域生成实收明细并创建实收审批单。`,
+      '提交实收',
+      { type: 'warning', confirmButtonText: '确认提交', cancelButtonText: '取消' }
+    );
+    await doSubmitReceived([row]);
+  } catch (e: any) {
+    if (e !== 'cancel' && e?.message !== 'cancel') ElMessage.error(e?.message || '提交失败');
+  }
+};
+
+/** 操作列下拉菜单路由 */
+const handleRowCommand = (cmd: string, row: PerformanceManageContract) => {
+  switch (cmd) {
+    case 'detail': goDetail(row); break;
+    case 'adjust': openAdjustDialog(row); break;
+    case 'submitReceived': submitSingleReceived(row); break;
+    case 'void': handleVoidContract(row); break;
+    case 'restore': handleRestoreContract(row); break;
+  }
+};
+
+// ==================== 明细级业绩调整弹窗 ====================
+const detailAdjustFormRef = ref();
+const detailAdjustSubmitting = ref(false);
+const detailAdjustDialog = reactive({
+  visible: false,
+  factId: '',
+  employeeId: '',
+  employeeName: '',
+  amount: 0,                // 当前明细的新签业绩（PerformanceManageRow.amount = performance_amount）
+});
+const detailAdjustForm = reactive({
+  adjustType: 'AMOUNT',
+  adjustAmount: undefined as number | undefined,  // 录入的是调整金额（正增负减），提交时折算为调整后金额
+  reason: '',
+});
+// 调整后金额 = 当前新签业绩 + 调整金额（仅用于界面提示；提交给后台的仍是调整后金额）
+const detailAdjustTargetAmount = computed(() =>
+  round2(num(detailAdjustDialog.amount) + num(detailAdjustForm.adjustAmount)));
+const detailAdjustRules = {
+  reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
+  adjustAmount: [
+    {
+      validator: (_rule: unknown, value: number | undefined, callback: (err?: Error) => void) => {
+        if (detailAdjustForm.adjustType === 'AMOUNT' && (value === undefined || value === null)) {
+          callback(new Error('请输入调整金额（正数增加，负数减少）'));
+        } else {
+          callback();
+        }
+      },
+      trigger: 'blur',
+    },
+  ],
+};
+
+const openDetailAdjustDialog = (row: PerformanceManageRow) => {
+  detailAdjustDialog.factId = String(row.id);
+  detailAdjustDialog.employeeId = String(row.employeeId);
+  detailAdjustDialog.employeeName = row.employeeName || '—';
+  detailAdjustDialog.amount = row.amount ?? 0;
+  detailAdjustForm.adjustType = 'AMOUNT';
+  detailAdjustForm.adjustAmount = undefined;
+  detailAdjustForm.reason = '';
+  detailAdjustDialog.visible = true;
+};
+
+const submitDetailAdjust = async () => {
+  await detailAdjustFormRef.value?.validate();
+  detailAdjustSubmitting.value = true;
+  try {
+    await performanceApi.createAdjust({
+      factId: detailAdjustDialog.factId,
+      period: detailDialog.period,
+      employeeId: detailAdjustDialog.employeeId,
+      adjustType: detailAdjustForm.adjustType,
+      adjustScope: 'DETAIL',
+      factType: detailDialog.factType,
+      // 界面录入调整金额（正增负减），后台口径不变：提交当前业绩 + 调整金额 = 调整后金额
+      targetAmount: round2(num(detailAdjustDialog.amount) + num(detailAdjustForm.adjustAmount)),
+      reason: detailAdjustForm.reason.trim(),
+    } as any);
+    ElMessage.success('调整单已提交审批');
+    detailAdjustDialog.visible = false;
+    loadDetailList();
+  } catch (e) {
+    // 错误已由拦截器提示
+  } finally {
+    detailAdjustSubmitting.value = false;
+  }
+};
+
+// ==================== 工具函数 ====================
+const num = (v: number | string | undefined | null): number => {
+  if (v === undefined || v === null || v === '') return 0;
+  const n = Number(v);
+  return Number.isNaN(n) ? 0 : n;
+};
+
+/** 金额保留两位小数（避免浮点累加误差，提交口径与后台 BigDecimal setScale(2) 一致）。 */
+const round2 = (v: number): number => Math.round((v + Number.EPSILON) * 100) / 100;
+
+/** 调整金额差额着色：增加（正）绿色、减少（负）红色、0 不着色。 */
+const adjustDeltaClass = (v: number | undefined): string => {
+  const d = num(v);
+  return d > 0 ? 'delta-up' : d < 0 ? 'delta-down' : '';
+};
+
+/**
+ * 是否已调整：调整后金额与原值不等即为已调整。
+ * 统一走 num() 做数值比较（后端两个字段类型可能为 number | string），
+ * 与汇总条的 hasAdjustRow 同口径 —— 未调整的行不展示「调整后」值，避免与「新签业绩」重复。
+ */
+const isAdjusted = (row: { amount?: number | string | null; originalAmount?: number | string | null }): boolean =>
+  row.originalAmount != null && num(row.amount) !== num(row.originalAmount);
+
+/**
+ * 调整增减方向着色：调整后 > 原值 = 增加（绿），调整后 < 原值 = 扣减（红）；
+ * 无原值或无变化时返回空串（沿用调用处的默认色）。
+ */
+const deltaClass = (after?: number | string | null, before?: number | string | null): string => {
+  if (after === undefined || after === null || before === undefined || before === null) return '';
+  const diff = num(after) - num(before);
+  if (diff > 0) return 'amount-positive';
+  if (diff < 0) return 'amount-negative';
+  return '';
+};
+
+const formatRatio = (val: number | string | undefined | null): string => {
+  if (val === undefined || val === null || val === '') return '—';
+  const n = Number(val);
+  if (Number.isNaN(n)) return String(val);
+  const pct = n * 100;
+  return `${Number.isInteger(pct) ? pct : pct.toFixed(2)}%`;
+};
+
+// ==================== 门店/组别 拆分展示 ====================
+// deptPath 形如「集团-门店-组别」（2~3 段）：门店取倒数第二段（无上级时取首段），组别取最后一段
+const deptParts = (path: string): string[] => path.split('-').map((s) => s.trim()).filter(Boolean);
+const deptStore = (path: string): string => {
+  const parts = deptParts(path);
+  return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] ?? '—');
+};
+const deptGroup = (path: string): string => {
+  const parts = deptParts(path);
+  return parts.length >= 2 ? parts[parts.length - 1] : '';
+};
+
+
+
+// ==================== 类型选项 ====================
+const bizTypeOptions = ref<string[]>([]);
+
+// ==================== 加载 ====================
+const getList = async () => {
+  loading.value = true;
+  try {
+    const res = await performanceApi.listManageByContract({
+      period: queryParams.period || undefined,
+      factType: 'PERF_EXPECT',
+      deptId: queryParams.deptId ? String(queryParams.deptId) : undefined,
+      employeeId: queryParams.employeeId || undefined,
+      bizType: queryParams.bizType || undefined,
+      keyword: queryParams.keyword?.trim() || undefined,
+      factStatus: queryParams.factStatus || undefined,
+      refundFilter: queryParams.refundFilter || undefined,
+      pageNum: pageNum.value,
+      pageSize: pageSize.value
+    });
+    const page = res.data;
+    contractData.value = page?.rows ?? [];
+    totalContracts.value = page?.total ?? 0;
+    summary.value = page?.summary ?? emptySummary();
+    bizTypeOptions.value = page?.bizTypes ?? [];
+    // 「已退单」标记：批量查这些合同最近一次已执行退单的落账月
+    const contractNos = contractData.value
+      .map((row) => row.contractNo)
+      .filter((no): no is string => !!no);
+    refundedMap.value = contractNos.length
+      ? (await perfRefundApi.refundedPeriods(Array.from(new Set(contractNos)))).data ?? {}
+      : {};
+  } finally {
+    loading.value = false;
+  }
+};
+
+const onPageChange = () => getList();
+const onSizeChange = () => {
+  pageNum.value = 1;
+  getList();
+};
+const handleQuery = () => {
+  pageNum.value = 1;
+  getList();
+};
+const resetQuery = () => {
+  queryParams.deptId = defaultDeptId();
+  queryParams.employeeId = undefined;
+  queryParams.bizType = '';
+  queryParams.keyword = undefined;
+  queryParams.factStatus = '';
+  queryParams.refundFilter = '';
+  pageNum.value = 1;
+  getList();
+};
+
+// ==================== 合同业绩调整弹窗（类详情可编辑表格，统一提交审批） ====================
+const adjustDialogRef = ref<InstanceType<typeof ContractAdjustDialog>>();
+
+const openAdjustDialog = (row: PerformanceManageContract) => {
+  adjustDialogRef.value?.open({
+    // contractNo 传真实合同号（为空兜底订单号），与 orderNo 一起构成后端「订单号+合同号」双键精确匹配
+    contractNo: row.contractNo || row.orderNo || '',
+    orderNo: row.orderNo,
+    bizType: row.bizType,
+    propertyAddress: row.propertyAddress,
+    businessDate: row.businessDate,
+    period: queryParams.period,
+  });
+};
+
+// ==================== 业绩冲正/补录弹窗 ====================
+const offsetDialogRef = ref();
+const openOffsetDialog = (row: PerformanceManageContract) => {
+  offsetDialogRef.value?.open({
+    // contractNo 传真实合同号（为空兜底订单号），与 orderNo 一起构成后端「订单号+合同号」双键精确匹配
+    contractNo: row.contractNo || row.orderNo || '',
+    orderNo: row.orderNo,
+    bizType: row.bizType,
+    propertyAddress: row.propertyAddress,
+  });
+};
+
+// ==================== 退单弹窗 ====================
+const refundDialogRef = ref();
+/** 合同号 → 最近退单落账月（「已退单」标记） */
+const refundedMap = ref<Record<string, string>>({});
+// 后端已按退单表回填 refundPeriod；旧接口结果作为兜底（兼容后端未升级）
+const refundedPeriod = (row: PerformanceManageContract) =>
+  row.refundPeriod ?? refundedMap.value[row.contractNo] ?? '';
+const openRefundDialog = (row: PerformanceManageContract) => {
+  refundDialogRef.value?.open(row);
+};
+
+onMounted(async () => {
+  try {
+    const res = await performanceApi.listManagePeriods();
+    const periods = res.data ?? [];
+    const now = new Date();
+    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    queryParams.period = periods.includes(current) ? current : (periods[0] ?? current);
+  } catch {
+    const now = new Date();
+    queryParams.period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }
+  await getList();
+});
+</script>
+
+<style lang="scss" scoped>
+.performance-contract-page {
+  padding: 16px;
+}
+
+.page-card {
+  border-radius: 12px;
+}
+
+.form-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+}
+/* 调整弹窗「当前 → 调整后」预览：金额放大加粗 + 浅底色块，差额红绿着色放大 */
+.form-tip.adjust-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  font-size: 13px;
+  color: #606266;
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 6px;
+}
+.form-tip.adjust-preview .amount {
+  font-size: 17px;
+  font-weight: 700;
+  color: #303133;
+}
+.form-tip.adjust-preview .delta-up {
+  font-size: 15px;
+  font-weight: 700;
+  color: #67c23a;
+}
+.form-tip.adjust-preview .delta-down {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f56c6c;
+}
+
+.filter-form {
+  margin-bottom: 4px;
+}
+
+.fact-tabs {
+  :deep(.el-tabs__header) {
+    margin-bottom: 10px;
+  }
+}
+
+.summary-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 4px 12px;
+  flex-wrap: wrap;
+
+  .summary-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+    flex-wrap: wrap;
+  }
+
+  .summary-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .summary-text {
+    font-size: 13px;
+    color: #606266;
+
+    b {
+      color: #303133;
+      margin: 0 2px;
+    }
+
+    .unsettled {
+      color: #e6a23c;
+    }
+  }
+
+  .summary-amount {
+    font-size: 13px;
+    color: #606266;
+
+    b {
+      color: #f56c6c;
+      font-size: 15px;
+      margin-left: 4px;
+    }
+
+    .summary-sub {
+      color: #909399;
+      font-size: 12px;
+    }
+  }
+}
+
+.data-table {
+  width: 100%;
+
+  .action-btns {
+    white-space: nowrap;
+
+    .el-dropdown {
+      margin-left: 12px;
+    }
+  }
+
+  .contract-link {
+    font-weight: 600;
+    padding: 0;
+  }
+
+  .refunded-tag {
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  .amount {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .amount-contract {
+    color: #f56c6c;
+  }
+  .amount-original {
+    font-variant-numeric: tabular-nums;
+    color: #c0c4cc;
+    font-size: 13px;
+  }
+  /* 金额下方的次级说明行（「新增角色人」标记等） */
+  .cell-sub {
+    margin-top: 2px;
+    font-size: 11px;
+    line-height: 1.2;
+  }
+  /* 「原值 → 调整后」：被调整掉的原值置灰加删除线（同实收详情「应收合计」） */
+  .amount-strike {
+    font-variant-numeric: tabular-nums;
+    color: #c0c4cc;
+    font-size: 13px;
+    text-decoration: line-through;
+  }
+  .amount-arrow {
+    margin: 0 4px;
+    color: #c0c4cc;
+  }
+  .adjust-tag {
+    margin-left: 4px;
+    transform: scale(0.85);
+    transform-origin: left center;
+  }
+}
+
+.pager-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.detail-desc {
+  margin-bottom: 12px;
+}
+
+.detail-summary-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 4px 12px;
+  flex-wrap: wrap;
+
+  .summary-text {
+    font-size: 13px;
+    color: #606266;
+
+    b {
+      color: #303133;
+      margin: 0 2px;
+    }
+
+    .unsettled {
+      color: #e6a23c;
+    }
+  }
+
+  .summary-amount {
+    font-size: 14px;
+    color: #606266;
+
+    b {
+      color: #f56c6c;
+      font-size: 16px;
+      margin-left: 4px;
+    }
+
+    .amount-negative {
+      color: #f56c6c;
+    }
+    /* 调整增减方向着色：增加=绿、扣减=红 */
+    .amount-positive {
+      color: #67c23a;
+    }
+
+    /* 被调整掉的原合计：置灰 + 删除线，与明细列「原值 → 调整后」同形式 */
+    b.summary-struck {
+      color: #c0c4cc;
+      font-size: 14px;
+      text-decoration: line-through;
+    }
+    .summary-arrow {
+      color: #c0c4cc;
+      margin: 0 4px;
+    }
+  }
+  .summary-sep {
+    color: #dcdfe6;
+    margin: 0 8px;
+  }
+}
+
+.person-name {
+  font-weight: 600;
+  color: #303133;
+}
+
+.amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #909399;
+}
+.amount-ink {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: #303133;
+}
+.amount-red {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #f56c6c;
+}
+.amount-redink {
+  color: #f56c6c;
+}
+/* 调整差额小字：括号包裹、与主金额拉开间距 */
+.amount-delta {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: 6px;
+}
+/* 调整增减方向着色：增加=绿、扣减=红，便于一眼区分增减 */
+.amount-positive {
+  color: #67c23a;
+}
+.amount-negative {
+  color: #f56c6c;
+}
+.redink-tag {
+  margin-left: 4px;
+  transform: scale(0.85);
+  transform-origin: left center;
+}
+</style>
+
+<style lang="scss">
+/* 门店/组别列：门店加粗为主、组别弱化为辅，超宽自动换行不截断 */
+.dept-wrap {
+  line-height: 1.5;
+  word-break: break-word;
+}
+.dept-store {
+  font-weight: 600;
+  color: #303133;
+}
+.dept-group {
+  color: #909399;
+}
+
+</style>

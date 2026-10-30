@@ -1,0 +1,1228 @@
+<template>
+  <div class="received-apply-page">
+    <el-card class="page-card" v-loading="loading">
+      <!-- 筛选条件 -->
+      <el-form class="filter-form" :inline="true" :model="queryParams" @submit.prevent>
+        <el-form-item label="期间">
+          <el-date-picker
+            v-model="queryParams.period"
+            type="month"
+            value-format="YYYY-MM"
+            placeholder="选择月份"
+            clearable
+            style="width: 150px"
+            @change="handleScopeChange"
+          />
+        </el-form-item>
+        <el-form-item label="门店/组别" prop="deptId">
+          <PanjiaDeptSelect
+            v-model="queryParams.deptId"
+            :placeholder="deptLocked ? '本部门' : '全部门店/组别'"
+            :clearable="!deptLocked"
+            width="200px"
+            @change="handleScopeChange"
+          />
+        </el-form-item>
+        <el-form-item v-if="!isAgent" label="员工" prop="employeeId">
+          <EmployeeSelect
+            v-model="queryParams.employeeId"
+            :dept-id="queryParams.deptId"
+            width="230px"
+            placeholder="姓名/工号搜索"
+            @change="handleScopeChange"
+          />
+        </el-form-item>
+        <el-form-item label="类型" prop="bizType">
+          <el-select
+            v-model="queryParams.bizType"
+            placeholder="全部类型"
+            clearable
+            filterable
+            style="width: 160px"
+            @change="handleQuery"
+          >
+            <el-option v-for="t in bizTypeOptions" :key="t" :label="t" :value="t" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="queryParams.status" placeholder="全部状态" clearable style="width: 130px" @change="handleQuery">
+            <el-option v-for="opt in statusOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="退单">
+          <el-select v-model="queryParams.refundFilter" placeholder="全部" clearable style="width: 120px" @change="handleQuery">
+            <el-option value="" label="全部" />
+            <el-option value="REFUND" label="仅退单" />
+            <el-option value="NORMAL" label="仅正常" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="关键字">
+          <el-input
+            v-model="queryParams.keyword"
+            placeholder="合同号/订单号/房源"
+            clearable
+            style="width: 200px"
+            @keyup.enter="handleQuery"
+            @clear="handleQuery"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
+          <el-button icon="Refresh" @click="resetQuery">重置</el-button>
+        </el-form-item>
+      </el-form>
+
+      <!-- 汇总条 -->
+      <div class="summary-bar">
+        <div class="summary-left">
+          <span class="summary-text">
+            共 <b>{{ total }}</b> {{ queryParams.period ? '张实收审批单' : '个合同（跨期合并）' }} ·
+            <!-- 按员工筛选时后端返回该员工明细合计（员工口径），否则为单据级实收合计 -->
+            {{ queryParams.employeeId ? '员工实收合计' : '实收合计' }}<span class="summary-month">（{{ summaryPeriodLabel }}）</span> <b class="amount-red">{{ formatAmount(summaryAmount) }}</b>
+            <span class="summary-sep">｜</span>
+            <!-- 按员工筛选时后端返回该员工应收份额合计（员工口径），否则为单据级应收合计 -->
+            {{ queryParams.employeeId ? '员工新签合计' : '新签合计' }}<span class="summary-month">（{{ summaryPeriodLabel }}）</span> <b class="amount-expected">{{ formatAmount(summaryExpectedAmount) }}</b>
+            <span class="summary-sub">（折算后 {{ formatAmount(summaryExpectedConvertedAmount) }}）</span>
+          </span>
+        </div>
+        <div class="summary-right">
+          <el-button v-if="checkPermi(['perf:received:batch'])" type="success" plain icon="DocumentChecked" @click="openBatchApprove">批量审批{{ selectedRows.length > 0 ? `(${selectedRows.length})` : '' }}</el-button>
+        </div>
+      </div>
+
+      <!-- 审批单表格 -->
+      <el-table border class="data-table" :data="applyList" @selection-change="onSelectionChange">
+        <el-table-column type="selection" width="50" :selectable="(row: ReceivedApply) => row.status === 'SUBMITTED'" />
+        <!-- 期间：未选期间时同合同多期单据合并为一行，展示合并期间串（8、9、10 月）；已退单时标注退单落账月 -->
+        <el-table-column label="期间" align="center" width="160" fixed="left">
+          <template #default="{ row }">
+            <div>{{ (row as ReceivedApply).periods || (row as ReceivedApply).period || '—' }}</div>
+            <el-tag v-if="refundedPeriod(row as ReceivedApply)" type="danger" size="small" effect="plain" class="adjust-tag">
+              已退单 {{ refundedPeriod(row as ReceivedApply) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="合同号/订单号" align="center" min-width="180" fixed="left">
+          <template #default="{ row }">
+            <el-button type="primary" link class="contract-link" @click="viewDetail(row)">{{ contractOrOrderNo(row) }}</el-button>
+          </template>
+        </el-table-column>
+        <el-table-column label="实收业绩" align="right" width="220">
+                  <template #default="{ row }">
+                    <template v-if="isReceivedAdjusted(row)">
+                      <!-- 原值与现值不等：展示「原值 → 调整后」；相等（AMOUNT 类总额不变的重分配）仅加「已调整」标识 -->
+                      <template v-if="receivedAmountChanged(row)">
+                        <span class="amount-strike">¥{{ formatAmount(row.originalReceivedAmount) }}</span>
+                        <span class="amount-arrow">→</span>
+                        <span class="amount" :class="deltaClass(row.receivedAmount, row.originalReceivedAmount) || 'amount-red'">¥{{ formatAmount(row.receivedAmount) }}</span>
+                        <span v-if="deltaParen(row.receivedAmount, row.originalReceivedAmount)" class="amount" :class="deltaClass(row.receivedAmount, row.originalReceivedAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(row.receivedAmount, row.originalReceivedAmount) }}</span>
+                      </template>
+                      <template v-else>
+                        <span class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
+                        <el-tag type="warning" size="small" effect="plain" class="adjust-tag">已调整</el-tag>
+                      </template>
+                    </template>
+                    <span v-else class="amount amount-red">¥{{ formatAmount(row.receivedAmount) }}</span>
+                    <div v-if="row.adjustPending" class="cell-sub">
+                      <el-tag type="warning" size="small" effect="plain" class="adjust-tag">
+                        调整审批中 ¥{{ formatAmount(row.adjustPendingAmount) }}
+                      </el-tag>
+                    </div>
+                  </template>
+                </el-table-column>
+        <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值 -->
+        <el-table-column label="新签业绩" align="right" width="200">
+          <template #default="{ row }">
+            <template v-if="isAdjusted(row)">
+              <!-- 原值与现值不等：展示「原值 → 调整后」；相等（AMOUNT 类总额不变的重分配）仅加「已调整」标识 -->
+              <template v-if="expectedAmountChanged(row)">
+                <span class="amount-strike">¥{{ formatAmount(row.originalExpectedAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount" :class="deltaClass(row.expectedAmount, row.originalExpectedAmount) || 'amount-red'">¥{{ formatAmount(row.expectedAmount) }}</span>
+                <span v-if="deltaParen(row.expectedAmount, row.originalExpectedAmount)" class="amount" :class="deltaClass(row.expectedAmount, row.originalExpectedAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(row.expectedAmount, row.originalExpectedAmount) }}</span>
+              </template>
+              <template v-else>
+                <span class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
+                <el-tag type="warning" size="small" effect="plain" class="adjust-tag">已调整</el-tag>
+              </template>
+            </template>
+            <span v-else class="amount amount-expected">¥{{ formatAmount(row.expectedAmount) }}</span>
+          </template>
+        </el-table-column>
+
+
+        <el-table-column label="类型" align="center" width="100">
+          <template #default="{ row }">{{ row.bizType || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="房源地址" align="left" min-width="200" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.propertyAddress || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="签约/认购时间" align="center" width="170">
+          <template #default="{ row }">{{ formatDateTime(row.businessDate) }}</template>
+        </el-table-column>
+        <el-table-column label="涉及人数" align="center" width="90">
+          <template #default="{ row }">{{ row.employeeCount ?? 0 }}</template>
+        </el-table-column>
+        <el-table-column label="明细条数" align="center" width="90">
+          <template #default="{ row }">{{ row.itemCount ?? 0 }}</template>
+        </el-table-column>
+        <el-table-column label="状态" align="center" width="130">
+          <template #default="{ row }">
+            <el-tag :type="statusTagType(rowStatusValue(row as ReceivedApply))" size="small">{{ statusLabel(rowStatusValue(row as ReceivedApply)) }}</el-tag>
+            <!-- 自动发起结佣留痕：审批通过（系统自动/人工终审）且非二手买卖时，结佣域已自动建单并提交 -->
+            <el-tooltip
+              v-if="row.autoCommissionApplyNo"
+              :content="`已自动发起结佣：${row.autoCommissionApplyNo}`"
+              placement="top"
+            >
+              <el-tag type="success" size="small" effect="plain" style="margin-top: 2px">已自动结佣</el-tag>
+            </el-tooltip>
+            <!-- 审批中原因提示（人数不一致/实收不足）：审批人与申请人一眼知道卡点 -->
+            <el-tooltip v-if="row.manualReviewReason" :content="row.manualReviewReason" placement="top">
+              <el-tag type="warning" size="small" effect="plain" style="margin-top: 2px">需人工核对</el-tag>
+            </el-tooltip>
+          </template>
+        </el-table-column>
+        <el-table-column label="当前节点" align="center" width="100">
+          <template #default="{ row }">{{ row.currentNode ? nodeLabel(row.currentNode) : '—' }}</template>
+        </el-table-column>
+        <el-table-column label="发起人" align="center" width="100">
+          <template #default="{ row }">{{ applicantName(row.applicantName, row.applicantId) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" align="center" width="220" fixed="right">
+          <template #default="{ row }">
+            <div class="table-actions">
+              <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
+              <!-- 合并行（未选期间、跨多期）不提供单期操作：审批/调整/作废均以审批单为粒度，需先在「期间」筛选到具体月份 -->
+              <template v-if="!row.periods">
+                <el-button v-if="row.status === 'SUBMITTED' && checkPermi(['perf:received:approve'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.id)">审批</el-button>
+                <el-button v-if="!isAgent && row.status === 'APPROVED' && !isRefundRow(row as ReceivedApply)" link type="warning" @click="openReceivedAdjust(row)">调整</el-button>
+                <!-- 待匹配新签（该订单当期无新签、无审批单）：唯一操作是补录新签 -->
+                <el-button v-if="row.pendingMatch && checkPermi(['perf:fact:supplement'])" link type="success" @click="openExpectSupplement(row as ReceivedApply)">补录</el-button>
+                <el-button v-if="row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重提</el-button>
+                <el-button v-if="row.status === 'SUBMITTED' && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
+              </template>
+              <el-tooltip v-else content="同一合同跨多期合并展示，请在上方「期间」筛选到具体月份后操作" placement="top">
+                <span class="cell-sub">按期间操作</span>
+              </el-tooltip>
+            </div>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty description="该条件下暂无实收审批单" />
+        </template>
+      </el-table>
+
+      <!-- 分页 -->
+      <div class="pager-bar">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="total"
+          :page-sizes="[10, 20, 50, 100]"
+          v-model:current-page="queryParams.pageNum"
+          v-model:page-size="queryParams.pageSize"
+          @size-change="handleQuery"
+          @current-change="getList"
+        />
+      </div>
+    </el-card>
+
+    <!-- 详情弹窗 -->
+    <el-dialog v-model="showDetail" title="实收业绩审批单详情" width="960px" top="5vh">
+      <!-- 审批中原因提示：人数不一致/实收不足，让审批人一眼知道为什么需要人工核对 -->
+      <el-alert
+        v-if="detailApp && detailApp.manualReviewReason"
+        type="warning"
+        :title="detailApp.manualReviewReason"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      />
+      <el-descriptions v-if="detailApp" :column="3" border size="small" class="detail-desc">
+        <el-descriptions-item label="审批单号">{{ detailApp.applyNo || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="期间">{{ detailApp.periods || detailApp.period }}</el-descriptions-item>
+        <el-descriptions-item label="状态">
+          <el-tag :type="statusTagType(rowStatusValue(detailApp))" size="small">{{ statusLabel(rowStatusValue(detailApp)) }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="合同号">{{ detailApp.contractNo || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="订单号">{{ detailApp.orderNo || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="当前节点">{{ detailApp.currentNode ? nodeLabel(detailApp.currentNode) : '—' }}</el-descriptions-item>
+        <el-descriptions-item label="发起人">
+          {{ applicantName(detailApp.applicantName, detailApp.applicantId) }}
+        </el-descriptions-item>
+        <el-descriptions-item label="审批人">
+          {{ detailApp.approverName || '—' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="审批时间">{{ formatDateTime(detailApp.approveTime) }}</el-descriptions-item>
+        <!-- 自动发起结佣留痕：审批通过（系统自动/人工终审）且非二手买卖时由结佣域自动建单并提交 -->
+        <el-descriptions-item label="自动结佣">
+          <template v-if="detailApp.autoCommissionApplyNo">
+            已自动发起结佣（{{ detailApp.autoCommissionApplyNo }}）
+          </template>
+          <template v-else>—</template>
+        </el-descriptions-item>
+        <!-- 实收合计：实收调整生效时展示「原值 → 调整后值」（实收不做折算） -->
+        <el-descriptions-item label="实收合计">
+          <template v-if="detailReceivedAdjusted">
+            <span class="amount-strike">¥{{ formatAmount(detailApp.originalReceivedAmount) }}</span>
+            <span class="amount-arrow">→</span>
+            <span class="amount" :class="deltaClass(detailApp.receivedAmount, detailApp.originalReceivedAmount) || 'amount-red'">¥{{ formatAmount(detailApp.receivedAmount) }}</span>
+            <span v-if="deltaParen(detailApp.receivedAmount, detailApp.originalReceivedAmount)" class="amount" :class="deltaClass(detailApp.receivedAmount, detailApp.originalReceivedAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(detailApp.receivedAmount, detailApp.originalReceivedAmount) }}</span>
+          </template>
+          <span v-else class="amount amount-red">¥{{ formatAmount(detailApp.receivedAmount) }}</span>
+        </el-descriptions-item>
+        <!-- 新签业绩（应收合计）：有调整时展示「原值 → 调整后值」，折算后同形式 -->
+        <el-descriptions-item label="应收合计" :span="2">
+          <template v-if="detailAdjusted">
+            <span class="amount-strike">¥{{ formatAmount(detailApp.originalExpectedAmount) }}</span>
+            <span class="amount-arrow">→</span>
+            <span class="amount" :class="deltaClass(detailApp.expectedAmount, detailApp.originalExpectedAmount) || 'amount-red'">¥{{ formatAmount(detailApp.expectedAmount) }}</span>
+            <span v-if="deltaParen(detailApp.expectedAmount, detailApp.originalExpectedAmount)" class="amount" :class="deltaClass(detailApp.expectedAmount, detailApp.originalExpectedAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(detailApp.expectedAmount, detailApp.originalExpectedAmount) }}</span>
+          </template>
+          <template v-else>
+            <span class="amount amount-expected">¥{{ formatAmount(detailApp.expectedAmount) }}</span>
+          </template>
+          <span class="converted-inline">
+            折算后
+            <span v-if="detailAdjusted" class="amount-strike">¥{{ formatAmount(detailApp.originalExpectedConvertedAmount) }}</span>
+            <span v-if="detailAdjusted" class="amount-arrow">→</span>
+            <span class="amount" :class="deltaClass(detailApp.expectedConvertedAmount, detailApp.originalExpectedConvertedAmount) || 'amount-ink'">¥{{ formatAmount(detailApp.expectedConvertedAmount) }}</span>
+            <span v-if="deltaParen(detailApp.expectedConvertedAmount, detailApp.originalExpectedConvertedAmount)" class="amount" :class="deltaClass(detailApp.expectedConvertedAmount, detailApp.originalExpectedConvertedAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(detailApp.expectedConvertedAmount, detailApp.originalExpectedConvertedAmount) }}</span>
+          </span>
+        </el-descriptions-item>
+        <el-descriptions-item label="签约/认购时间">{{ formatDateTime(detailApp.businessDate) }}</el-descriptions-item>
+        <el-descriptions-item label="房源地址" :span="2">{{ detailApp.propertyAddress || '—' }}</el-descriptions-item>
+      </el-descriptions>
+
+      <div class="detail-table-wrap">
+        <div class="detail-table-title">每人实收明细（{{ detailFacts.length }} 条）</div>
+        <el-table :data="detailFacts" border max-height="420" class="detail-facts-table">
+
+          <el-table-column label="期间" align="center" width="90" fixed="left">
+            <template #default="scope">{{ scope.row.period || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="门店/组别" align="left" min-width="150">
+            <template #default="scope">
+              <span v-if="scope.row.deptPath" class="dept-wrap" :title="scope.row.deptPath">
+                <span class="dept-store">{{ deptStore(scope.row.deptPath) }}</span>
+                <span v-if="deptGroup(scope.row.deptPath)" class="dept-group"> · {{ deptGroup(scope.row.deptPath) }}</span>
+              </span>
+              <span v-else>—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="工号" align="center" width="120">
+            <template #default="scope">{{ scope.row.employeeCode || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="姓名" align="center" min-width="80">
+            <template #default="scope">
+              <span class="person-name">{{ scope.row.employeeName || employeeName(scope.row.employeeId) || '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="所属角色" align="center" min-width="100">
+            <template #default="scope">{{ scope.row.roleType || scope.row.roleName || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="角色占比" align="center" width="90">
+            <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
+          </el-table-column>
+          <el-table-column label="实收业绩" align="right" width="200">
+            <template #default="scope">
+              <template v-if="isFactReceivedAdjusted(scope.row)">
+                <span class="amount-strike">¥{{ formatAmount(scope.row.originalAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount" :class="deltaClass(scope.row.amount, scope.row.originalAmount) || 'amount-red'">¥{{ formatAmount(scope.row.amount) }}</span>
+                <span v-if="deltaParen(scope.row.amount, scope.row.originalAmount)" class="amount" :class="deltaClass(scope.row.amount, scope.row.originalAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(scope.row.amount, scope.row.originalAmount) }}</span>
+              </template>
+              <span v-else class="amount amount-red">¥{{ formatAmount(scope.row.amount) }}</span>
+            </template>
+          </el-table-column>
+          <!-- 新签业绩：有调整时展示「原值 → 调整后值」，未调整只展示一个值 -->
+          <el-table-column label="新签业绩" align="right" width="200">
+            <template #default="scope">
+              <template v-if="isAdjusted(scope.row)">
+                <span class="amount-strike">¥{{ formatAmount(scope.row.originalExpectedAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount" :class="deltaClass(scope.row.expectedAmount, scope.row.originalExpectedAmount) || 'amount-red'">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
+                <span v-if="deltaParen(scope.row.expectedAmount, scope.row.originalExpectedAmount)" class="amount" :class="deltaClass(scope.row.expectedAmount, scope.row.originalExpectedAmount)" style="font-size: 12px; margin-left: 2px">{{ deltaParen(scope.row.expectedAmount, scope.row.originalExpectedAmount) }}</span>
+              </template>
+              <span v-else class="amount amount-expected">¥{{ formatAmount(scope.row.expectedAmount) }}</span>
+            </template>
+          </el-table-column>
+
+          <template #empty>
+            <el-empty description="该合同暂无实收明细" />
+          </template>
+        </el-table>
+      </div>
+
+      <template #footer>
+        <!-- 审批统一由「我的待办」弹窗办理（工作流任务接口），本页只提供查看；不提供业务直批入口 -->
+        <el-button @click="showDetail = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量审批弹窗：勾选/录入合同号 → 等待处理完成 → 展示结果 -->
+    <el-dialog v-model="showBatchApprove" title="批量审批" width="600px" @close="resetBatchApprove">
+      <!-- 等待视图 -->
+      <div v-if="batchApproveLoading" class="batch-waiting">
+        <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+        <p class="waiting-text">正在批量审批，请耐心等待...</p>
+        <p class="waiting-sub">共 {{ batchWaitingCount }} 张单据，逐单处理中</p>
+      </div>
+
+      <!-- 结果视图 -->
+      <div v-else-if="batchApproveResult" class="batch-result">
+        <el-result :icon="batchApproveResult.failed > 0 ? 'warning' : 'success'" :title="batchResultSummary">
+        </el-result>
+        <div class="result-detail">
+          <div v-if="batchApproveResult.successContracts.length" class="result-section">
+            <div class="result-label success">成功（{{ batchApproveResult.success }}）</div>
+            <div class="contract-list">{{ batchApproveResult.successContracts.join('、') }}</div>
+          </div>
+          <div v-if="batchApproveResult.skippedContracts.length" class="result-section">
+            <div class="result-label skip">跳过（{{ batchApproveResult.skipped }}）</div>
+            <div class="contract-list">{{ batchApproveResult.skippedContracts.join('、') }}</div>
+          </div>
+          <div v-if="batchApproveResult.failedContracts.length" class="result-section">
+            <div class="result-label fail">失败（{{ batchApproveResult.failed }}）</div>
+            <div class="contract-list">{{ batchApproveResult.failedContracts.join('、') }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 确认视图：勾选单据 / 录入合同号 两种模式 -->
+      <template v-else>
+        <div class="batch-confirm">
+          <el-radio-group v-model="batchMode" class="batch-mode-switch">
+            <el-radio-button value="select">勾选单据{{ selectedRows.length > 0 ? `（${selectedRows.length}）` : '' }}</el-radio-button>
+            <el-radio-button value="manual">录入合同号</el-radio-button>
+          </el-radio-group>
+
+          <!-- 勾选模式 -->
+          <template v-if="batchMode === 'select'">
+            <p class="confirm-text">将批量审批以下 <b>{{ selectedRows.length }}</b> 张待审批单据：</p>
+            <el-table :data="selectedRows" border max-height="320" size="small">
+              <el-table-column label="合同号/订单号" align="center" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">{{ contractOrOrderNo(row) }}</template>
+              </el-table-column>
+              <el-table-column label="期间" align="center" width="150">
+                <template #default="{ row }">{{ row.periods || row.period }}</template>
+              </el-table-column>
+              <el-table-column label="实收业绩" align="right" width="120">
+                <template #default="{ row }">{{ formatAmount(row.receivedAmount) }}</template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-if="selectedRows.length === 0" description="请先在列表勾选待审批单据，或切换到「录入合同号」" :image-size="60" />
+          </template>
+
+          <!-- 录入模式 -->
+          <el-form v-else label-width="80px">
+            <el-form-item label="结算月">
+              <el-date-picker
+                v-model="manualForm.period"
+                type="month"
+                value-format="YYYY-MM"
+                placeholder="留空则全部期间一并审批"
+                style="width: 100%"
+              />
+            </el-form-item>
+            <el-form-item label="合同号" required>
+              <el-input
+                v-model="manualForm.contractNosText"
+                type="textarea"
+                :rows="8"
+                placeholder="每行一个合同号/订单号（以列表展示的编号为准），或用逗号/空格分隔"
+              />
+            </el-form-item>
+          </el-form>
+          <div class="batch-hint">将逐单审批当前节点，非您审批范围内的单据会跳过并提示原因。</div>
+        </div>
+      </template>
+
+      <template #footer>
+        <el-button v-if="!batchApproveResult && !batchApproveLoading" @click="showBatchApprove = false">取消</el-button>
+        <el-button v-if="!batchApproveResult && !batchApproveLoading" type="primary" @click="doBatchApprove">开始审批</el-button>
+        <el-button v-if="batchApproveResult" type="primary" @click="closeBatchResult">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 业务明细直接审批弹窗（与「我的待办」共用同一 WorkflowHandle 组件） -->
+    <WorkflowHandle ref="workflowHandleRef" @handled="getList" />
+
+    <!-- 实收调整弹窗（RECEIVED_AMOUNT，合同级）：入口在实收明细页，审批通过的单据才可调整 -->
+    <ReceivedAdjustDialog ref="receivedAdjustDialogRef" @submitted="getList" />
+    <!-- 新签补录弹窗：入口为「待匹配新签」到账行（该订单当期无新签），提交总监审批后自动补建实收单 -->
+    <ExpectSupplementDialog ref="expectSupplementDialogRef" @submitted="getList" />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { Loading } from '@element-plus/icons-vue';
+import { receivedApi, type ReceivedApply, type ReceivedFact, type BatchApproveResult } from '@/api/panjia/received';
+import { perfRefundApi } from '@/api/panjia/refund';
+import { performanceApi } from '@/api/panjia/performance';
+import { employeeApi } from '@/api/panjia/employee';
+import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
+import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
+import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
+import { useBizApproval } from '@/hooks/workflow/useBizApproval';
+import { useDeptScope } from '@/hooks/useDeptScope';
+import { checkPermi } from '@/utils/permission';
+import { resolveBizNo } from '@/utils/panjiaBiz';
+import { useUserStore } from '@/store/modules/user';
+import WorkflowHandle from '@/components/WorkflowHandle/index.vue';
+import ReceivedAdjustDialog from './components/ReceivedAdjustDialog.vue';
+import ExpectSupplementDialog from './components/ExpectSupplementDialog.vue';
+
+const route = useRoute();
+const userStore = useUserStore();
+/** 经纪人：本人口径（后端强制按本人 employeeId 过滤），不展示员工筛选 */
+const isAgent = computed(() => userStore.roles.includes('agent'));
+
+/** 是否可以作废：超管全部可操作，普通用户只能操作自己发起的单据 */
+const canCancel = (row: ReceivedApply): boolean => {
+  if (userStore.roles.includes('admin') || userStore.roles.includes('superadmin')) return true;
+  return String(row.applicantId) === String(userStore.userId);
+};
+
+// ==================== 实收调整（RECEIVED_AMOUNT，合同级） ====================
+const receivedAdjustDialogRef = ref();
+const openReceivedAdjust = (row: ReceivedApply) => {
+  receivedAdjustDialogRef.value?.open({
+    contractNo: resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '',
+    orderNo: row.orderNo,
+    bizType: row.bizType,
+    propertyAddress: row.propertyAddress,
+    period: row.period,
+  });
+};
+
+// ==================== 新签补录（待匹配新签：该订单当期无新签） ====================
+const expectSupplementDialogRef = ref();
+const openExpectSupplement = (row: ReceivedApply) => {
+  expectSupplementDialogRef.value?.open(row);
+};
+
+/** 业务明细直接审批：通过 businessId 查当前用户可办理任务，复用 WorkflowHandle 弹窗 */
+const workflowHandleRef = ref<InstanceType<typeof WorkflowHandle>>();
+const { loading: approvalLoading, handleBizApproval } = useBizApproval(
+  async (businessId) => {
+    const res: any = await receivedApi.getInstanceId(businessId);
+    return res.data?.instanceId ?? null;
+  },
+  // 在途任务认领：拥有当前节点角色但不在待办快照时（如事后补赋财务角色的总监）自动认领后再审批
+  async (businessId) => {
+    const res: any = await receivedApi.claim(businessId);
+    return res.data === true;
+  },
+);
+const onBizApprove = (businessId: string | number) =>
+  handleBizApproval(businessId, (task) => workflowHandleRef.value?.open(task));
+
+const loading = ref(false);
+const applyList = ref<ReceivedApply[]>([]);
+const total = ref(0);
+/** 合同号 → 最近一次已执行退单的落账月（「已退单」标记） */
+const refundedMap = ref<Record<string, string>>({});
+const refundedPeriod = (row: ReceivedApply): string =>
+  row.contractNo ? (refundedMap.value[row.contractNo] ?? '') : '';
+/** 退单冲减单（单号 TD 前缀，金额为负数镜像）：不可再调整/补录 */
+const isRefundRow = (row: ReceivedApply): boolean => !!row.applyNo && row.applyNo.startsWith('TD');
+// 后端全量汇总（与查询条件一致、不随分页变化）：totalReceivedAmount=实收合计
+const pageSummary = ref<Record<string, number | string> | null>(null);
+
+// ==================== 门店/组别筛选（全系统统一口径：所有用户查本部门及以下） ====================
+const { deptLocked, defaultDeptId } = useDeptScope();
+
+const queryParams = reactive({
+  pageNum: 1,
+  pageSize: 20,
+  period: '',
+  status: '',
+  keyword: '',
+  deptId: defaultDeptId(),
+  employeeId: undefined as string | undefined,
+  bizType: undefined as string | undefined,
+  refundFilter: '',
+});
+
+const num = (v: number | string | null | undefined): number => {
+  if (v === undefined || v === null || v === '') return 0;
+  const n = Number(v);
+  return Number.isNaN(n) ? 0 : n;
+};
+const formatAmount = (n: number | string | null | undefined) =>
+  n == null ? '0.00' : num(n).toFixed(2);
+
+/**
+ * 调整增减方向着色：调整后 > 原值 = 增加（绿），调整后 < 原值 = 扣减（红）；
+ * 无原值或无变化时返回空串（沿用调用处的默认色）。
+ */
+const deltaClass = (after?: number | string | null, before?: number | string | null): string => {
+  if (after === undefined || after === null || before === undefined || before === null) return '';
+  const diff = num(after) - num(before);
+  if (diff > 0) return 'amount-positive';
+  if (diff < 0) return 'amount-negative';
+  return '';
+};
+
+/**
+ * 调整差额（括号展示，形如 (+100.00) / (-100.00)），与「新签详情」同款；
+ * 无原值或无变化时返回空串（模板可直接用作 v-if 条件）。
+ */
+const deltaParen = (after?: number | string | null, before?: number | string | null): string => {
+  if (after === undefined || after === null || before === undefined || before === null) return '';
+  const diff = num(after) - num(before);
+  if (diff === 0) return '';
+  return `(${diff > 0 ? '+' : ''}${diff.toFixed(2)})`;
+};
+
+/**
+ * 是否按「原值 → 调整后值」展示：需后端 expectedAdjusted 标记与原值同时成立。
+ * 两者缺一（如老数据无提交快照）就退回单值展示，避免出现「0.00 → 12000.00」这类误导。
+ * 列表行（ReceivedApply）与每人明细行（ReceivedFact）共用同一判定。
+ */
+const isAdjusted = (
+  row: { expectedAdjusted?: boolean | null; originalExpectedAmount?: number | string | null } | null | undefined,
+): boolean => !!row?.expectedAdjusted && row.originalExpectedAmount != null;
+
+/**
+ * 实收业绩（PERF_REAL）是否按「原值 → 调整后值」展示：需后端 receivedAdjusted 标记与
+ * 调整前合计同时成立（实收调整生效）。
+ */
+const isReceivedAdjusted = (
+  row: { receivedAdjusted?: boolean | null; originalReceivedAmount?: number | string | null } | null | undefined,
+): boolean => !!row?.receivedAdjusted && row.originalReceivedAmount != null;
+
+/**
+ * 实收金额是否发生变动：原值与现值不等才展示「原值 → 现值」；
+ * 相等（AMOUNT 类业绩调整合同总额不变的重分配）仍有调整发生，仅加「已调整」标签标识。
+ */
+const receivedAmountChanged = (
+  row: { originalReceivedAmount?: number | string | null; receivedAmount?: number | string | null } | null | undefined,
+): boolean => num(row?.originalReceivedAmount) !== num(row?.receivedAmount);
+
+/**
+ * 新签金额是否发生变动（口径同 receivedAmountChanged）：
+ * 相等（AMOUNT 类业绩调整合同总额不变的重分配）仍有调整发生，仅加「已调整」标签标识。
+ */
+const expectedAmountChanged = (
+  row: { originalExpectedAmount?: number | string | null; expectedAmount?: number | string | null } | null | undefined,
+): boolean => num(row?.originalExpectedAmount) !== num(row?.expectedAmount);
+
+/** 每人实收明细行：调整前字段名为 originalAmount，判定口径与列表行一致 */
+const isFactReceivedAdjusted = (
+  row: { receivedAdjusted?: boolean | null; originalAmount?: number | string | null } | null | undefined,
+): boolean => !!row?.receivedAdjusted && row.originalAmount != null;
+
+const formatDateTime = (val?: string | null): string => {
+  if (!val) return '—';
+  return val.replace('T', ' ').substring(0, 19);
+};
+
+// ==================== 门店/组别 拆分展示（与合同业绩明细同口径） ====================
+// deptPath 形如「集团-门店-组别」（2~3 段）：门店取倒数第二段（无上级时取首段），组别取最后一段
+const deptParts = (path: string): string[] => path.split('-').map((s) => s.trim()).filter(Boolean);
+const deptStore = (path: string): string => {
+  const parts = deptParts(path);
+  return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] ?? '—');
+};
+const deptGroup = (path: string): string => {
+  const parts = deptParts(path);
+  return parts.length >= 2 ? parts[parts.length - 1] : '';
+};
+
+const formatRatio = (val: number | string | undefined | null): string => {
+  if (val === undefined || val === null || val === '') return '—';
+  const n = Number(val);
+  if (Number.isNaN(n)) return String(val);
+  const pct = n * 100;
+  return `${Number.isInteger(pct) ? pct : pct.toFixed(2)}%`;
+};
+
+// 汇总条「实收合计」：优先用后端全量汇总（同查询条件全量 SUM），接口未返回时退回当前页求和
+const summaryAmount = computed(() => {
+  const s = pageSummary.value?.totalReceivedAmount;
+  return s != null && s !== '' ? Number(s) : applyList.value.reduce((s, r) => s + num(r.receivedAmount), 0);
+});
+
+// 汇总条「新签合计」及折算后合计：后端全量汇总（同查询条件、跨页）；实收不做折算
+const summaryExpectedAmount = computed(() => num(pageSummary.value?.totalExpectedAmount));
+const summaryExpectedConvertedAmount = computed(() => num(pageSummary.value?.totalExpectedConvertedAmount));
+/** 汇总条月份标注：实收合计＝所选期间（实收月）单据合计；新签合计＝同条件下的应收合计；未选期间标注「全期间」 */
+const summaryPeriodLabel = computed(() => queryParams.period || '全期间');
+
+const STATUS_MAP: Record<string, string> = {
+  PENDING: '待匹配新签', SUBMITTED: '审批中', APPROVED: '已通过', REJECTED: '已驳回', CANCELLED: '已作废',
+};
+// PENDING（待匹配新签）：去草稿后无新签的到账只落库不建单，显示为无需审批的展示行，
+// 待补录新签并审批通过后由后端自动补建实收单
+const statusOptions = Object.entries(STATUS_MAP)
+  .map(([value, label]) => ({ value, label }));
+/** 行状态：待匹配展示行无单据状态，映射为 PENDING（唯一显示条件 = pendingMatch） */
+const rowStatusValue = (row?: ReceivedApply | null) =>
+  row?.pendingMatch ? 'PENDING' : (row?.status || '');
+const statusLabel = (s: string) => STATUS_MAP[s] || s || '—';
+const statusTagType = (s: string) => {
+  const map: Record<string, string> = {
+    PENDING: 'info', SUBMITTED: 'warning', APPROVED: 'success', REJECTED: 'danger', CANCELLED: 'info',
+  };
+  return (map as any)[s] || 'info';
+};
+const nodeLabel = (node?: string) => node === 'FINANCE' ? '财务审批' : node === 'DIRECTOR' ? '总监审批' : (node || '—');
+
+// 员工姓名（明细表里给的是员工 ID，走员工档案表）
+const employeeMap = new Map<number, string>();
+const employeeName = (empId: number | string | undefined) => {
+  if (empId == null) return '';
+  return employeeMap.get(Number(empId)) ?? '';
+};
+
+const loadEmployeeMap = async () => {
+  try {
+    const res: any = await employeeApi.list({ pageNum: 1, pageSize: 9999 });
+    for (const e of res.data?.rows ?? []) {
+      if (e.employeeId != null) employeeMap.set(Number(e.employeeId), e.employeeName || `员工#${e.employeeId}`);
+    }
+  } catch { /* ignore */ }
+};
+
+/**
+ * 发起人/审批人姓名由后端统一翻译（ReceivedApply.applicantName / approverName，
+ * 基于 @Translation 按 userId 取昵称），列表与详情一律直接展示姓名。
+ * 不在前端查用户表：业务角色（店长/财务/人事/经纪人）没有 system:user:query 权限，直查会 403。
+ * 空值即「系统自动」——导入归档等无人值守发起，不留空白。
+ */
+const applicantName = (name?: string | null, userId?: number | string | null) => {
+  if (name) return name;
+  if (userId === null || userId === undefined || String(userId).trim() === '') return '系统自动';
+  return '—';
+};
+
+const getList = async () => {
+  loading.value = true;
+  try {
+    const res: any = await receivedApi.list({
+      period: queryParams.period || undefined,
+      status: queryParams.status || undefined,
+      keyword: queryParams.keyword || undefined,
+      deptId: queryParams.deptId || undefined,
+      employeeId: queryParams.employeeId || undefined,
+      bizType: queryParams.bizType || undefined,
+      refundFilter: queryParams.refundFilter || undefined,
+      pageNum: queryParams.pageNum,
+      pageSize: queryParams.pageSize,
+    });
+    applyList.value = res.data?.rows ?? [];
+    total.value = res.data?.total ?? 0;
+    pageSummary.value = res.data?.summary ?? null;
+    // 「已退单」标记：批量查这些合同最近一次已执行退单的落账月（无权限时静默忽略，不影响列表）
+    const contractNos = Array.from(new Set(applyList.value
+      .map((row) => row.contractNo)
+      .filter((no): no is string => !!no)));
+    refundedMap.value = {};
+    if (contractNos.length) {
+      try {
+        refundedMap.value = (await perfRefundApi.refundedPeriods(contractNos)).data ?? {};
+      } catch { /* 无 perf:refund:list 权限时不展示标记 */ }
+    }
+  } catch {
+    applyList.value = [];
+    total.value = 0;
+    pageSummary.value = null;
+    refundedMap.value = {};
+  } finally {
+    loading.value = false;
+  }
+};
+
+const handleQuery = () => {
+  queryParams.pageNum = 1;
+  getList();
+};
+
+// ==================== 类型筛选（选项随期间/部门/员工范围变化） ====================
+const bizTypeOptions = ref<string[]>([]);
+const loadBizTypes = async () => {
+  try {
+    const res = await performanceApi.listSearchBizTypes({
+      period: queryParams.period,
+      deptId: isAgent.value ? undefined : queryParams.deptId,
+      employeeId: isAgent.value ? undefined : queryParams.employeeId,
+    });
+    bizTypeOptions.value = res.data ?? [];
+    // 当前选中类型已不在可见范围内时清空，避免带着失效条件查询
+    if (queryParams.bizType && !bizTypeOptions.value.includes(queryParams.bizType)) {
+      queryParams.bizType = undefined;
+    }
+  } catch { bizTypeOptions.value = []; }
+};
+
+/** 期间/门店/员工范围变化：先按新范围刷新类型选项（顺带剔除失效选中），再查询 */
+const handleScopeChange = () => loadBizTypes().then(handleQuery);
+
+// 合同号/订单号合并展示：一手房、房产金融、家装荐客以订单号为准，其它以合同号为准（空则回退）
+const contractOrOrderNo = (row: ReceivedApply): string =>
+  resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—';
+const resetQuery = () => {
+  Object.assign(queryParams, {
+    status: '', keyword: '', refundFilter: '',
+    deptId: defaultDeptId(), pageNum: 1,
+    employeeId: undefined, bizType: undefined,
+  });
+  loadBizTypes().then(handleQuery);
+};
+
+// 详情
+const showDetail = ref(false);
+const detailApp = ref<ReceivedApply | null>(null);
+const detailFacts = ref<ReceivedFact[]>([]);
+/** 详情弹窗的「应收合计」是否按「原值 → 调整后值」展示（同一处判定复用三遍，提为 computed） */
+const detailAdjusted = computed(() => isAdjusted(detailApp.value));
+/** 详情弹窗的「实收合计」是否按「原值 → 调整后值」展示 */
+const detailReceivedAdjusted = computed(() => isReceivedAdjusted(detailApp.value));
+
+const viewDetail = async (row: ReceivedApply) => {
+  showDetail.value = true;
+  detailApp.value = row;
+  detailFacts.value = [];
+  await loadEmployeeMap();
+  try {
+    // 待匹配新签（无审批单）：直接取该组未绑定明细
+    if (row.pendingMatch) {
+      const res: any = await receivedApi.pendingDetail(row.orderNo || row.contractNo, row.period);
+      detailApp.value = row;
+      detailFacts.value = res.data ?? [];
+      return;
+    }
+    // 未选期间：合同维度跨期详情（8、9、10 月逐笔展开，退单月为负数）；
+    // 选定期：该期单据详情（退单月展示冲减单）
+    const crossPeriod = !queryParams.period && !!(row.contractNo || row.orderNo);
+    const res: any = crossPeriod
+      ? await receivedApi.getContractDetail(row.contractNo || undefined, row.orderNo || undefined)
+      : await receivedApi.getDetail(row.id);
+    detailApp.value = res.data?.apply ?? row;
+    detailFacts.value = res.data?.facts ?? [];
+  } catch { /* 拦截器处理 */ }
+};
+
+const cancel = async (row: ReceivedApply) => {
+  try {
+    await ElMessageBox.confirm(`确认作废实收审批单「${row.applyNo}」？作废后不可恢复。`, '提示', { type: 'warning' });
+  } catch {
+    return;
+  }
+  try {
+    await receivedApi.cancel(row.id);
+    ElMessage.success('已作废');
+    getList();
+  } catch { /* 拦截器处理 */ }
+};
+
+const resubmit = async (row: ReceivedApply) => {
+  try {
+    await receivedApi.resubmit(row.id);
+    ElMessage.success('已重提');
+    getList();
+  } catch { /* 拦截器处理 */ }
+};
+
+// 批量审批：勾选/录入合同号 → 确认 → 等待 → 展示结果
+const showBatchApprove = ref(false);
+const batchApproveLoading = ref(false);
+const batchApproveResult = ref<BatchApproveResult | null>(null);
+const selectedRows = ref<ReceivedApply[]>([]);
+
+const onSelectionChange = (rows: ReceivedApply[]) => {
+  selectedRows.value = rows;
+};
+
+/** 批量方式：select=勾选列表单据；manual=手工录入合同号/订单号 */
+const batchMode = ref<'select' | 'manual'>('select');
+/** 录入模式表单 */
+const manualForm = reactive({
+  period: '' as string,
+  contractNosText: '',
+});
+/** 等待视图展示的单据数（勾选=勾选数，录入=解析后的号码数） */
+const batchWaitingCount = ref(0);
+
+const openBatchApprove = () => {
+  batchMode.value = selectedRows.value.length > 0 ? 'select' : 'manual';
+  if (!manualForm.period) manualForm.period = queryParams.period || '';
+  showBatchApprove.value = true;
+};
+
+const batchResultSummary = computed(() => {
+  const r = batchApproveResult.value;
+  if (!r) return '';
+  return `成功 ${r.success} 个，跳过 ${r.skipped} 个，失败 ${r.failed} 个`;
+});
+
+const resetBatchApprove = () => {
+  batchApproveLoading.value = false;
+  batchApproveResult.value = null;
+  batchWaitingCount.value = 0;
+};
+
+const closeBatchResult = () => {
+  showBatchApprove.value = false;
+  resetBatchApprove();
+  getList();
+};
+
+const doBatchApprove = async () => {
+  let period = '';
+  let contractNos: string[] = [];
+  if (batchMode.value === 'select') {
+    if (selectedRows.value.length === 0) {
+      ElMessage.warning('请至少勾选一张待审批单据');
+      return;
+    }
+    // 期间推导：所选单据同期间且非合并行时按该期间审批；含跨期合并行/多期间混选时
+    // 传空期间，由后端把合同下所有期间的 SUBMITTED 单一并审批（多期实收一次审完）
+    const hasMergedRow = selectedRows.value.some((r) => !!r.periods);
+    const periods = [...new Set(selectedRows.value.map((r) => r.period).filter(Boolean))];
+    period = !hasMergedRow && periods.length === 1 ? periods[0] : '';
+    // 提取合同号/订单号：优先订单号（精确），无订单号用合同号（展开全部订单）
+    contractNos = selectedRows.value
+      .map((row) => row.orderNo || row.contractNo)
+      .filter(Boolean);
+    if (contractNos.length === 0) {
+      ElMessage.warning('所选单据无有效合同号/订单号');
+      return;
+    }
+  } else {
+    contractNos = manualForm.contractNosText
+      .split(/[\n,，\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (contractNos.length === 0) {
+      ElMessage.warning('请输入至少一个合同号');
+      return;
+    }
+    // 结算月留空 = 全部期间一并审批
+    period = manualForm.period || '';
+  }
+  batchWaitingCount.value = contractNos.length;
+  batchApproveLoading.value = true;
+  try {
+    const res: any = await receivedApi.batchApproveByContractAsync(period, contractNos);
+    batchApproveResult.value = res.data;
+  } catch { /* 拦截器处理 */ } finally {
+    batchApproveLoading.value = false;
+  }
+};
+
+// 工作流跳转：从「我的已办/我的单据」等查看态进入本页时，按 query 参数直接打开单据详情
+// （审批办理已改为「我的待办」原地弹窗，本页不再承担审批态入口）
+const openFromWorkflow = async () => {
+  const id = route.query.id as string;
+  const type = route.query.type as string;
+  if (!id || !type) return;
+  await loadEmployeeMap();
+  try {
+    const res: any = await receivedApi.getDetail(id);
+    const apply: ReceivedApply | null = res.data?.apply ?? null;
+    if (!apply) {
+      ElMessage.error('加载单据失败');
+      return;
+    }
+    detailApp.value = apply;
+    detailFacts.value = res.data?.facts ?? [];
+    // 背景列表对齐到该单据期间，便于查看人顺带看到同期间其他单据
+    if (apply.period) {
+      queryParams.period = apply.period;
+      queryParams.pageNum = 1;
+      getList();
+    }
+    showDetail.value = true;
+  } catch {
+    ElMessage.error('加载单据失败');
+  }
+};
+
+// 本页会被 keep-alive 缓存复用，跳转进来时 onMounted 不一定触发 → 由该 Hook 兜住（含原因说明）
+useWorkflowRouteOpen('/performance/received', openFromWorkflow);
+
+onMounted(async () => {
+  loadEmployeeMap();
+  loadBizTypes();
+  // 默认选中最新有数据期间（当月有单据优先当月），与新签合同页口径一致
+  try {
+    const res = await receivedApi.listPeriods();
+    const periods = res.data ?? [];
+    const now = new Date();
+    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    queryParams.period = periods.includes(current) ? current : (periods[0] ?? '');
+  } catch { /* 期间加载失败保持不选，按全部期间查询 */ }
+  getList();
+});
+</script>
+
+<style lang="scss" scoped>
+.received-apply-page {
+  padding: 16px;
+}
+
+.page-card {
+  border-radius: 12px;
+}
+
+.filter-form {
+  margin-bottom: 4px;
+}
+
+.summary-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 4px 12px;
+  flex-wrap: wrap;
+}
+
+.summary-text {
+  font-size: 13px;
+  color: #606266;
+
+  b {
+    color: #303133;
+    margin: 0 2px;
+  }
+
+  .amount-red {
+    color: #f56c6c;
+  }
+  .amount-expected {
+    color: #909399;
+  }
+  .summary-sep {
+    color: #dcdfe6;
+    margin: 0 6px;
+  }
+  .summary-sub {
+    color: #909399;
+    font-size: 12px;
+  }
+  .summary-month {
+    color: #409eff;
+    font-size: 12px;
+  }
+}
+
+.data-table {
+  width: 100%;
+
+  .contract-link {
+    font-weight: 600;
+    padding: 0;
+  }
+
+  .table-actions {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+  }
+
+  .amount {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .amount-red {
+    color: #f56c6c;
+  }
+  .amount-expected {
+    color: #909399;
+  }
+}
+
+.pager-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.detail-table-wrap {
+  margin-top: 16px;
+}
+
+.detail-table-title {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.detail-table {
+  .amount {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .amount-red {
+    color: #f56c6c;
+  }
+}
+
+.detail-facts-table {
+  .person-name {
+    font-weight: 600;
+    color: #303133;
+  }
+
+  .dept-wrap {
+    line-height: 1.5;
+    word-break: break-word;
+  }
+
+  .dept-store {
+    font-weight: 600;
+    color: #303133;
+  }
+
+  .dept-group {
+    color: #909399;
+  }
+
+  /* 仅统一数字字体与字重；颜色交由 amount-expected / amount-red / amount-ink 语义类决定 */
+  .amount {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+}
+
+.batch-hint {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
+  margin-top: 8px;
+}
+
+.batch-mode-switch {
+  margin-bottom: 12px;
+}
+
+.confirm-text {
+  font-size: 13px;
+  color: #606266;
+  margin: 0 0 8px;
+
+  b {
+    color: #303133;
+  }
+}
+
+.batch-waiting {
+  text-align: center;
+  padding: 40px 0;
+
+  .waiting-text {
+    font-size: 15px;
+    font-weight: 500;
+    margin-top: 16px;
+  }
+  .waiting-sub {
+    font-size: 13px;
+    color: #909399;
+    margin-top: 8px;
+  }
+}
+
+.batch-result {
+  .result-detail {
+    margin-top: 8px;
+  }
+
+  .result-section {
+    margin-bottom: 12px;
+  }
+
+  .result-label {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+
+    &.success { color: #67c23a; }
+    &.skip { color: #909399; }
+    &.fail { color: #f56c6c; }
+  }
+
+  .contract-list {
+    font-size: 12px;
+    color: #606266;
+    line-height: 1.6;
+    word-break: break-all;
+    background: var(--el-fill-color-light);
+    border-radius: 4px;
+    padding: 8px 10px;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+}
+
+/* 折算后金额列：中性色（不加红绿涨跌语义），与各业绩页口径一致 */
+.amount-ink {
+  color: #303133;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.amount-gray {
+  color: #909399;
+  font-weight: 400;
+}
+
+/* ============ 「原值 → 调整后值」展示（列表两列 / 详情应收合计 / 每人明细 共用） ============
+   有调整时：被调整掉的原值置灰加删除线，箭头连接调整后值；
+   未调整时：只渲染一个值。
+   样式口径与「合同业绩明细」页 .amount-strike / .amount-arrow 保持一致。 */
+.amount-expected {
+  color: #909399;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.amount-red {
+  color: #f56c6c;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* 调整增减方向着色：增加=绿、扣减=红，便于一眼区分增减 */
+.amount-positive {
+  color: #67c23a;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.amount-negative {
+  color: #f56c6c;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.amount-strike {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #c0c4cc;
+  text-decoration: line-through;
+}
+.amount-arrow {
+  margin: 0 4px;
+  color: #c0c4cc;
+}
+/* 详情「应收合计」右侧的折算后内联段：灰字标签 + 值，与左侧应收合计同一格并排 */
+.converted-inline {
+  margin-left: 10px;
+  font-size: 13px;
+  color: #909399;
+}
+
+/* 金额下方的次级说明行（调整审批中标记等） */
+.cell-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.cell-sub .adjust-tag {
+  margin-left: 0;
+}
+</style>

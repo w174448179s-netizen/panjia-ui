@@ -1,0 +1,113 @@
+import { ref } from 'vue';
+import { ElMessage } from 'element-plus';
+import { getInfo } from '@/api/workflow/instance';
+import { pageByTaskWait } from '@/api/workflow/task';
+import type { FlowTaskVO } from '@/api/workflow/task/types';
+
+/**
+ * 业务明细直接审批 composable（双入口之「推」模式）。
+ *
+ * 设计依据：审批集成设计说明 §3.2
+ *   businessId → getInstanceId → pageByTaskWait(instanceId) → 当前用户可办理任务
+ *
+ * 与「我的待办」共用同一 completeTask/backProcess API，结果与留痕完全一致。
+ * 服务端鉴权：pageByTaskWait 按 flow_user.processedBy 过滤当前登录用户，
+ * 非审批人查不到任务 → 前端不弹窗 → 不存在越权入口。
+ *
+ * 默认通过 getInfo（workflow:instance:query 权限）获取实例 ID；
+ * 业务域可传 fetchInstanceId 回调，用业务自身权限的轻量端点获取实例 ID，绕过 workflow:instance:query。
+ *
+ * 可选 claimTask 回调（在途任务认领）：待办快照中查不到本人任务时调用，
+ * 后端校验当前用户拥有节点所需角色后把自己追加为办理人（如事后补赋财务角色的总监），
+ * 认领成功后重新拉取待办并正常打开审批弹窗；认领失败的后端提示由请求拦截器统一弹出。
+ */
+export function useBizApproval(
+  fetchInstanceId?: (businessId: string | number) => Promise<string | number | null>,
+  claimTask?: (businessId: string | number) => Promise<boolean>,
+) {
+  const loading = ref(false);
+
+  /**
+   * 通过业务单据 ID 查询当前用户可办理的审批任务。
+   * @param businessId 业务单据 ID（实收审批单 ID / 结佣申请单 ID / 业绩调整单 ID）
+   * @returns 当前用户可办理的任务，无权或无任务时返回 null
+   */
+  const getMyTaskByBusinessId = async (businessId: string | number): Promise<FlowTaskVO | null> => {
+    loading.value = true;
+    try {
+      let instanceId: string | number | null = null;
+      if (fetchInstanceId) {
+        instanceId = await fetchInstanceId(businessId);
+      } else {
+        const instanceRes: any = await getInfo(businessId);
+        instanceId = instanceRes.data?.id ?? null;
+      }
+      if (!instanceId) return null;
+
+      // 注意：工作流系统级 pageByTaskWait 当前并未按 instanceId 过滤，
+      // 返回的是本人全部待办（按创建时间倒序）。直接取首页第一条会导致
+      // 「点任意行审批都打开同一条任务」，因此这里分页拉取后在客户端按实例精确匹配。
+      const pageSize = 100;
+      let pageNum = 1;
+      let matched: FlowTaskVO | null = null;
+      while (true) {
+        const taskRes: any = await pageByTaskWait({
+          instanceId,
+          pageNum,
+          pageSize,
+        });
+        const tasks: FlowTaskVO[] = taskRes.data?.rows ?? [];
+        const hit = tasks.find((t) => String(t.instanceId) === String(instanceId));
+        if (hit) {
+          matched = hit;
+          break;
+        }
+        const total: number = taskRes.data?.total ?? 0;
+        if (tasks.length === 0 || pageNum * pageSize >= total) {
+          break;
+        }
+        pageNum += 1;
+      }
+      return matched;
+    } catch {
+      return null;
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  /**
+   * 业务明细入口审批：查任务 → 打开 WorkflowHandle 弹窗。
+   * @param businessId 业务单据 ID
+   * @param open WorkflowHandle 组件暴露的 open 方法
+   * @param onHandled 任务办理完成后的回调（通常是刷新列表）
+   */
+  const handleBizApproval = async (
+    businessId: string | number,
+    open: (task: FlowTaskVO) => void,
+    onHandled?: () => void,
+  ) => {
+    let task = await getMyTaskByBusinessId(businessId);
+    // 待办快照中查不到：尝试按节点角色认领（事后补赋角色的场景），认领成功则重查待办
+    if (!task && claimTask) {
+      let claimed = false;
+      try {
+        claimed = await claimTask(businessId);
+      } catch {
+        // 认领失败原因（角色不匹配/无待办）已由请求拦截器弹出，这里不再重复提示
+        return;
+      }
+      if (claimed) {
+        task = await getMyTaskByBusinessId(businessId);
+      }
+    }
+    if (!task) {
+      ElMessage.info('该单据当前不在您的审批范围内');
+      return;
+    }
+    open(task);
+    onHandled?.();
+  };
+
+  return { loading, getMyTaskByBusinessId, handleBizApproval };
+}

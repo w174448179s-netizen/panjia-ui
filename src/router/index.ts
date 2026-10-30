@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 /* Layout */
 import Layout from '@/layout/index.vue';
-import panjiaRoutes from './panjia';
 
 /**
  * Note: 路由配置项
@@ -27,7 +26,6 @@ import panjiaRoutes from './panjia';
 
 // 公共路由
 export const constantRoutes: RouteRecordRaw[] = [
-  ...panjiaRoutes,
   {
     path: '/redirect',
     component: Layout,
@@ -67,7 +65,7 @@ export const constantRoutes: RouteRecordRaw[] = [
   {
     path: '',
     component: Layout,
-    redirect: '/panjia/employee',
+    redirect: '/index',
     children: [
       {
         path: '/index',
@@ -88,6 +86,20 @@ export const constantRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/system/user/profile/index.vue'),
         name: 'Profile',
         meta: { title: '个人中心', icon: 'user' }
+      }
+    ]
+  },
+  {
+    path: '/performance/contract',
+    component: Layout,
+    hidden: true,
+    redirect: 'noredirect',
+    children: [
+      {
+        path: 'detail',
+        component: () => import('@/views/performance/contract/detail.vue'),
+        name: 'PerformanceContractDetail',
+        meta: { title: '合同业绩明细', activeMenu: '/performance/manage', noCache: true }
       }
     ]
   }

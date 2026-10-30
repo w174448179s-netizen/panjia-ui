@@ -1,17 +1,88 @@
 import panjiaRequest from './index';
-import type { AttendanceImport, AttendanceRecord, AttendanceQuery, PageResult } from './types';
+import type {
+  AttendanceApproval,
+  AttendanceDetail,
+  AttendanceQuery,
+  AttendanceRecord,
+  AttendanceRectify,
+  AttendanceRectifyQuery,
+  AttendanceRectifySubmitForm,
+  AttendanceSaveForm,
+  PageResult
+} from './types';
 
+/**
+ * 考勤汇总接口（员工域，实际前缀 /api/panjia）。
+ * 人月维度：一员工一月一行，服务薪酬扣款。
+ * 管理端方法需 people:attendance:* 权限（人事/总监）；
+ * my 系列全员可访问，服务端强制只返回本人数据。
+ */
 export const attendanceApi = {
-  batchList(params: AttendanceQuery) {
-    return panjiaRequest.get<PageResult<AttendanceImport>>('/attendance/batch/page', params);
+  /** 管理端分页查询 */
+  list(params: AttendanceQuery) {
+    return panjiaRequest.get<PageResult<AttendanceRecord>>('/people/attendance/list', params);
   },
-  importFile(file: File, month: string) {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('month', month);
-    return panjiaRequest.post('/attendance/import', formData);
+  /** 管理端详情 */
+  getById(id: string | number) {
+    return panjiaRequest.get<AttendanceRecord>(`/people/attendance/${id}`);
   },
-  recordList(params: AttendanceQuery) {
-    return panjiaRequest.get<PageResult<AttendanceRecord>>('/attendance/record/page', params);
+  /** 新增（人工登记） */
+  create(data: AttendanceSaveForm) {
+    return panjiaRequest.post<string>('/people/attendance', data);
+  },
+  /** 修改 */
+  update(id: string | number, data: AttendanceSaveForm) {
+    return panjiaRequest.put<void>(`/people/attendance/${id}`, data);
+  },
+  /** 删除（单个或批量） */
+  remove(ids: string | number | Array<string | number>) {
+    const idPath = Array.isArray(ids) ? ids.join(',') : ids;
+    return panjiaRequest.delete<void>(`/people/attendance/${idPath}`);
+  },
+  /** 本人考勤分页查询（仅月份条件生效） */
+  myList(params: AttendanceQuery) {
+    return panjiaRequest.get<PageResult<AttendanceRecord>>('/people/attendance/my/list', params);
+  },
+  /** 本人考勤详情 */
+  myGetById(id: string | number) {
+    return panjiaRequest.get<AttendanceRecord>(`/people/attendance/my/${id}`);
+  },
+  /** 本人考勤每日明细（展开行加载） */
+  myDetails(attendMonth: string) {
+    return panjiaRequest.get<AttendanceDetail[]>('/people/attendance/my/details', { attendMonth });
+  },
+  /** 管理端考勤每日明细（考勤管理「考勤汇总→详情」，按员工查询；人事/总监） */
+  detailsByEmployee(employeeId: string | number, attendMonth: string) {
+    return panjiaRequest.get<AttendanceDetail[]>('/people/attendance/details', { employeeId, attendMonth });
+  },
+  // ==================== 考勤审批 ====================
+  /** 查询期间审批状态 */
+  getApproval(period: string) {
+    return panjiaRequest.get<AttendanceApproval>(`/people/attendance/approval/${period}`);
+  },
+  /** 按审批单 ID 查询（工作流办理弹窗详情用，含异常考勤快照） */
+  getApprovalDetail(id: string | number) {
+    return panjiaRequest.get<AttendanceApproval>(`/people/attendance/approval/detail/${id}`);
+  },
+  /** 提交当月考勤审批（人事，发起 warm-flow 考勤月度审批流程） */
+  submitApproval(period: string) {
+    return panjiaRequest.post<string>('/people/attendance/approval/submit', { period });
+  },
+  // ==================== 考勤修改申请 ====================
+  /** 本人修改申请分页（仅月份/状态条件生效，服务端强制本人数据） */
+  rectifyMyPage(params: AttendanceRectifyQuery) {
+    return panjiaRequest.get<PageResult<AttendanceRectify>>('/people/attendance/rectify/my/page', params);
+  },
+  /** 提交考勤修改申请（发起人事审批流程） */
+  rectifySubmit(data: AttendanceRectifySubmitForm) {
+    return panjiaRequest.post<string>('/people/attendance/rectify/my/submit', data);
+  },
+  /** 申请单详情（人事/总监，工作流审批弹窗用） */
+  rectifyGetById(id: string | number) {
+    return panjiaRequest.get<AttendanceRectify>(`/people/attendance/rectify/${id}`);
+  },
+  /** 管理端申请分页（人事/总监，考勤管理「修改记录」Tab 用） */
+  rectifyPage(params: AttendanceRectifyQuery) {
+    return panjiaRequest.get<PageResult<AttendanceRectify>>('/people/attendance/rectify/page', params);
   }
 };

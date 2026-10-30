@@ -31,6 +31,7 @@ export interface LoginData {
  */
 export interface LoginResult {
   access_token: string;
+  need_change_password?: boolean;
 }
 
 /**

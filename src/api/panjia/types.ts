@@ -12,53 +12,431 @@ export interface PageQuery {
 export interface PageResult<T = any> {
   total: number;
   rows: T[];
+  /** 跨页全局汇总（与过滤条件一致，不随分页变化），后端按需返回 */
+  summary?: Record<string, number | string>;
 }
 
-// 员工档案
-export interface Employee {
+/**
+ * 导入批次原始行（V2.0 §3.2 RawData）。
+ *
+ * 后端在 {@code RawData} 接口上反序列化具体分表实体
+ * （RawSigned/RawNewSign/RawAttendance/RawPoints/RawManual），
+ * 前端只关心通用字段：id / batchId / rowNo / rawJson + createTime。
+ * 其它类型字段（如 orderNo / roleSysNo 等）通过展开 rawJson 查看。
+ */
+export interface ImportRawRow {
   id: string;
-  employeeNo: string;
-  name: string;
-  phone: string;
-  idCard: string;
-  deptId: string;
-  deptName: string;
-  storeId: string;
-  storeName: string;
-  rankId: string;
-  rankName: string;
-  position: string;
-  entryDate: string;
-  status: string;
-  remark: string;
+  batchId: string;
+  rowNo: number;
+  rawJson: string;
   createTime: string;
 }
 
-// 员工查询参数
-export interface EmployeeQuery extends PageQuery {
-  name?: string;
-  phone?: string;
-  deptId?: string;
-  storeId?: string;
-  rankId?: string;
-  status?: string;
-}
+// ==================== 员工域 V5.2 ====================
 
-// 员工表单
-export interface EmployeeForm {
-  id?: string;
-  employeeNo: string;
-  name: string;
+/** 员工档案（含当前态算薪事实，后端 enrich 后返回） */
+export interface Employee {
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  deptId: string;
+  deptName: string;
+  postNames: string[];
+  levelCode: string;
   phone: string;
   idCard: string;
-  deptId: string;
-  storeId: string;
-  rankId: string;
-  position: string;
-  entryDate: string;
+  /** 户口所在地 */
+  residence?: string;
+  /** 现住地址 */
+  currentAddress?: string;
+  /** 性别（字典 panjia_employee_gender：MALE/FEMALE） */
+  gender?: string;
+  /** 工资卡开户银行 */
+  bankName?: string;
+  /** 工资卡开户支行 */
+  bankBranch?: string;
+  /** 工资卡卡号（本人） */
+  bankCardNo?: string;
+  reportDate: string;
+  hireDate: string;
+  leaveDate?: string;
   status: string;
+  socialInsured: boolean;
+  /** 社保金额（自定义；null=用全局默认算法） */
+  socialFee?: number;
+  housingInsured: boolean;
+  commercialInsured: boolean;
+  /** 商业保险金额（自定义；null=用全局默认 21 元） */
+  commercialFee?: number;
+  dormitory: boolean;
+  /** 公积金金额（自定义；null=用全局默认算法） */
+  housingFund?: number;
+  /** 宿舍费金额（自定义；null=用全局默认算法） */
+  dormitoryFee?: number;
+  isPartTime: boolean;
+  /** 新签业绩不计入所属组别店长的团队业绩（只影响店长团队提成与其社保人数，总监不受影响） */
+  excludeTeam: boolean;
+  /** 绩效方案编码（空/null=未指派，算薪按默认方案积分绩效） */
+  perfSchemeCode?: string | null;
+  mentorCode?: string;
+  mentorName?: string;
   remark?: string;
 }
+
+/** 员工分页查询参数 */
+export interface EmployeeQuery extends PageQuery {
+  employeeCode?: string;
+  employeeName?: string;
+  deptId?: string;
+  postName?: string;
+  /** 状态集合（多选：ACTIVE/PARTTIME/LEFT/PENDING） */
+  status?: string[];
+  /** 性别（MALE/FEMALE，精确） */
+  gender?: string;
+  /** 入职时间范围-起（含） */
+  hireDateBegin?: string;
+  /** 入职时间范围-止（含） */
+  hireDateEnd?: string;
+  /** 排序字段（createTime=默认录入时间倒序；hireDate=入职时间） */
+  sortField?: string;
+  /** 排序方向（asc/desc；默认 desc） */
+  sortOrder?: string;
+}
+
+/** 新增员工表单 */
+export interface EmployeeCreateForm {
+  employeeCode: string;
+  employeeName: string;
+  deptId: string;
+  postNames: string[];
+  levelCode: string;
+  phone: string;
+  idCard: string;
+  /** 户口所在地 */
+  residence?: string;
+  /** 现住地址 */
+  currentAddress?: string;
+  /** 性别（MALE/FEMALE） */
+  gender?: string;
+  /** 工资卡开户银行 */
+  bankName?: string;
+  /** 工资卡开户支行 */
+  bankBranch?: string;
+  /** 工资卡卡号（本人） */
+  bankCardNo?: string;
+  reportDate: string;
+  hireDate: string;
+  status: string;
+  socialInsured: boolean;
+  housingInsured: boolean;
+  commercialInsured: boolean;
+  dormitory: boolean;
+  parttime: boolean;
+  /** 新签业绩不计入所属组别店长的团队业绩（只影响店长侧） */
+  excludeTeam: boolean;
+  /** 绩效方案编码（修改时 null=不修改；空串=清除指派回默认方案；新增不支持指派） */
+  perfSchemeCode?: string | null;
+  mentorCode?: string;
+  remark?: string;
+  /** 社保金额（自定义；null=用全局默认算法） */
+  socialFee?: number;
+  /** 商业保险金额（自定义；null=用全局默认 21 元） */
+  commercialFee?: number;
+  /** 公积金金额（自定义；null=用全局默认算法） */
+  housingFund?: number;
+  /** 宿舍费金额（自定义；null=用全局默认算法） */
+  dormitoryFee?: number;
+}
+
+/** 修改员工表单（在新增基础上支持生效日与离职日） */
+export interface EmployeeUpdateForm extends EmployeeCreateForm {
+  effectiveDate?: string;
+  leaveDate?: string;
+}
+
+/** 部门树节点（门店 → 组别，不含客户根节点） */
+export interface DeptNode {
+  deptId: string;
+  deptName: string;
+  parentId: string;
+  children: DeptNode[];
+}
+
+// ==================== 员工合同域 ====================
+
+/** 员工合同 */
+export interface Contract {
+  contractId: string;
+  employeeId: string;
+  /** 工号（后端 enrich） */
+  employeeCode?: string;
+  /** 姓名（后端 enrich） */
+  employeeName?: string;
+  deptId: string;
+  /** 门店全路径名（后端 enrich） */
+  deptName?: string;
+  /** 合同类型（LABOR/PARTTIME/OTHER） */
+  contractType: string;
+  startDate: string;
+  /** 合同结束日（null=无固定期限） */
+  endDate?: string | null;
+  /** 身份证扫描件 ossId 集合 */
+  idCardOssIds: string[];
+  /** 身份证扫描件访问 URL 集合（与 ossId 一一对应） */
+  idCardUrls?: (string | null)[];
+  /** 合同签署扫描件 ossId 集合（签订后上传留底） */
+  contractOssIds?: string[];
+  /** 合同签署扫描件访问 URL 集合（与 ossId 一一对应） */
+  contractUrls?: (string | null)[];
+  remark?: string;
+  createTime: string;
+}
+
+/** 合同分页查询参数 */
+export interface ContractQuery extends PageQuery {
+  employeeId?: string;
+  employeeCode?: string;
+  employeeName?: string;
+  contractType?: string;
+  deptId?: string;
+}
+
+/** 新增合同表单 */
+export interface ContractCreateForm {
+  employeeId: string;
+  contractType: string;
+  deptId: string;
+  startDate: string;
+  endDate?: string | null;
+  /** 身份证扫描件 ossId 集合 */
+  idCardOssIds?: string[];
+  /** 合同签署扫描件 ossId 集合（null=不修改；空集合=清空） */
+  contractOssIds?: string[];
+  remark?: string;
+}
+
+/** 修改合同表单（员工不允许改） */
+export interface ContractUpdateForm {
+  contractType?: string;
+  deptId?: string;
+  startDate?: string;
+  endDate?: string | null;
+  idCardOssIds?: string[];
+  /** 合同签署扫描件 ossId 集合（null=不修改；空集合=清空） */
+  contractOssIds?: string[];
+  remark?: string;
+}
+
+/** 合同到期提醒行（已到期未重签 or 30 天内到期） */
+export interface ContractExpiring {
+  employeeId: string;
+  employeeCode?: string;
+  employeeName?: string;
+  deptName?: string;
+  contractType: string;
+  endDate: string;
+  /** true=已到期未重签；false=30 天内到期 */
+  expired: boolean;
+}
+
+/** 岗位选项 */
+export interface PostOption {
+  postId: string;
+  postName: string;
+}
+
+/** 员工变更记录 */
+export interface EmployeeChangeLog {
+  effectiveDate: string;
+  changeFieldName: string;
+  beforeValue?: string;
+  afterValue?: string;
+  operatorName?: string;
+}
+
+/** 对账差异项 */
+export interface ReconcileItem {
+  employeeCode: string;
+  employeeName: string;
+  field: string;
+  beforeValue: string;
+  afterValue: string;
+}
+
+/** 对账结果 */
+export interface ReconcileResult {
+  totalEmployees: number;
+  fixedCount: number;
+  items: ReconcileItem[];
+}
+
+/** 店组虚拟人候选行 */
+export interface VirtualEmployeeCandidate {
+  deptId: string | number;
+  deptFullName: string;
+  deptCategory: string | null;
+  hasVirtual: boolean;
+  virtualEmployeeId: string | number | null;
+}
+
+/** 一键新建店组虚拟人请求项 */
+export interface VirtualEmployeeInitItem {
+  deptId: string | number;
+  deptCategory: string;
+}
+
+/** 一键新建店组虚拟人结果 */
+export interface VirtualEmployeeInitResult {
+  createdCodes: string[];
+  skippedCodes: string[];
+  conflictedCodes: string[];
+}
+
+// ==================== 导入域 V2.0（单据导入：业绩/考勤/积分/费用） ====================
+
+/** 单据导入批次 */
+export interface ImportBatch {
+  id: string;
+  batchNo: string;
+  sourceType: string;
+  templateVersion: string;
+  fileName: string;
+  originalFileName?: string;
+  storagePath: string;
+  period?: string;
+  totalRows: number;
+  successRows: number;
+  failedRows: number;
+  status: string;
+  operatorId?: string;
+  deptId?: string;
+  /** 批次级错误数量（归一化/归档阶段整批失败，非行级校验错误），用于判定是否展示"问题清单"按钮 */
+  batchErrorCount?: number;
+  createTime: string;
+  updateTime: string;
+}
+
+/** 单据导入问题 */
+export interface ImportIssue {
+  id: string;
+  batchId: string;
+  rowNo?: number;
+  issueType: string;
+  fieldName?: string;
+  rawValue?: string;
+  message: string;
+  status: string;
+  createTime: string;
+}
+
+/** 导入模板配置（import 域） */
+export interface ImportTemplate {
+  id: string;
+  templateCode: string;
+  templateVersion: string;
+  optLockVersion?: number;
+  templateName: string;
+  sourceType: string;
+  fileType: string;
+  sheetName?: string;
+  headerRow: number;
+  dataStartRow: number;
+  columnMapping: string;
+  validationRules?: string;
+  isActive: boolean;
+  description?: string;
+  sourceFileVersion?: string;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+  remark?: string;
+  createdBy?: string;
+  createdAt?: string;
+  updatedBy?: string;
+  updatedAt?: string;
+}
+
+/** 导入列映射（import 域） */
+export interface ColumnMapping {
+  source_column?: string;
+  source_header?: string;
+  target_field?: string;
+  transform?: string;
+  default_value?: string;
+  data_type?: string;
+  required?: boolean;
+}
+
+/** 员工导入模板（people 域） */
+export interface PeopleImportTemplate {
+  id: string;
+  templateCode: string;
+  templateVersion: string;
+  columnJson: string;
+  enabled: number; // 1启用 0停用
+  createTime: string;
+}
+
+/** 列定义（people 域 ColumnDef / 通用列结构） */
+export interface ColumnDef {
+  colName: string;
+  field: string;
+  type: string;
+  required?: boolean;
+  maxLength?: number;
+  enumValues?: string[];
+  dateFormat?: string;
+  deptLevel?: number;
+}
+
+/** 版本对比差异条目 */
+export interface TemplateColumnDiff {
+  field: string;
+  changeType: 'ADDED' | 'REMOVED' | 'MODIFIED' | 'UNCHANGED';
+  sourceHeader?: string;
+  targetHeader?: string;
+  sourceType?: string;
+  targetType?: string;
+  sourceRequired?: boolean;
+  targetRequired?: boolean;
+  diffDetail: string;
+}
+
+// ==================== 员工域 V6.0 员工导入 ====================
+
+/** 员工导入批次（people 域独立状态机） */
+export interface PeopleImportBatch {
+  id: string;
+  batchNo: string;
+  templateCode: string;
+  templateVersion: string;
+  fileName: string;
+  storagePath: string;
+  fileHash: string;
+  totalRows: number;
+  successRows: number;
+  failedRows: number;
+  status: string;
+  operatorId?: string;
+  remark?: string;
+  supersededByBatchId?: string;
+  createTime: string;
+  updateTime: string;
+}
+
+/** 员工导入问题 */
+export interface PeopleImportIssue {
+  id: string;
+  batchId: string;
+  rowNo?: number;
+  issueType: string;
+  fieldName?: string;
+  rawValue?: string;
+  message: string;
+  status: string;
+  createTime: string;
+}
+
+// ==================== 其它业务域（保留原有定义） ====================
 
 // 职级规则
 export interface RankRule {
@@ -75,25 +453,6 @@ export interface RankRule {
 export interface RankRuleQuery extends PageQuery {
   rankCode?: string;
   rankName?: string;
-  status?: string;
-}
-
-// 师徒关系
-export interface MentorRelation {
-  id: string;
-  mentorId: string;
-  mentorName: string;
-  apprenticeId: string;
-  apprenticeName: string;
-  startDate: string;
-  endDate?: string;
-  status: string;
-  commissionRate: number;
-}
-
-export interface MentorQuery extends PageQuery {
-  mentorId?: string;
-  apprenticeId?: string;
   status?: string;
 }
 
@@ -159,48 +518,288 @@ export interface AttendanceImport {
   month: string;
 }
 
+/** 月考勤汇总（员工域 pj_people_attendance，一员工一月一行） */
 export interface AttendanceRecord {
   id: string;
   employeeId: string;
-  employeeName: string;
-  workDays: number;
-  leaveDays: number;
-  absentDays: number;
-  lateTimes: number;
-  earlyLeaveTimes: number;
-  overtimeHours: number;
-  month: string;
-}
-
-export interface AttendanceQuery extends PageQuery {
+  attendMonth: string;
+  leaveDays?: number;
+  /** 事假天数 */
+  personalLeaveDays?: number;
+  /** 病假（诊所类证明）天数 */
+  sickClinicDays?: number;
+  /** 病假（二甲医院以上）天数 */
+  sickHospitalDays?: number;
+  absentDays?: number;
+  lateCount?: number;
+  lateMinutes?: number;
+  missingCardCount?: number;
+  attendDays?: number;
+  restDays?: number;
+  dataSource?: string;
+  remark?: string;
+  version?: number;
+  createTime?: string;
+  updateTime?: string;
+  // 展示冗余
+  employeeCode?: string;
   employeeName?: string;
-  month?: string;
+  deptId?: string;
+  deptName?: string;
+  /** 该期间考勤已提交审批（SUBMITTED/APPROVED）时锁定，禁止增删改 */
+  locked?: boolean;
 }
 
-// 积分
-export interface ScoreImport {
+/** 考勤汇总查询（管理端；本人查询仅用 monthStart/monthEnd） */
+export interface AttendanceQuery extends PageQuery {
+  employeeId?: string;
+  employeeName?: string;
+  employeeCode?: string;
+  deptId?: string;
+  monthStart?: string;
+  monthEnd?: string;
+}
+
+/** 考勤每日明细（一员工一天一行，导入同步） */
+export interface AttendanceDetail {
   id: string;
-  batchNo: string;
-  fileName: string;
-  totalCount: number;
-  importTime: string;
-  month: string;
+  employeeId: string;
+  employeeCode?: string;
+  employeeName?: string;
+  attendDate: string;
+  status?: string;
 }
 
+/** 考勤汇总新增/编辑表单（人月维度） */
+export interface AttendanceSaveForm {
+  employeeId?: string;
+  attendMonth?: string;
+  leaveDays?: number;
+  /** 事假天数 */
+  personalLeaveDays?: number;
+  /** 病假（诊所类证明）天数 */
+  sickClinicDays?: number;
+  /** 病假（二甲医院以上）天数 */
+  sickHospitalDays?: number;
+  absentDays?: number;
+  lateCount?: number;
+  lateMinutes?: number;
+  missingCardCount?: number;
+  attendDays?: number;
+  restDays?: number;
+  remark?: string;
+  version?: number;
+}
+
+/** 考勤审批单（一期间一行；无审批单时 status 为空表示未提交） */
+export type AttendanceApprovalStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+
+/** 异常考勤行（迟到/迟到分/缺卡/旷工/请假 任一 >0，仅这些行需要总监审阅） */
+export interface AttendanceAbnormalRow {
+  employeeId?: number | string;
+  employeeCode?: string | null;
+  employeeName?: string | null;
+  attendMonth?: string | null;
+  lateCount?: number;
+  lateMinutes?: number;
+  missingCardCount?: number;
+  absentDays?: number;
+  leaveDays?: number;
+  /** 事假天数 */
+  personalLeaveDays?: number;
+  /** 病假（诊所类证明）天数 */
+  sickClinicDays?: number;
+  /** 病假（二甲医院以上）天数 */
+  sickHospitalDays?: number;
+  remark?: string | null;
+}
+
+export interface AttendanceApproval {
+  id?: string;
+  period: string;
+  status?: AttendanceApprovalStatus;
+  /** 该月是否有考勤记录（false = 无考勤，算薪前需人工确认） */
+  dataExists?: boolean;
+  submitBy?: string;
+  submitTime?: string;
+  approveBy?: string;
+  approveTime?: string;
+  rejectReason?: string;
+  processInstanceId?: string | null;
+  /** 当期考勤总行数 */
+  totalCount?: number;
+  /** 异常行数（需总监审阅的行） */
+  abnormalCount?: number;
+  /** 异常行请假天数合计 */
+  abnormalLeaveDays?: number;
+  /** 异常考勤快照明细 */
+  abnormalRows?: AttendanceAbnormalRow[];
+}
+
+// ==================== 考勤修改申请（经纪人发起 → 人事审批） ====================
+
+/** 考勤修改申请单状态 */
+export type AttendanceRectifyStatus = 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'CANCELED';
+
+/** 考勤修改明细项（月汇总指标单项调整，field 限定白名单） */
+export interface RectifyChangeItem {
+  field: string;
+  fieldName?: string;
+  oldValue?: string;
+  newValue?: string;
+}
+
+/** 考勤修改申请提交表单 */
+export interface AttendanceRectifySubmitForm {
+  /** 考勤月份（yyyy-MM-dd，当月 1 日） */
+  attendMonth: string;
+  changes: RectifyChangeItem[];
+  /** 涉及日期（逗号分隔 yyyy-MM-dd） */
+  involveDates?: string;
+  reason: string;
+  /** 截图 ossId 列表（逗号分隔，≥1 张） */
+  ossIds: string;
+}
+
+/** 考勤修改申请单（本人记录 / 人事审批详情共用） */
+export interface AttendanceRectify {
+  id: string;
+  employeeId: string;
+  employeeCode?: string;
+  employeeName?: string;
+  attendMonth: string;
+  changes?: RectifyChangeItem[];
+  involveDates?: string;
+  reason?: string;
+  /** 截图 ossId 列表（逗号分隔） */
+  ossIds?: string;
+  /** 截图访问地址（逗号分隔，与 ossIds 一一对应） */
+  ossUrls?: string;
+  status?: AttendanceRectifyStatus;
+  submitBy?: string;
+  submitTime?: string;
+  approveBy?: string;
+  approveTime?: string;
+  rejectReason?: string;
+  createTime?: string;
+}
+
+/** 考勤修改申请查询（本人仅用月份/状态；管理端额外支持姓名模糊） */
+export interface AttendanceRectifyQuery extends PageQuery {
+  monthStart?: string;
+  monthEnd?: string;
+  status?: string;
+  employeeName?: string;
+}
+
+// 积分（员工域 pj_people_performance_score，一员工一月一行，来自积分日报导入）
 export interface ScoreRecord {
   id: string;
   employeeId: string;
-  employeeName: string;
-  scoreType: string;
-  score: number;
-  month: string;
-  remark: string;
+  scoreMonth: string;
+  totalPoints?: number;
+  attendDays?: number;
+  avgPoints?: number;
+  grade?: string | null;
+  deductRate?: number | null;
+  /** 当月晚提交次数（填报时间晚于23:00的天数） */
+  lateSubmitCount?: number;
+  /** 积分扣款 = 晚提交次数 × 5元/次 */
+  pointsFee?: number;
+  dataSource?: string;
+  version?: number;
+  createTime?: string;
+  updateTime?: string;
+  // 展示冗余
+  employeeCode?: string;
+  employeeName?: string;
+  deptId?: string;
+  deptName?: string;
+  /** 该期间积分已提交审批（SUBMITTED/APPROVED）时锁定 */
+  locked?: boolean;
 }
 
+/** 积分汇总查询（管理端） */
 export interface ScoreQuery extends PageQuery {
+  employeeId?: string;
+  employeeCode?: string;
   employeeName?: string;
-  scoreType?: string;
-  month?: string;
+  deptId?: string;
+  monthStart?: string;
+  monthEnd?: string;
+}
+
+/** 积分每日明细（一员工一天一行，导入同步） */
+export interface ScoreDetail {
+  id: string;
+  employeeId: string;
+  employeeCode?: string;
+  employeeName?: string;
+  pointDate: string;
+  submitTime?: string;
+  score?: number;
+  isValid?: boolean;
+  isLateSubmit?: boolean;
+}
+
+/** 积分审批单（一期间一行；无审批单时 status 为空表示未提交） */
+export type ScoreApprovalStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+
+/** 扣点行（B/C 级，仅这些行需要总监审阅；A 级不扣点免审） */
+export interface ScoreDeductRow {
+  employeeId?: number | string;
+  employeeCode?: string | null;
+  employeeName?: string | null;
+  scoreMonth?: string | null;
+  totalPoints?: number;
+  attendDays?: number;
+  avgPoints?: number;
+  grade?: string | null;
+  deductRate?: number | null;
+  /** 晚提交次数（0 或 null 表示无晚提交） */
+  lateSubmitCount?: number;
+  /** 积分扣款 = 晚提交次数 × 5 元/次 */
+  pointsFee?: number;
+}
+
+export interface ScoreApproval {
+  id?: string;
+  period: string;
+  status?: ScoreApprovalStatus;
+  /** 该月是否有积分数据（false = 无积分，算薪前需人工确认） */
+  dataExists?: boolean;
+  submitBy?: string;
+  submitTime?: string;
+  approveBy?: string;
+  approveTime?: string;
+  rejectReason?: string;
+  processInstanceId?: string | null;
+  /** 当期积分总人数 */
+  totalCount?: number;
+  /** A 级人数（不扣点，免审） */
+  gradeACount?: number;
+  /** B 级人数（-2%） */
+  gradeBCount?: number;
+  /** C 级人数（-4%） */
+  gradeCCount?: number;
+  /** 扣点行快照明细（B/C 级） */
+  deductRows?: ScoreDeductRow[];
+  /** 当月晚提交总次数 */
+  lateSubmitTotalCount?: number;
+  /** 当月晚提交扣款总额（元） */
+  lateSubmitTotalFee?: number;
+  /** 晚提交行快照明细（lateSubmitCount > 0） */
+  lateSubmitRows?: ScoreLateSubmitRow[];
+}
+
+/** 晚提交行（总监核对豁免情况） */
+export interface ScoreLateSubmitRow {
+  employeeId?: number | string;
+  employeeCode?: string | null;
+  employeeName?: string | null;
+  scoreMonth?: string | null;
+  lateSubmitCount?: number;
+  pointsFee?: number;
 }
 
 // 工资计算

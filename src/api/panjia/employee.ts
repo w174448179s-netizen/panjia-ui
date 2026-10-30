@@ -1,39 +1,140 @@
 import panjiaRequest from './index';
-import type { Employee, EmployeeQuery, EmployeeForm, PageResult } from './types';
+import type {
+  DeptNode,
+  Employee,
+  EmployeeChangeLog,
+  EmployeeCreateForm,
+  EmployeeQuery,
+  EmployeeUpdateForm,
+  PageResult,
+  PeopleImportBatch,
+  PeopleImportIssue,
+  PostOption,
+  ReconcileResult,
+  VirtualEmployeeCandidate,
+  VirtualEmployeeInitItem,
+  VirtualEmployeeInitResult
+} from './types';
+import type { PerfScheme } from './payroll';
 
+/**
+ * 员工域 V5.2 接口（实际前缀 /api/panjia）。
+ * 无删除接口：离职 = status 改 LEFT（账户禁用，数据保留）。
+ */
 export const employeeApi = {
-  // 列表（分页）
+  /** 分页查询员工列表 */
   list(params: EmployeeQuery) {
-    return panjiaRequest.get<PageResult<Employee>>('/employee/page', params);
+    return panjiaRequest.get<PageResult<Employee>>('/people/employee/list', params);
   },
-  // 详情
-  getById(id: string) {
-    return panjiaRequest.get<Employee>(`/employee/${id}`);
+  /** 员工详情 */
+  getById(employeeId: string | number) {
+    return panjiaRequest.get<Employee>(`/people/employee/${employeeId}`);
   },
-  // 新建
-  create(data: EmployeeForm) {
-    return panjiaRequest.post('/employee', data);
+  /** 新增员工（建员工 + 系统账户 + 岗位/角色 + 初始算薪事实） */
+  create(data: EmployeeCreateForm) {
+    return panjiaRequest.post<string>('/people/employee', data);
   },
-  // 更新
-  update(id: string, data: EmployeeForm) {
-    return panjiaRequest.put(`/employee/${id}`, data);
+  /** 修改员工（统一 diff：部门/岗位同步系统，职级/开关走事实变更） */
+  update(employeeId: string | number, data: EmployeeUpdateForm) {
+    return panjiaRequest.put<void>(`/people/employee/${employeeId}`, data);
   },
-  // 删除
-  remove(id: string) {
-    return panjiaRequest.delete(`/employee/${id}`);
+  /** 员工变更记录时间线 */
+  history(employeeId: string | number) {
+    return panjiaRequest.get<EmployeeChangeLog[]>(`/people/employee/${employeeId}/history`);
   },
-  // 批量删除
-  batchRemove(ids: string[]) {
-    return panjiaRequest.delete('/employee/batch', { ids });
+  /** 调整算薪事实生效日期（值不变，仅平移生效日；factTypes 传 ["ALL"]=全部项） */
+  adjustFactDate(employeeId: string | number, factTypes: string[], newDate: string) {
+    return panjiaRequest.post<number>(`/people/employee/${employeeId}/adjust-fact-date`, { factTypes, newDate });
   },
-  // 批量导入
-  importFile(file: File) {
+  /** 岗位选项（职位多选下拉） */
+  postOptions() {
+    return panjiaRequest.get<PostOption[]>('/people/employee/postOptions');
+  },
+  /** 绩效方案清单（员工编辑表单指派下拉数据源；方案本体由薪酬域「绩效方案」页维护） */
+  perfSchemes() {
+    return panjiaRequest.get<PerfScheme[]>('/people/employee/perf-schemes');
+  },
+  /** 部门树选项（门店 → 组别，不含客户根节点） */
+  deptTree() {
+    return panjiaRequest.get<DeptNode[]>('/people/employee/deptTree');
+  },
+  /** 员工-系统账户对齐（自动修复 dept/岗位角色/离职禁用差异） */
+  reconcile() {
+    return panjiaRequest.post<ReconcileResult>('/people/reconcile/run');
+  },
+  /** 店组虚拟人候选列表（全部启用部门 + 店组编码 + 是否已有虚拟人） */
+  virtualCandidates() {
+    return panjiaRequest.get<VirtualEmployeeCandidate[]>('/people/employee/virtual/candidates');
+  },
+  /** 一键新建店组虚拟人（写入店组编码 + 幂等补建虚拟人） */
+  initVirtualEmployees(data: VirtualEmployeeInitItem[]) {
+    return panjiaRequest.post<VirtualEmployeeInitResult>('/people/employee/virtual/init', data);
+  },
+  // ==================== V6.0 员工导入 ====================
+  /** 上传文件导入员工（阶段A同步诊断，阶段B异步落地，返回 batchId 供轮询）；effectiveDate 为覆盖导入的生效时间，不传默认当前时间 */
+  importEmployees(file: File, effectiveDate?: string) {
     const formData = new FormData();
     formData.append('file', file);
-    return panjiaRequest.post('/employee/import', formData);
+    if (effectiveDate) {
+      formData.append('effectiveDate', effectiveDate);
+    }
+    return panjiaRequest.post<string>('/people/employee/import', formData);
   },
-  // 导出
-  export(params: EmployeeQuery) {
-    return panjiaRequest.post('/employee/export', params);
+  /** 员工导入批次详情（轮询进度用） */
+  importBatch(batchId: string | number) {
+    return panjiaRequest.get<PeopleImportBatch>(`/people/employee/import/batches/${batchId}`);
+  },
+  /** 员工导入批次列表 */
+  importBatches() {
+    return panjiaRequest.get<PeopleImportBatch[]>('/people/employee/import/batches');
+  },
+  /** 员工导入批次问题清单 */
+  importIssues(batchId: string | number) {
+    return panjiaRequest.get<PeopleImportIssue[]>(`/people/employee/import/${batchId}/issues`);
+  },
+  /** 下载员工导入模板（Excel，含表头+示例行） */
+  async downloadImportTemplate() {
+    const { getToken } = await import('@/utils/auth');
+    const baseApi = import.meta.env.VITE_APP_BASE_API;
+    const res = await fetch(`${baseApi}/api/panjia/people/employee/import/template?_t=${Date.now()}`, {
+      headers: { Authorization: `Bearer ${getToken()}`, clientid: 'e5cd7e4891bf95d1d19206ce24a7b32e' }
+    });
+    if (!res.ok) throw new Error('模板下载失败');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = '员工导入模板.xlsx';
+    link.click();
+    window.URL.revokeObjectURL(url);
+  },
+  /** 导出员工名单（Excel，列与导入模板一致，支持闭环） */
+  async exportEmployees(params?: Record<string, any>) {
+    const { getToken } = await import('@/utils/auth');
+    const baseApi = import.meta.env.VITE_APP_BASE_API;
+    const usp = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v === undefined || v === null || v === '') return;
+        if (Array.isArray(v)) {
+          v.forEach((item) => usp.append(k, String(item)));
+        } else {
+          usp.append(k, String(v));
+        }
+      });
+    }
+    const qs = usp.toString();
+    const url = `${baseApi}/api/panjia/people/employee/export${qs ? '?' + qs : ''}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${getToken()}`, clientid: 'e5cd7e4891bf95d1d19206ce24a7b32e' }
+    });
+    if (!res.ok) throw new Error('导出失败');
+    const blob = await res.blob();
+    const objUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objUrl;
+    link.download = '员工名单.xlsx';
+    link.click();
+    window.URL.revokeObjectURL(objUrl);
   }
 };

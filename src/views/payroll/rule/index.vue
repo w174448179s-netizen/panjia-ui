@@ -1,0 +1,1033 @@
+<template>
+  <div class="payroll-rule" style="padding: 12px;">
+    <el-tabs v-model="activeTab" @tab-change="onTabChange">
+      <!-- ==================== 职级/提成规则 ==================== -->
+      <el-tab-pane label="职级/提成规则" name="rank">
+        <div class="policy-toolbar">
+          <span class="policy-title">职级来源：字典 panjia_employee_level；同一职级可按生效区间配置多版规则</span>
+          <el-button type="primary" plain icon="Plus" @click="addRank">新增职级规则</el-button>
+        </div>
+        <el-alert
+          v-if="noEffectiveLevels.length > 0"
+          type="error"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 12px"
+          :title="`以下职级当前无生效规则：${noEffectiveLevels.join('、')}。算薪将按该职级最近一版规则兜底，请尽快补充新规则。`"
+        />
+        <el-table :data="sortedRankList" stripe border :row-class-name="rankRowClass">
+          <el-table-column label="职级" width="90" align="center">
+            <template #default="{ row }">
+              <dict-tag :options="panjia_employee_level" :value="row.levelCode" />
+            </template>
+          </el-table-column>
+          <el-table-column label="底薪" width="100" align="right">
+            <template #default="{ row }">{{ fmtMoney(row.baseSalary) }}</template>
+          </el-table-column>
+          <el-table-column label="基础提点" width="90" align="center">
+            <template #default="{ row }">{{ fmtPct(row.baseRate) }}</template>
+          </el-table-column>
+          <el-table-column label="保底" width="100" align="right">
+            <template #default="{ row }">{{ fmtMoney(row.minSalary) }}</template>
+          </el-table-column>
+          <el-table-column label="团队提点" width="90" align="center">
+            <template #default="{ row }">{{ row.teamRate != null ? fmtPct(row.teamRate) : '—' }}</template>
+          </el-table-column>
+          <el-table-column label="个人提点" width="90" align="center">
+            <template #default="{ row }">{{ row.personalRate != null ? fmtPct(row.personalRate) : '—' }}</template>
+          </el-table-column>
+          <el-table-column label="伯乐奖励" min-width="180">
+            <template #default="{ row }">
+              <span v-if="parseRank(row as RankRule).mentorBonusMode === 'RATE_ADD'">
+                加点 {{ fmtPct(parseRank(row as RankRule).mentorBonusRateAdd) }} / 上限 {{ fmtPct(parseRank(row as RankRule).mentorBonusRateCap) }}
+              </span>
+              <span v-else-if="parseRank(row as RankRule).mentorBonusMode === 'AMOUNT_RATIO'">
+                千里马结佣 × {{ fmtPct(parseRank(row as RankRule).mentorBonusAmountRatio) }}
+              </span>
+              <span v-else>—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="生效区间" width="200" align="center">
+            <template #default="{ row }">
+              {{ row.effectiveFrom }} ~ {{ isOpenEnd(row.effectiveTo) ? '至今' : row.effectiveTo }}
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="80" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="isExpired(row as RankRule)" type="info" size="small">已失效</el-tag>
+              <el-tag v-else-if="isFuture(row as RankRule)" type="warning" size="small">待生效</el-tag>
+              <el-tag v-else type="success" size="small">生效中</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="80" fixed="right">
+            <template #default="{ row }">
+              <el-tooltip content="编辑" placement="top">
+                <el-button link type="primary" icon="Edit" @click="editRank(row as RankRule)"></el-button>
+              </el-tooltip>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
+      <!-- ==================== 客户政策规则 ==================== -->
+      <el-tab-pane label="客户政策规则" name="policy">
+        <div class="policy-toolbar">
+          <span class="policy-title">政策参数（全公司统一）</span>
+          <el-button type="primary" @click="savePolicyInline" :loading="policySaving">保存</el-button>
+        </div>
+        <el-form v-if="policyForm.id" :model="policyForm" label-width="110px" class="policy-form">
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="范围类型">
+                <el-input v-model="policyForm.scopeType" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="社保基数">
+                <el-input-number v-model="policyForm.baseSocial" :precision="2" :controls="false" style="width:100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="生效日">
+                <el-date-picker v-model="policyForm.effectiveFrom" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <el-divider content-position="left">社保个人比例（按职级，联动字典 panjia_employee_level）</el-divider>
+          <el-form-item label="社保比例">
+            <div class="social-grid">
+              <div v-for="lv in dictLevels" :key="lv" class="social-item">
+                <span class="social-label">{{ lv }}</span>
+                <el-input-number v-model="policyJson.socialSettlementRatio[lv]" :min="0" :max="1" :precision="4" :step="0.01" :controls="false" />
+                <span class="social-pct">{{ fmtPct(policyJson.socialSettlementRatio[lv]) }}</span>
+              </div>
+            </div>
+          </el-form-item>
+
+          <el-divider content-position="left">公积金与兼职</el-divider>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="公积金(个人)">
+                <el-input-number v-model="policyJson.housingFund" :min="0" :precision="2" :controls="false" style="width:100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="兼职豁免">
+                <el-checkbox v-model="policyJson.parttimeExemptSocial">免社保</el-checkbox>
+                <el-checkbox v-model="policyJson.parttimeExemptHousing" style="margin-left:16px">免公积金</el-checkbox>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="未买社保扣点">
+                <el-input-number v-model="policyJson.noSocialDeduct" :min="-1" :max="0" :precision="4" :step="0.01" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">{{ fmtPct(policyJson.noSocialDeduct) }}（0 = 不扣）</span>
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <el-divider content-position="left">考勤规则</el-divider>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="迟到罚款">
+                <el-input-number v-model="policyJson.attendance.lateFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">元/次</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="旷工罚款（无底薪）">
+                <el-input-number v-model="policyJson.attendance.absentNoBaseFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">元/天；实际扣 = 该值 × 旷工倍数</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="旷工倍数">
+                <el-input-number v-model="policyJson.attendance.absentWithBaseTimes" :min="0" :precision="1" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">有底薪 = 日工资 × 倍数；无底薪 = 无底薪罚款 × 倍数</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="事假扣款">
+                <el-input-number v-model="policyJson.attendance.personalLeaveFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">元/天；有底薪另加扣一天日工资</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="事假加扣日工资">
+                <el-checkbox v-model="policyJson.attendance.personalLeaveDeductDailyWage">有底薪员工按天加扣日工资</el-checkbox>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="病假诊所·有底薪">
+                <el-input-number v-model="policyJson.attendance.sickClinicWithBaseFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">元/天（诊所类证明）</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="病假诊所·无底薪">
+                <el-input-number v-model="policyJson.attendance.sickClinicNoBaseFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">元/天（诊所类证明）</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="病假二甲·有底薪">
+                <el-input-number v-model="policyJson.attendance.sickHospitalWithBaseFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">元/天（二甲医院以上）</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="病假二甲·无底薪">
+                <el-input-number v-model="policyJson.attendance.sickHospitalNoBaseFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">元/天；0 = 不扣</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="旧版请假兜底">
+                <el-input-number v-model="policyJson.attendance.leaveFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">元/天；仅历史数据无三类请假分项时生效</span>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <p class="section-tip">日工资 = 满月底薪 ÷ 当月自然天数（按算薪归属月自动计算，不再使用固定的月计薪天数 21.75）。</p>
+
+          <el-divider content-position="left">积分考核规则</el-divider>
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            title="积分规则已迁移至「绩效方案」配置"
+            description="积分绩效（等级阈值/扣点/晚提交罚款）现按绩效方案统一维护：薪酬计算 → 绩效方案。员工可在档案中指派不同绩效方案（积分绩效/业绩绩效A版/业绩绩效B版/店长积分绩效/无绩效）；未指派的员工按默认方案「积分绩效」考核，口径与本处历史配置一致。"
+          />
+
+          <el-divider content-position="left">商业保险与宿舍</el-divider>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="商业保险">
+                <el-input-number v-model="policyJson.commercialInsurance" :min="0" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">元/月</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="宿舍管理费">
+                <el-input-number v-model="policyJson.dormitoryFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <el-divider content-position="left">个税规则</el-divider>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="个税模式">
+                <el-radio-group v-model="policyJson.tax.mode">
+                  <el-radio label="EXTERNAL">外部回补（推荐）</el-radio>
+                  <el-radio label="ENGINE">内部引擎试算</el-radio>
+                </el-radio-group>
+                <div class="form-tip" v-if="policyJson.tax.mode === 'EXTERNAL'">
+                  系统内不预扣个税（记 0）。算薪后在「工资批次 → 导入个税」粘贴扣缴端算税结果回补，得到最终实发。
+                </div>
+                <div class="form-tip" v-else>内部简化试算（缺专项附加扣除、真实累计口径），结果仅供对照，不建议作为发放依据。</div>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="个税起征点">
+                <el-input-number v-model="policyJson.tax.threshold" :min="0" :controls="false" style="width:100%" :disabled="policyJson.tax.mode === 'EXTERNAL'" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="扣除社保">
+                <el-switch v-model="policyJson.tax.deductSocial" :disabled="policyJson.tax.mode === 'EXTERNAL'" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-form-item v-if="policyJson.tax.mode !== 'EXTERNAL'" label="税率阶梯">
+            <el-table :data="policyJson.tax.brackets" border size="small" style="width:100%">
+              <el-table-column label="下限(元)" width="130">
+                <template #default="{ row }">
+                  <el-input-number v-model="row.min" :min="0" :controls="false" style="width:100%" />
+                </template>
+              </el-table-column>
+              <el-table-column label="税率" width="130">
+                <template #default="{ row }">
+                  <el-input-number v-model="row.rate" :min="0" :max="1" :precision="4" :step="0.01" :controls="false" style="width:100%" />
+                </template>
+              </el-table-column>
+              <el-table-column label="速算扣除" width="130">
+                <template #default="{ row }">
+                  <el-input-number v-model="row.quick" :min="0" :controls="false" style="width:100%" />
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="70" align="center">
+                <template #default="{ $index }">
+                  <el-tooltip content="删除" placement="top">
+                    <el-button link type="danger" icon="Delete" @click="policyJson.tax.brackets.splice($index, 1)"></el-button>
+                  </el-tooltip>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-button type="primary" plain size="small" style="margin-top:8px" @click="policyJson.tax.brackets.push({ min: 0, rate: 0.03, quick: 0 })">+ 添加税率</el-button>
+          </el-form-item>
+        </el-form>
+        <el-empty v-else description="暂无政策规则数据" />
+      </el-tab-pane>
+
+      <!-- ==================== 业绩折算规则 ==================== -->
+      <el-tab-pane label="业绩折算规则" name="conversion">
+        <el-table :data="conversionList" stripe border>
+          <el-table-column label="业务类型" prop="bizType" width="150" />
+          <el-table-column label="折算系数" width="120" align="center">
+            <template #default="{ row }">{{ fmtPct(row.factor) }}</template>
+          </el-table-column>
+          <el-table-column label="生效日" prop="effectiveFrom" width="120" />
+          <el-table-column label="操作" width="80">
+            <template #default="{ row }">
+              <el-tooltip content="编辑" placement="top">
+                <el-button link type="primary" icon="Edit" @click="editConversion(row as ConversionRule)"></el-button>
+              </el-tooltip>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
+      <!-- ==================== 门店社保标准 ==================== -->
+      <el-tab-pane label="门店社保标准" name="deptSocial">
+        <div class="policy-toolbar">
+          <span class="policy-title">
+            门店社保扣减标准（每人每月固定额，算薪时 = 标准 × 计缴参保人数；计缴人数 = 非兼职、已参保且个人社保比例&gt;30%）
+          </span>
+          <el-button type="primary" :loading="socialSaving" @click="saveSocialStandards">保存</el-button>
+        </div>
+        <el-table :data="storeList" stripe border>
+          <el-table-column label="部门（业务组）" prop="deptName" min-width="180" />
+          <el-table-column label="社保扣减标准（元/人/月）" width="240" align="center">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="socialRows[String(row.deptId)].standard"
+                :min="0" :precision="2" :controls="false" placeholder="未配置按0" style="width:180px"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="生效日" width="160" align="center">
+            <template #default="{ row }">
+              <el-date-picker
+                v-model="socialRows[String(row.deptId)].effectiveFrom"
+                type="date" value-format="YYYY-MM-DD" placeholder="默认当月"
+                :clearable="true" style="width:140px"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="socialRows[String(row.deptId)].id" type="success" size="small">已配置</el-tag>
+              <el-tag v-else type="info" size="small">未配置</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
+      <!-- ==================== 门店月度配置 ==================== -->
+      <el-tab-pane label="门店月度配置" name="deptMonthly">
+        <div class="policy-toolbar">
+          <div class="monthly-toolbar-left">
+            <span class="policy-title" style="margin-right:12px">新签与结佣差额（按部门 × 月份，算薪直接扣减）</span>
+            <el-date-picker
+              v-model="monthlyPeriod" type="month" value-format="YYYY-MM" placeholder="选择月份"
+              style="width:140px" @change="loadMonthly"
+            />
+          </div>
+          <el-button type="primary" :loading="monthlySaving" @click="saveMonthly">保存</el-button>
+        </div>
+        <el-table :data="monthlyRows" stripe border v-loading="monthlyLoading">
+          <el-table-column label="部门（业务组）" prop="deptName" min-width="180" />
+          <el-table-column label="新签与结佣差额（元）" width="220" align="center">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="row.diffAmount"
+                :precision="2" :controls="false" placeholder="未配置按0" style="width:170px"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="备注" min-width="220">
+            <template #default="{ row }">
+              <el-input v-model="row.remark" placeholder="选填" />
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+    </el-tabs>
+
+    <!-- ==================== 职级编辑弹窗 ==================== -->
+    <el-dialog v-model="rankDialog.show" :title="rankDialog.form.id ? '编辑职级规则' : '新增职级规则'" width="560px">
+      <el-form :model="rankDialog.form" label-width="100px">
+        <el-form-item label="职级">
+          <el-select
+            v-model="rankDialog.form.levelCode"
+            placeholder="请选择职级"
+            :disabled="!!rankDialog.form.id"
+            style="width:100%"
+          >
+            <el-option
+              v-for="dict in availableLevelOptions"
+              :key="dict.value"
+              :label="dict.label"
+              :value="dict.value"
+            />
+          </el-select>
+          <div class="form-tip" v-if="!rankDialog.form.id">
+            同一职级可配置多版规则，用生效区间区分（如 A1：1~9 月 55%，10 月起 60%）
+          </div>
+        </el-form-item>
+        <el-form-item label="生效日">
+          <el-date-picker
+            v-model="rankDialog.form.effectiveFrom"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="选择生效日期"
+            style="width:100%"
+          />
+        </el-form-item>
+        <el-form-item label="失效日">
+          <el-date-picker
+            v-model="rankDialog.form.effectiveTo"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="留空 = 长期有效"
+            clearable
+            style="width:100%"
+          />
+        </el-form-item>
+        <el-form-item label="底薪">
+          <el-input-number v-model="rankDialog.form.baseSalary" :min="0" :precision="2" :controls="false" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="基础提点">
+          <el-input-number v-model="rankDialog.form.baseRate" :min="0" :max="1" :precision="4" :step="0.01" :controls="false" style="width:100%" />
+          <div class="form-tip">当前值：{{ fmtPct(rankDialog.form.baseRate) }}</div>
+        </el-form-item>
+        <el-form-item label="保底">
+          <el-input-number v-model="rankDialog.form.minSalary" :min="0" :precision="2" :controls="false" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="团队提点">
+          <el-input-number v-model="rankDialog.form.teamRate" :min="0" :max="1" :precision="4" :step="0.01" :controls="false" style="width:100%" />
+          <div class="form-tip" v-if="rankDialog.form.teamRate != null">当前值：{{ fmtPct(rankDialog.form.teamRate) }}</div>
+        </el-form-item>
+        <el-form-item label="个人提点">
+          <el-input-number v-model="rankDialog.form.personalRate" :min="0" :max="1" :precision="4" :step="0.01" :controls="false" style="width:100%" />
+          <div class="form-tip" v-if="rankDialog.form.personalRate != null">当前值：{{ fmtPct(rankDialog.form.personalRate) }}</div>
+        </el-form-item>
+
+        <el-divider content-position="left">伯乐奖励</el-divider>
+        <el-form-item label="奖励模式">
+          <el-select v-model="rankJson.mentorBonusMode" style="width:100%">
+            <el-option label="加点模式（每推荐+X%，上限Y%）" value="RATE_ADD" />
+            <el-option label="金额比例（千里马结佣 × X%）" value="AMOUNT_RATIO" />
+          </el-select>
+        </el-form-item>
+        <template v-if="rankJson.mentorBonusMode === 'RATE_ADD'">
+          <el-form-item label="每推荐加点">
+            <el-input-number v-model="rankJson.mentorBonusRateAdd" :min="0" :max="1" :precision="4" :step="0.01" :controls="false" style="width:100%" />
+            <div class="form-tip">当前值：{{ fmtPct(rankJson.mentorBonusRateAdd) }}</div>
+          </el-form-item>
+          <el-form-item label="累计上限">
+            <el-input-number v-model="rankJson.mentorBonusRateCap" :min="0" :max="1" :precision="4" :step="0.01" :controls="false" style="width:100%" />
+            <div class="form-tip">当前值：{{ fmtPct(rankJson.mentorBonusRateCap) }}</div>
+          </el-form-item>
+        </template>
+        <template v-else-if="rankJson.mentorBonusMode === 'AMOUNT_RATIO'">
+          <el-form-item label="千里马结佣比例">
+            <el-input-number v-model="rankJson.mentorBonusAmountRatio" :min="0" :max="1" :precision="4" :step="0.01" :controls="false" style="width:100%" />
+            <div class="form-tip">当前值：{{ fmtPct(rankJson.mentorBonusAmountRatio) }}</div>
+          </el-form-item>
+        </template>
+
+        <el-divider content-position="left">晋升规则（算薪时自动判定，次月生效）</el-divider>
+        <el-form-item label="保护期月数">
+          <el-input-number v-model="rankJson.promotion.protectMonths" :min="0" :max="36" :controls="false" style="width:100%" placeholder="留空=不限制" />
+          <div class="form-tip">仅新人保护职级用（如 A0=3）：保护期最后一个月算薪时判定去向</div>
+        </el-form-item>
+        <el-form-item label="累计业绩阈值">
+          <el-input-number v-model="rankJson.promotion.threshold" :min="0" :precision="2" :controls="false" style="width:100%" placeholder="留空=不参与自动晋升" />
+          <div class="form-tip">该职级期间累计业绩（原始金额）达到此值 → 晋升「达标去向」</div>
+        </el-form-item>
+        <el-form-item label="达标去向">
+          <el-select v-model="rankJson.promotion.reachTo" clearable placeholder="累计达标后晋升到" style="width:100%">
+            <el-option v-for="d in availableLevelOptions" :key="d.value" :label="d.label" :value="d.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="未达标去向">
+          <el-select v-model="rankJson.promotion.belowTo" clearable placeholder="保护期满未达标转入" style="width:100%">
+            <el-option v-for="d in availableLevelOptions" :key="d.value" :label="d.label" :value="d.value" />
+          </el-select>
+          <div class="form-tip">仅配了保护期的职级用（如 A0 保护期满未达 1 万 → A1）</div>
+        </el-form-item>
+
+        <!-- 总监门店提成阶梯 -->
+        <template v-if="rankDialog.form.levelCode === 'D'">
+          <el-divider content-position="left">门店提成阶梯（总监）</el-divider>
+          <el-form-item label="提成阶梯">
+            <el-table :data="rankJson.brackets" border size="small" style="width:100%">
+              <el-table-column label="下限(元)" width="140">
+                <template #default="{ row }">
+                  <el-input-number v-model="row.min" :min="0" :controls="false" style="width:100%" />
+                </template>
+              </el-table-column>
+              <el-table-column label="上限(元)" width="140">
+                <template #default="{ row }">
+                  <el-input-number v-model="row.max" :min="0" :controls="false" style="width:100%" />
+                </template>
+              </el-table-column>
+              <el-table-column label="提成比例" width="140">
+                <template #default="{ row }">
+                  <el-input-number v-model="row.rate" :min="0" :max="1" :precision="4" :step="0.01" :controls="false" style="width:100%" />
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="70" align="center">
+                <template #default="{ $index }">
+                  <el-tooltip content="删除" placement="top">
+                    <el-button link type="danger" icon="Delete" @click="rankJson.brackets.splice($index, 1)"></el-button>
+                  </el-tooltip>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-button type="primary" plain size="small" style="margin-top:8px" @click="rankJson.brackets.push({ min: 0, max: null, rate: 0.06 })">+ 添加阶梯</el-button>
+          </el-form-item>
+        </template>
+      </el-form>
+      <template #footer>
+        <el-button @click="rankDialog.show = false">取消</el-button>
+        <el-button type="primary" @click="saveRank">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- ==================== 折算编辑弹窗 ==================== -->
+    <el-dialog v-model="convDialog.show" title="编辑折算规则" width="420px">
+      <el-form :model="convDialog.form" label-width="100px">
+        <el-form-item label="业务类型"><el-input v-model="convDialog.form.bizType" /></el-form-item>
+        <el-form-item label="折算系数">
+          <el-input-number v-model="convDialog.form.factor" :min="0" :max="1" :precision="6" :step="0.01" :controls="false" style="width:100%" />
+          <div class="form-tip">当前值：{{ fmtPct(convDialog.form.factor) }}</div>
+        </el-form-item>
+        <el-form-item label="生效日"><el-date-picker v-model="convDialog.form.effectiveFrom" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="convDialog.show = false">取消</el-button>
+        <el-button type="primary" @click="saveConversion">保存</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, computed, toRefs, onMounted, watch } from 'vue';
+import { ElMessage } from 'element-plus';
+import { useDict } from '@/utils/dict';
+import {
+  payrollApi,
+  type RankRule,
+  type PolicyRule,
+  type ConversionRule,
+  type StoreDept,
+  type DeptMonthlyConfig,
+} from '@/api/panjia/payroll';
+
+// 职级字典：规则页职级下拉/展示的唯一出处
+const { panjia_employee_level } = toRefs<any>(useDict('panjia_employee_level'));
+
+const activeTab = ref('rank');
+const rankList = ref<RankRule[]>([]);
+const policyList = ref<PolicyRule[]>([]);
+const conversionList = ref<ConversionRule[]>([]);
+
+// ==================== 工具函数 ====================
+const fmtMoney = (n: number | null | undefined) =>
+  n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtPct = (n: number | null | undefined) =>
+  n == null ? '—' : (Number(n) * 100).toFixed(1) + '%';
+
+const safeParse = (s: string): any => {
+  try { return s ? JSON.parse(s) : {}; } catch { return {}; }
+};
+
+// ==================== 职级规则 ====================
+const rankDialog = ref({ show: false, form: {} as RankRule });
+// 编辑时的结构化 JSON 对象
+const rankJson = reactive({
+  mentorBonusMode: '' as string,
+  mentorBonusRateAdd: 0,
+  mentorBonusRateCap: 0,
+  mentorBonusAmountRatio: 0,
+  brackets: [] as Array<{ min: number; max: number | null; rate: number }>,
+  // 晋升规则（对应 ruleContent.promotion，算薪时自动判定，次月生效）
+  promotion: {
+    protectMonths: null as number | null,
+    threshold: null as number | null,
+    belowTo: '' as string,
+    reachTo: '' as string,
+  },
+});
+
+const parseRank = (row: RankRule) => safeParse(row.ruleContent);
+
+// ==================== 生效区间工具 ====================
+const OPEN_END = '9999-12-31';
+const today = () => new Date().toISOString().slice(0, 10);
+const isOpenEnd = (d?: string | null) => !d || d >= OPEN_END;
+const isExpired = (row: RankRule) => !isOpenEnd(row.effectiveTo) && row.effectiveTo! < today();
+const isFuture = (row: RankRule) => row.effectiveFrom > today();
+
+// 列表排序：职级 → 生效日，同职级多版规则按时间排列
+const sortedRankList = computed(() =>
+  rankList.value.toSorted((a, b) =>
+    a.levelCode === b.levelCode
+      ? a.effectiveFrom.localeCompare(b.effectiveFrom)
+      : a.levelCode.localeCompare(b.levelCode),
+  ),
+);
+
+// 已失效行置灰
+const rankRowClass = ({ row }: { row: RankRule }) => (isExpired(row) ? 'rank-row-expired' : '');
+
+// 当前无任何生效版本的职级（规则页预警：算薪会按最近版本兜底）
+const noEffectiveLevels = computed(() => {
+  const t = today();
+  const byLevel = new Map<string, RankRule[]>();
+  rankList.value.forEach((r) => {
+    const arr = byLevel.get(r.levelCode) ?? [];
+    arr.push(r);
+    byLevel.set(r.levelCode, arr);
+  });
+  return Array.from(byLevel.entries())
+    .filter(
+      ([, rs]) =>
+        !rs.some((r) => r.effectiveFrom <= t && (isOpenEnd(r.effectiveTo) || r.effectiveTo! >= t)),
+    )
+    .map(([lv]) => lv)
+    .toSorted();
+});
+
+// 可选职级：字典全部职级（同一职级允许配置多版规则，按生效区间区分）
+const availableLevelOptions = computed(
+  () => (panjia_employee_level.value ?? []) as Array<{ value: string; label: string }>,
+);
+
+// 字典职级清单（值数组）：社保比例等按职级配置以字典为准，新增字典项自动出现
+const dictLevels = computed(() => availableLevelOptions.value.map((d) => d.value));
+
+// 字典新增职级时，社保比例自动补一行（默认 0，由用户在政策页设置后保存）
+watch(
+  dictLevels,
+  (levels) => {
+    levels.forEach((lv) => {
+      if (policyJson.socialSettlementRatio[lv] == null) {
+        policyJson.socialSettlementRatio[lv] = 0;
+      }
+    });
+  },
+  { immediate: true },
+);
+
+const addRank = () => {
+  rankDialog.value = {
+    show: true,
+    form: {
+      id: undefined as any,
+      levelCode: '',
+      baseSalary: 0,
+      baseRate: 0,
+      minSalary: 0,
+      teamRate: null,
+      personalRate: null,
+      ruleContent: '{}',
+      effectiveFrom: new Date().toISOString().slice(0, 10),
+      effectiveTo: null,
+    } as RankRule,
+  };
+  rankJson.mentorBonusMode = 'RATE_ADD';
+  rankJson.mentorBonusRateAdd = 0.02;
+  rankJson.mentorBonusRateCap = 0.10;
+  rankJson.mentorBonusAmountRatio = 0;
+  rankJson.brackets = [];
+  rankJson.promotion = { protectMonths: null, threshold: null, belowTo: '', reachTo: '' };
+};
+
+const editRank = (row: RankRule) => {
+  // 长期有效（9999-12-31）在弹窗里显示为空
+  const form = { ...row, effectiveTo: isOpenEnd(row.effectiveTo) ? null : row.effectiveTo };
+  rankDialog.value = { show: true, form };
+  const j = safeParse(row.ruleContent);
+  rankJson.mentorBonusMode = j.mentorBonusMode || '';
+  rankJson.mentorBonusRateAdd = j.mentorBonusRateAdd ?? 0;
+  rankJson.mentorBonusRateCap = j.mentorBonusRateCap ?? 0;
+  rankJson.mentorBonusAmountRatio = j.mentorBonusAmountRatio ?? 0;
+  rankJson.brackets = (j.brackets ?? []).map((b: any) => ({ ...b }));
+  rankJson.promotion = {
+    protectMonths: j.promotion?.protectMonths ?? null,
+    threshold: j.promotion?.threshold ?? null,
+    belowTo: j.promotion?.belowTo ?? '',
+    reachTo: j.promotion?.reachTo ?? '',
+  };
+};
+
+const saveRank = async () => {
+  if (!rankDialog.value.form.levelCode) {
+    ElMessage.warning('请选择职级');
+    return;
+  }
+  if (!rankDialog.value.form.effectiveFrom) {
+    ElMessage.warning('请选择生效日');
+    return;
+  }
+  const form = rankDialog.value.form;
+  // 失效日留空 = 长期有效
+  form.effectiveTo = form.effectiveTo || OPEN_END;
+  if (form.effectiveTo < form.effectiveFrom) {
+    ElMessage.warning('失效日不能早于生效日');
+    return;
+  }
+  // 同职级生效区间不允许重叠（算薪按日期命中唯一版本）
+  const overlap = rankList.value.find(
+    (r) =>
+      r.levelCode === form.levelCode &&
+      r.id !== form.id &&
+      r.effectiveFrom <= form.effectiveTo! &&
+      (isOpenEnd(r.effectiveTo) ? OPEN_END : r.effectiveTo!) >= form.effectiveFrom,
+  );
+  if (overlap) {
+    ElMessage.warning(
+      `与已有规则生效区间重叠（${overlap.effectiveFrom} ~ ${isOpenEnd(overlap.effectiveTo) ? '至今' : overlap.effectiveTo}），请调整日期`,
+    );
+    return;
+  }
+  // 序列化结构化字段回 ruleContent
+  const j: any = { mentorBonusMode: rankJson.mentorBonusMode };
+  if (rankJson.mentorBonusMode === 'RATE_ADD') {
+    j.mentorBonusRateAdd = rankJson.mentorBonusRateAdd;
+    j.mentorBonusRateCap = rankJson.mentorBonusRateCap;
+  } else if (rankJson.mentorBonusMode === 'AMOUNT_RATIO') {
+    j.mentorBonusAmountRatio = rankJson.mentorBonusAmountRatio;
+  }
+  if (rankDialog.value.form.levelCode === 'D') {
+    j.brackets = rankJson.brackets;
+  }
+  // 晋升规则：阈值或保护期任一配置才写入；全空则移除 promotion 节点（不参与自动晋升）
+  const p = rankJson.promotion;
+  if (p.threshold != null || p.protectMonths != null) {
+    const promotion: Record<string, any> = {};
+    if (p.protectMonths != null) promotion.protectMonths = p.protectMonths;
+    if (p.threshold != null) promotion.threshold = p.threshold;
+    if (p.reachTo) promotion.reachTo = p.reachTo;
+    if (p.belowTo) promotion.belowTo = p.belowTo;
+    j.promotion = promotion;
+  } else {
+    delete j.promotion;
+  }
+  rankDialog.value.form.ruleContent = JSON.stringify(j);
+  await payrollApi.saveRank(rankDialog.value.form);
+  rankDialog.value.show = false;
+  ElMessage.success('已保存');
+  load();
+};
+
+// ==================== 政策规则（单条记录，页面内直接编辑） ====================
+const policyForm = reactive({} as PolicyRule);
+const policySaving = ref(false);
+// 结构化 JSON 对象
+const policyJson = reactive({
+  socialSettlementRatio: {} as Record<string, number>,
+  parttimeExemptSocial: true,
+  parttimeExemptHousing: true,
+  housingFund: 0,
+  // 未买社保扣点（负=扣点，0=不扣），引擎 policy.noSocialDeduct，种子默认 -0.02
+  noSocialDeduct: -0.02,
+  attendance: {
+    lateFee: 0, absentNoBaseFee: 0, absentWithBaseTimes: 0,
+    personalLeaveFee: 50, personalLeaveDeductDailyWage: true,
+    sickClinicWithBaseFee: 30, sickClinicNoBaseFee: 20,
+    sickHospitalWithBaseFee: 20, sickHospitalNoBaseFee: 0,
+    leaveFee: 50,
+  },
+  points: { penaltyFee: 0, gradeA: 0, gradeB: 0, deductA: 0, deductB: 0, deductC: 0 }, // 仅回显兼容，已迁移至绩效方案配置
+  commercialInsurance: 0,
+  dormitoryFee: 0,
+  tax: { mode: 'EXTERNAL', threshold: 0, deductSocial: true, brackets: [] as Array<{ min: number; rate: number; quick: number }> },
+});
+
+const loadPolicy = (row: PolicyRule) => {
+  Object.assign(policyForm, row);
+  const j = safeParse(row.ruleContent);
+  policyJson.socialSettlementRatio = { ...j.socialSettlementRatio };
+  // 字典中有但 JSON 里还没有的职级（新增职级），补默认值 0
+  dictLevels.value.forEach((lv) => {
+    if (policyJson.socialSettlementRatio[lv] == null) {
+      policyJson.socialSettlementRatio[lv] = 0;
+    }
+  });
+  policyJson.parttimeExemptSocial = j.parttimeExemptSocial ?? true;
+  policyJson.parttimeExemptHousing = j.parttimeExemptHousing ?? true;
+  policyJson.housingFund = j.housingFund ?? 0;
+  policyJson.noSocialDeduct = j.noSocialDeduct ?? -0.02;
+  // 考勤规则逐 key 兜底（历史 JSON 无新 key 时按引擎默认值回显）；workDaysPerMonth 已废弃不回显
+  policyJson.attendance = {
+    lateFee: j.attendance?.lateFee ?? 0,
+    absentNoBaseFee: j.attendance?.absentNoBaseFee ?? 0,
+    absentWithBaseTimes: j.attendance?.absentWithBaseTimes ?? 0,
+    personalLeaveFee: j.attendance?.personalLeaveFee ?? 50,
+    personalLeaveDeductDailyWage: j.attendance?.personalLeaveDeductDailyWage ?? true,
+    sickClinicWithBaseFee: j.attendance?.sickClinicWithBaseFee ?? 30,
+    sickClinicNoBaseFee: j.attendance?.sickClinicNoBaseFee ?? 20,
+    sickHospitalWithBaseFee: j.attendance?.sickHospitalWithBaseFee ?? 20,
+    sickHospitalNoBaseFee: j.attendance?.sickHospitalNoBaseFee ?? 0,
+    leaveFee: j.attendance?.leaveFee ?? 50,
+  };
+  policyJson.points = { ...j.points };
+  policyJson.commercialInsurance = j.commercialInsurance ?? 0;
+  policyJson.dormitoryFee = j.dormitoryFee ?? 0;
+  policyJson.tax = {
+    mode: j.tax?.mode ?? 'EXTERNAL',
+    threshold: j.tax?.threshold ?? 5000,
+    deductSocial: j.tax?.deductSocial ?? true,
+    brackets: (j.tax?.brackets ?? []).map((b: any) => ({ ...b })),
+  };
+};
+
+const savePolicyInline = async () => {
+  policySaving.value = true;
+  try {
+    // 社保比例只保留字典中的职级（字典删减职级后，保存即自动清理多余键）
+    const ratio: Record<string, number> = {};
+    dictLevels.value.forEach((lv) => {
+      ratio[lv] = policyJson.socialSettlementRatio[lv] ?? 0;
+    });
+    policyForm.ruleContent = JSON.stringify({
+      socialSettlementRatio: ratio,
+      parttimeExemptSocial: policyJson.parttimeExemptSocial,
+      parttimeExemptHousing: policyJson.parttimeExemptHousing,
+      housingFund: policyJson.housingFund,
+      noSocialDeduct: policyJson.noSocialDeduct,
+      attendance: policyJson.attendance,
+      // points 已迁移至绩效方案（pj_payroll_perf_scheme），保存时剔除避免双配置源
+      commercialInsurance: policyJson.commercialInsurance,
+      dormitoryFee: policyJson.dormitoryFee,
+      tax: policyJson.tax,
+    });
+    await payrollApi.savePolicy(policyForm);
+    ElMessage.success('已保存');
+  } finally {
+    policySaving.value = false;
+  }
+};
+
+// ==================== 折算规则 ====================
+const convDialog = ref({ show: false, form: {} as ConversionRule });
+const editConversion = (row: ConversionRule) => { convDialog.value = { show: true, form: { ...row } }; };
+const saveConversion = async () => {
+  await payrollApi.saveConversion(convDialog.value.form);
+  convDialog.value.show = false;
+  ElMessage.success('已保存');
+  load();
+};
+
+// ==================== 门店社保标准（DEPT 政策 socialStandard） ====================
+const storeList = ref<StoreDept[]>([]);
+const socialSaving = ref(false);
+/** deptId(字符串) → 编辑行（标准/已存在政策 id/生效日）；雪花 ID 一律字符串键，禁止 Number 转换 */
+interface SocialRow {
+  standard: number | null;
+  id?: number | string;
+  effectiveFrom?: string;
+}
+const socialRows = reactive<Record<string, SocialRow>>({});
+
+const buildSocialRows = () => {
+  const deptPolicies = policyList.value.filter((p) => p.scopeType === 'DEPT');
+  storeList.value.forEach((s) => {
+    const key = String(s.deptId);
+    const p = deptPolicies.find((x) => x.scopeKey === key);
+    socialRows[key] = p
+      ? { standard: safeParse(p.ruleContent).socialStandard ?? null, id: p.id, effectiveFrom: p.effectiveFrom }
+      : { standard: null };
+  });
+};
+
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+};
+
+const saveSocialStandards = async () => {
+  socialSaving.value = true;
+  try {
+    for (const s of storeList.value) {
+      const key = String(s.deptId);
+      const row = socialRows[key];
+      if (!row || row.standard == null) {
+        continue; // 未填 = 不生成配置（算薪按 0）
+      }
+      await payrollApi.savePolicy({
+        id: row.id as number,
+        scopeType: 'DEPT',
+        scopeKey: key,
+        baseSocial: 1637.15,
+        ruleContent: JSON.stringify({ socialStandard: row.standard }),
+        effectiveFrom: row.effectiveFrom || todayStr(),
+      } as PolicyRule);
+    }
+    ElMessage.success('已保存');
+    await load();
+  } finally {
+    socialSaving.value = false;
+  }
+};
+
+// ==================== 门店月度配置（新签与结佣差额） ====================
+const currentMonth = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+const monthlyPeriod = ref(currentMonth());
+const monthlyRows = ref<DeptMonthlyConfig[]>([]);
+const monthlyLoading = ref(false);
+const monthlySaving = ref(false);
+
+const loadMonthly = async () => {
+  if (!monthlyPeriod.value || storeList.value.length === 0) {
+    return;
+  }
+  monthlyLoading.value = true;
+  try {
+    const cfgs = ((await payrollApi.deptMonthlyList(monthlyPeriod.value)) as any).data ?? [];
+    const cfgMap = new Map<string, DeptMonthlyConfig>(cfgs.map((c: DeptMonthlyConfig) => [String(c.deptId), c]));
+    monthlyRows.value = storeList.value.map((s) => {
+      const c = cfgMap.get(String(s.deptId));
+      return {
+        id: c?.id,
+        deptId: s.deptId,
+        deptName: s.deptName,
+        diffAmount: c?.diffAmount ?? null,
+        remark: c?.remark ?? null,
+      };
+    });
+  } finally {
+    monthlyLoading.value = false;
+  }
+};
+
+const saveMonthly = async () => {
+  monthlySaving.value = true;
+  try {
+    // 提交前剥离展示字段（deptName），只传后端实体字段
+    await payrollApi.saveDeptMonthly(
+      monthlyPeriod.value,
+      monthlyRows.value.map(({ id, deptId, diffAmount, remark }) => ({ id, deptId, diffAmount, remark })),
+    );
+    ElMessage.success('已保存');
+    await loadMonthly();
+  } finally {
+    monthlySaving.value = false;
+  }
+};
+
+/** tab 首次切入时懒加载对应数据 */
+const onTabChange = (name: string | number) => {
+  if (name === 'deptSocial' && storeList.value.length === 0) {
+    load();
+  }
+  if (name === 'deptMonthly') {
+    loadMonthly();
+  }
+};
+
+// ==================== 加载 ====================
+const load = async () => {
+  const [rankRes, policyRes, convRes, storeRes] = await Promise.all([
+    payrollApi.rankList(),
+    payrollApi.policyList(),
+    payrollApi.conversionList(),
+    payrollApi.storeList(),
+  ]);
+  rankList.value = ((rankRes as any).data) ?? [];
+  policyList.value = ((policyRes as any).data) ?? [];
+  conversionList.value = ((convRes as any).data) ?? [];
+  storeList.value = ((storeRes as any).data) ?? [];
+  if (policyList.value.length > 0) {
+    // 客户政策页取 GLOBAL 政策（DEPT 政策在「门店社保标准」tab 维护，不覆盖全局表单）
+    const globalPolicy = policyList.value.find((p) => p.scopeType === 'GLOBAL') ?? policyList.value[0];
+    loadPolicy(globalPolicy);
+  }
+  buildSocialRows();
+  if (activeTab.value === 'deptMonthly') {
+    loadMonthly();
+  }
+};
+
+onMounted(load);
+</script>
+
+<style scoped>
+.policy-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 8px 4px;
+}
+.policy-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+}
+.monthly-toolbar-left {
+  display: flex;
+  align-items: center;
+}
+.policy-form {
+  padding: 0 8px;
+}
+.ratio-tag {
+  display: inline-block;
+  margin: 2px 6px 2px 0;
+  padding: 1px 6px;
+  background: #ecf5ff;
+  color: #409eff;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.form-tip {
+  color: #909399;
+  font-size: 12px;
+  margin-top: 2px;
+}
+.section-tip {
+  color: #909399;
+  font-size: 12px;
+  margin: 0 0 12px 4px;
+}
+.social-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+.social-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.social-label {
+  width: 28px;
+  font-size: 13px;
+  color: #606266;
+  text-align: right;
+}
+.social-item :deep(.el-input-number) {
+  flex: 1;
+}
+.social-pct {
+  width: 48px;
+  font-size: 12px;
+  color: #409eff;
+}
+/* 已失效的历史版本规则置灰 */
+:deep(.rank-row-expired) {
+  color: #a8abb2;
+  background: #fafafa;
+}
+</style>

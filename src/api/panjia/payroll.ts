@@ -1,0 +1,406 @@
+import panjiaRequest from './index';
+import { download } from '@/utils/request';
+
+export interface PayrollBatch {
+  id: number;
+  period: string;
+  deptScope: string;
+  status: string;
+  employeeCount: number;
+  grossTotal: number;
+  deductTotal: number;
+  taxTotal: number;
+  netTotal: number;
+  attempt: number;
+  lockedAt: string;
+  /** 工资条发送时间（员工端「工资查询」可见的前提之一；历史锁定/发放批次无此值也可见） */
+  sendTime?: string | null;
+  /** 工资条发送操作人（留痕） */
+  sendBy?: string | null;
+  createTime: string;
+}
+
+export interface PayrollDetail {
+  id: number;
+  employeeId: number;
+  /** 员工核对时间（纯留痕；null=未核对，批次锁定后不可核对） */
+  ackTime?: string | null;
+  deptId: number;
+  levelCode: string;
+  employeeRole: string;
+  isPartTime: boolean;
+  /** 员工姓名（后端按 employeeId 翻译） */
+  employeeName?: string;
+  /** 工号（后端按 employeeId 翻译） */
+  employeeCode?: string;
+  /** 门店名称（后端按 deptId 翻译） */
+  deptName?: string;
+  commissionIncome: number;
+  teamIncome: number;
+  personalNewsignIncome: number;
+  storeIncome: number;
+  baseSalary: number;
+  guaranteeFill: number;
+  mentorBonus: number;
+  bonus: number;
+  otherIncome: number;
+  socialFee: number;
+  housingFund: number;
+  attendanceFee: number;
+  commercialInsurance: number;
+  dormitoryFee: number;
+  negativeCarryover: number;
+  otherDeduct: number;
+  /** 积分扣款（晚提交处罚：次数×5元/次） */
+  pointsFee?: number;
+  gross: number;
+  deduct: number;
+  tax: number;
+  net: number;
+  employerSocial: number;
+  /** 个税来源：ENGINE=内部引擎试算，EXTERNAL=外部个税系统导入回补 */
+  taxSource?: string;
+  /** 当月新签业绩（折算后金额） */
+  newSignPerformance?: number;
+  /** 当月结佣业绩（不折算） */
+  commissionPerformance?: number;
+  /** 当月新签业绩提成比例（职级personalRate） */
+  newSignRate?: number;
+  finalRate: number;
+  perfGrade: string;
+  /** 绩效提成扣点（积分等级 A/B/C 对应扣点，A=0/B=-2%/C=-4%，负=扣点） */
+  perfDeduct?: number | string | null;
+  /** 绩效方案金额扣款（业绩绩效B版/店长积分绩效：未达标扣固定金额，正=扣款；积分类方案为空） */
+  perfDeductFee?: number | string | null;
+  /** 绩效方案编码（该批次冻结的实际生效方案；空=历史批次按默认积分绩效） */
+  perfSchemeCode?: string | null;
+  /** 绩效方案计算过程 JSON（{schemeCode,schemeName,schemeType,grade?,tierMin?,tierMax?,perf?,deduct?,fee?}） */
+  perfCalcProcess?: string | null;
+  /** 提成点调整叠加值（负值=扣点，算薪时叠加到综合提点；0=无调整） */
+  manualAdjust?: number | string | null;
+  /** 所有扣点合计（等级扣点 + 未参保自动扣点 + 人工调整，前端「绩效提成扣点」列统一取此值） */
+  totalDeduct?: number | string | null;
+  /** 伯乐加点（仅 RATE_ADD 模式落地：加点费率×达标千里马数封顶，已计入 finalRate；AMOUNT_RATIO 为空。前端据此自适应显示百分比或金额） */
+  mentorAdd?: number | string | null;
+  /** 提成点调整溯源 JSON（RateAdjustItem 数组：type/rate/reason/source/adjustId） */
+  rateAdjustJson?: string | null;
+  /** 结佣提成跨月回溯计算过程 JSON（[{month,perf,rate,income}]，仅存在回溯时落地） */
+  commissionCalcProcess?: string | null;
+  /** 保底补足计算过程 JSON（{minSalary,compareLabel,compareValue,steps?,newsignSteps?,fill}，保底职级落地，未触发也落地） */
+  guaranteeCalcProcess?: string | null;
+  /** 店长/总监 sheet：门店当月新签计薪业绩合计（折算后） */
+  deptNewSignTotal?: number;
+  /** 店长/总监 sheet：门店社保业绩扣款（门店社保扣减标准 × 计缴参保人数） */
+  deptEmployerSocialTotal?: number;
+  /** 门店社保扣减标准（每人每月固定额，DEPT 政策 socialStandard） */
+  deptSocialStandard?: number;
+  /** 门店计缴参保人数（非兼职+参保+个人社保比例>30%） */
+  deptInsuredCount?: number;
+  /** 新签与结佣差额（门店当月配置值，团队计薪业绩直接扣减） */
+  deptDiffAmount?: number;
+  /** 店长 sheet：团队提成比例（职级 teamRate，如 0.10） */
+  teamRate?: number;
+  /** 总监 sheet：门店提成比例（跳点命中档 rate） */
+  storeRate?: number;
+  /** 店长 sheet：保底工资（职级 minSalary，如 8000） */
+  minSalary?: number;
+  /** 总监 sheet：全勤奖（policy.fullAttendance 默认 500） */
+  fullAttendance?: number;
+  /** 总监各门店提成明细 JSON（DirectorStoreItem 数组：deptId/newSign/social/billable/rate/income，导出按门店分行） */
+  directorStoreItems?: string | null;
+}
+
+/** 本人工资查询用的员工主数据（后端 EmployeeMainDataDTO） */
+export interface MyPayrollEmployee {
+  employeeId: number | string;
+  employeeCode: string;
+  employeeName: string;
+  deptId: number | string;
+  deptName: string;
+  status?: string;
+  userId?: number | string;
+}
+
+/** GET /payroll/my/detail 返回体：批次 + 本人明细 + 员工主数据 */
+export interface MyPayrollDetailVO {
+  batch: PayrollBatch;
+  detail: PayrollDetail;
+  employee: MyPayrollEmployee;
+}
+
+export interface RankRule {
+  id: number;
+  levelCode: string;
+  baseSalary: number;
+  baseRate: number;
+  minSalary: number;
+  teamRate: number | null;
+  personalRate: number | null;
+  ruleContent: string;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+}
+
+export interface PolicyRule {
+  id: number;
+  scopeType: string;
+  scopeKey: string | null;
+  baseSocial: number;
+  ruleContent: string;
+  effectiveFrom: string;
+}
+
+export interface ConversionRule {
+  id: number;
+  bizType: string;
+  factor: number;
+  effectiveFrom: string;
+}
+
+/** 绩效方案类型 */
+export type PerfSchemeType = 'NONE' | 'GRADE_RATE' | 'RATE_TIER' | 'AMOUNT_TIER' | 'GRADE_AMOUNT';
+
+/** 绩效方案（pj_payroll_perf_scheme；员工档案经 PERF_SCHEME 事实按月指派，未指派=默认方案积分绩效） */
+export interface PerfScheme {
+  id?: number;
+  /** 方案编码（唯一，指派事实存储值） */
+  code: string;
+  name: string;
+  /** NONE=无绩效/GRADE_RATE=积分绩效（等级扣提点）/RATE_TIER=业绩阶梯扣提点/AMOUNT_TIER=业绩阶梯扣金额/GRADE_AMOUNT=积分等级扣金额（店长） */
+  schemeType: PerfSchemeType;
+  /** 适用岗位 AGENT=经纪人/MANAGER=店长/ALL=不限 */
+  applicableRole: string;
+  /** 方案参数 JSON：积分类 {gradeA,gradeB,deductA..C,penaltyFee} 或 {gradeA,gradeB,feeA..C}；阶梯类 {tiers:[{min,max,rate|amount}]} */
+  ruleContent: string;
+  /** 默认方案（唯一；员工未指派时算薪按此方案） */
+  isDefault?: boolean;
+  effectiveFrom: string;
+}
+
+/** 门店选项（顶级根的直接子部门），门店级配置页枚举门店用（雪花 ID 必须字符串处理） */
+export interface StoreDept {
+  deptId: number | string;
+  deptName: string;
+}
+
+/** 门店月度算薪配置（新签与结佣差额等，按门店×月份维护） */
+export interface DeptMonthlyConfig {
+  id?: number | string;
+  deptId: number | string;
+  /** 门店名（前端展示用，提交前剥离） */
+  deptName?: string;
+  period?: string;
+  /** 新签与结佣差额（团队计薪业绩直接扣减项，未配置按 0） */
+  diffAmount?: number | string | null;
+  remark?: string | null;
+}
+
+export interface ManualItem {
+  id: number;
+  startMonth: string;
+  endMonth: string | null;
+  employeeId: number;
+  itemType: string;
+  subType: string | null;
+  amount: number;
+  reason: string;
+  status: string;
+  createTime: string;
+}
+
+export const payrollApi = {
+  // 批次
+  createBatch(data: { period: string; deptScope?: string }) {
+    return panjiaRequest.post<PayrollBatch>('/payroll/batch', data);
+  },
+  calculate(id: number) {
+    return panjiaRequest.post<PayrollBatch>(`/payroll/batch/${id}/calculate`);
+  },
+  submit(id: number) {
+    return panjiaRequest.post<PayrollBatch>(`/payroll/batch/${id}/submit`);
+  },
+  /** 个税回补导入（外部个税系统算税后回填）：员工ID(字符串雪花) → 本月个税 */
+  importTax(id: number | string, taxByEmployeeId: Record<string, number>) {
+    return panjiaRequest.post<PayrollBatch>(`/payroll/batch/${id}/tax-import`, taxByEmployeeId);
+  },
+  pay(id: number) {
+    return panjiaRequest.post<PayrollBatch>(`/payroll/batch/${id}/pay`);
+  },
+  /** 发送工资条：算薪完成且未锁定可发；发送后员工端「工资查询」可见 */
+  send(id: number) {
+    return panjiaRequest.post<PayrollBatch>(`/payroll/batch/${id}/send`);
+  },
+  listBatches(period?: string) {
+    return panjiaRequest.get<PayrollBatch[]>('/payroll/batch', { period });
+  },
+  /** id 接受字符串：雪花 ID 由后端以字符串下发，Number() 转换 19 位会丢精度 */
+  getBatch(id: number | string) {
+    return panjiaRequest.get<PayrollBatch>(`/payroll/batch/${id}`);
+  },
+  getDetails(id: number | string) {
+    return panjiaRequest.get<PayrollDetail[]>(`/payroll/batch/${id}/details`);
+  },
+  getSnapshot(id: number) {
+    return panjiaRequest.get<{ snapshotContent: string }>(`/payroll/batch/${id}/snapshot`);
+  },
+
+  // 规则
+  rankList() {
+    return panjiaRequest.get<RankRule[]>('/payroll/rule/rank');
+  },
+  saveRank(data: RankRule) {
+    return panjiaRequest.post('/payroll/rule/rank', data);
+  },
+  policyList() {
+    return panjiaRequest.get<PolicyRule[]>('/payroll/rule/policy');
+  },
+  savePolicy(data: PolicyRule) {
+    return panjiaRequest.post('/payroll/rule/policy', data);
+  },
+  conversionList() {
+    return panjiaRequest.get<ConversionRule[]>('/payroll/rule/conversion');
+  },
+  saveConversion(data: ConversionRule) {
+    return panjiaRequest.post('/payroll/rule/conversion', data);
+  },
+  /** 绩效方案列表（积分/业绩阶梯/店长积分/无绩效，员工档案指派） */
+  perfSchemeList() {
+    return panjiaRequest.get<PerfScheme[]>('/payroll/rule/perf-scheme');
+  },
+  /** 保存绩效方案（code 存在则更新；默认方案唯一） */
+  savePerfScheme(data: PerfScheme) {
+    return panjiaRequest.post('/payroll/rule/perf-scheme', data);
+  },
+
+  // 门店级配置
+  /** 门店列表（顶级根直接子部门），门店社保标准/月度配置页枚举门店 */
+  storeList() {
+    return panjiaRequest.get<StoreDept[]>('/payroll/rule/stores');
+  },
+  /** 门店月度配置列表（新签与结佣差额等） */
+  deptMonthlyList(period: string) {
+    return panjiaRequest.get<DeptMonthlyConfig[]>('/payroll/rule/dept-monthly', { period });
+  },
+  /** 批量保存某月门店月度配置 */
+  saveDeptMonthly(period: string, rows: DeptMonthlyConfig[]) {
+    return panjiaRequest.post('/payroll/rule/dept-monthly', rows, { params: { period } });
+  },
+
+  // 手工项
+  createManual(data: Partial<ManualItem>) {
+    return panjiaRequest.post<number>('/payroll/manual-item', data);
+  },
+  listManual(period: string) {
+    return panjiaRequest.get<ManualItem[]>('/payroll/manual-item', { period });
+  },
+  getManual(id: number | string) {
+    return panjiaRequest.get<ManualItem>(`/payroll/manual-item/${id}`);
+  },
+  deleteManual(id: number) {
+    return panjiaRequest.delete(`/payroll/manual-item/${id}`);
+  },
+  importManual(file: File) {
+    const form = new FormData();
+    form.append('file', file);
+    return panjiaRequest.post<string>('/payroll/manual-item/importData', form);
+  },
+  exportManual(period: string, fileName: string) {
+    return download('/payroll/manual-item/export', { period }, fileName);
+  },
+  downloadManualTemplate() {
+    return download('/payroll/manual-item/importTemplate', {}, '其他收支导入模板.xlsx');
+  },
+};
+
+/** 结佣追溯明细项（后端 CommissionItemDTO） */
+export interface CommissionTraceItem {
+  itemId?: number | string;
+  performanceFactId?: number | string;
+  period: string;
+  approvedMonth?: string;
+  employeeId: number | string;
+  employeeCode?: string;
+  employeeName?: string;
+  deptId?: number | string;
+  deptName?: string;
+  contractNo?: string;
+  orderNo?: string;
+  businessDate?: string;
+  propertyAddress?: string;
+  shareRatio?: number | string;
+  bizType: string;
+  roleType?: string;
+  feeItem?: string;
+  amount: number;
+  /** 结佣业绩折算后金额（amount × conversionFactor） */
+  convertedAmount?: number;
+  status?: string;
+  source?: string;
+}
+
+/** 本人工资查询（综合查询 → 工资查询；员工身份后端按登录态解析） */
+export const mySalaryApi = {
+  /** 我有工资明细的批次（期间倒序） */
+  listBatches() {
+    return panjiaRequest.get<PayrollBatch[]>('/payroll/batch/my/batches');
+  },
+  /** 我在指定批次的工资明细 + 员工主数据 */
+  getDetail(batchId: number | string) {
+    return panjiaRequest.get<MyPayrollDetailVO>('/payroll/batch/my/detail', { batchId });
+  },
+  /** 员工核对工资（纯留痕标记；批次锁定后不可核对，已核对幂等） */
+  ackDetail(batchId: number | string) {
+    return panjiaRequest.post<PayrollDetail>(`/payroll/batch/my/detail/ack?batchId=${batchId}`);
+  },
+  /** 我的结佣追溯（本人期间已审批结佣明细） */
+  myCommissionTrace(period: string) {
+    return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/my/commission-trace', { period });
+  },
+  /** 我的门店新签明细（店长查看所在门店团队成员新签业绩） */
+  myTeamNewSign(period: string) {
+    return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/my/team-newsign', { period });
+  },
+  // 工资查询密码门
+  /** 查询当前登录员工是否已设置工资查询密码 */
+  passwordStatus() {
+    return panjiaRequest.get<{ hasPassword: boolean }>('/payroll/batch/my/password-status');
+  },
+  /** 验证工资查询密码 */
+  verifyPassword(password: string) {
+    return panjiaRequest.post<void>('/payroll/batch/my/verify-password', { password });
+  },
+  /** 设置/修改工资查询密码；oldPassword 修改时必填，首次设置可省略 */
+  setPassword(password: string, oldPassword?: string) {
+    const body: Record<string, string> = { password };
+    if (oldPassword) body.oldPassword = oldPassword;
+    return panjiaRequest.put<void>('/payroll/batch/my/password', body);
+  },
+};
+
+/** 组织视角结佣追溯（总监/财务查指定员工） */
+export const orgCommissionTraceApi = {
+  list(period: string, employeeId: number | string) {
+    return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/commission-trace', { period, employeeId });
+  },
+  teamNewSign(period: string, deptId: number | string) {
+    return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/team-newsign', { period, deptId });
+  },
+  /** 导出用：指定期间全部结佣明细 */
+  allCommission(period: string) {
+    return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/all-commission', { period });
+  },
+  /** 导出用：指定期间全部新签明细 */
+  allNewSign(period: string) {
+    return panjiaRequest.get<CommissionTraceItem[]>('/payroll/batch/all-newsign', { period });
+  },
+  /** 历史工资 Excel 导入（仅超级管理员） */
+  historyImport(period: string, file: File) {
+    const formData = new FormData();
+    formData.append('period', period);
+    formData.append('file', file);
+    return panjiaRequest.post<string>('/payroll/batch/history-import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    });
+  },
+};
