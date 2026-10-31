@@ -355,9 +355,14 @@
             <span v-else class="amount amount-received">{{ formatAmount(row.receivedAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="新签业绩" align="right" width="120">
+        <el-table-column label="新签业绩" align="right" width="180">
           <template #default="{ row }">
-            <span :class="['amount', num(row.amount) < 0 ? 'amount-negative' : 'amount-ink']">{{ formatAmount(row.amount) }}</span>
+            <template v-if="row.originalAmount != null && num(row.originalAmount) !== num(row.amount)">
+              <span class="amount-strike">{{ formatAmount(row.originalAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span :class="['amount', num(row.amount) < 0 ? 'amount-negative' : 'amount-ink']">{{ formatAmount(row.amount) }}</span>
+            </template>
+            <span v-else :class="['amount', num(row.amount) < 0 ? 'amount-negative' : 'amount-ink']">{{ formatAmount(row.amount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="120">
