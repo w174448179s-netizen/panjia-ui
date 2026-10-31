@@ -285,9 +285,9 @@
           </el-table-column>
           <el-table-column label="说明" min-width="120" align="center">
             <template #default="{ row }">
-              <span v-if="!row.isValid">早于 19:30 提交，不计积分</span>
-              <span v-else-if="row.isLateSubmit">晚于 23:00 提交，计积分并记晚提交</span>
-              <span v-else>正常窗口内提交</span>
+              <span v-if="!row.isValid">窗口外提交，不计积分（计 0）</span>
+              <span v-else-if="row.isLateSubmit">晚提交，计积分并记晚提交</span>
+              <span v-else>窗口内提交</span>
             </template>
           </el-table-column>
         </el-table>
