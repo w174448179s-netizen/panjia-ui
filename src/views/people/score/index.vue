@@ -97,6 +97,15 @@
               新增积分
             </el-button>
             <el-button type="success" plain icon="Upload" @click="importOpen = true">导入积分</el-button>
+            <el-button
+              v-hasPermi="['dingtalk:sync:score']"
+              type="primary"
+              plain
+              icon="Star"
+              @click="syncOpen = true"
+            >
+              钉钉同步
+            </el-button>
           </div>
         </div>
       </template>
@@ -131,8 +140,11 @@
         <el-table-column label="积分扣款(元)" align="center" prop="pointsFee" width="110">
           <template #default="{ row }">{{ row.pointsFee ? Number(row.pointsFee).toFixed(2) : '0.00' }}</template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="110" fixed="right">
+        <el-table-column label="操作" align="center" width="160" fixed="right">
           <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="openDetail(row as ScoreRecord)">
+              详情
+            </el-button>
             <el-tooltip
               :disabled="!row.locked"
               content="该期间已提交审批或已通过，无法修改"
@@ -235,9 +247,61 @@
       </template>
     </el-dialog>
 
+    <!-- 积分每日明细：导入/钉钉同步落库的每日数据 -->
+    <el-dialog v-model="detailOpen" :title="detailTitle" width="820px" append-to-body destroy-on-close>
+      <div v-loading="detailLoading">
+        <div class="detail-summary">
+          <span>明细天数 <b>{{ detailList.length }}</b></span>
+          <span>计入积分 <b>{{ detailSummary.points }}</b></span>
+          <span>晚提交 <b>{{ detailSummary.late }}</b></span>
+          <span>不计入 <b>{{ detailSummary.invalid }}</b></span>
+        </div>
+        <el-table
+          border
+          size="small"
+          :data="detailList"
+          max-height="460"
+          empty-text="该月暂无积分明细（可能未同步或未导入）"
+        >
+          <el-table-column label="日期" prop="pointDate" width="110" align="center" />
+          <el-table-column label="填报时间" width="170" align="center">
+            <template #default="{ row }">{{ formatTime(row.submitTime) }}</template>
+          </el-table-column>
+          <el-table-column label="当日积分" prop="score" width="90" align="center">
+            <template #default="{ row }">{{ row.score ?? '—' }}</template>
+          </el-table-column>
+          <el-table-column label="是否计入" width="90" align="center">
+            <template #default="{ row }">
+              <el-tag :type="row.isValid ? 'success' : 'info'" effect="plain">
+                {{ row.isValid ? '计入' : '不计入' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="晚提交" width="90" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="row.isLateSubmit" type="warning" effect="plain">晚提交</el-tag>
+              <span v-else>—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="说明" min-width="120" align="center">
+            <template #default="{ row }">
+              <span v-if="!row.isValid">早于 19:30 提交，不计积分</span>
+              <span v-else-if="row.isLateSubmit">晚于 23:00 提交，计积分并记晚提交</span>
+              <span v-else>正常窗口内提交</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </el-dialog>
+
     <!-- 积分导入入口：整体复用导入页组件（自带归属月/上传/批次管理），关闭后刷新汇总列表 -->
     <el-dialog v-model="importOpen" title="积分数据导入" width="1080px" append-to-body destroy-on-close @closed="getList">
       <ImportScorePage />
+    </el-dialog>
+
+    <!-- 钉钉同步入口：默认同步当前筛选的积分期间 -->
+    <el-dialog v-model="syncOpen" title="钉钉积分同步" width="1080px" append-to-body destroy-on-close>
+      <DingTalkSyncPanel type="SCORE" :default-period="period" embedded @finished="handleSynced" />
     </el-dialog>
   </div>
 </template>
@@ -247,12 +311,13 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import type { FormInstance } from 'element-plus';
 import { scoreApi } from '@/api/panjia/score';
-import type { ScoreApproval, ScoreQuery, ScoreRecord } from '@/api/panjia/types';
+import type { ScoreApproval, ScoreDetail, ScoreQuery, ScoreRecord } from '@/api/panjia/types';
 import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import modal from '@/plugins/modal';
 import ScoreApprovalDetail from '@/components/WorkflowHandle/details/ScoreApprovalDetail.vue';
 import ImportScorePage from '@/views/import/score/index.vue';
+import DingTalkSyncPanel from '@/views/people/dingtalk/components/DingTalkSyncPanel.vue';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { useDeptScope } from '@/hooks/useDeptScope';
 
@@ -264,6 +329,9 @@ const total = ref(0);
 
 /** 积分导入弹窗（内嵌导入页组件） */
 const importOpen = ref(false);
+
+/** 钉钉同步弹窗（默认同步当前筛选期间） */
+const syncOpen = ref(false);
 
 // 门店/组别筛选：全系统统一数据权限口径（useDeptScope：默认本部门、树裁剪为子树、不可清空）
 const { deptLocked, defaultDeptId } = useDeptScope();
@@ -502,6 +570,51 @@ const saveEdit = async () => {
   }
 };
 
+// ==================== 每日明细（详情） ====================
+const detailOpen = ref(false);
+const detailLoading = ref(false);
+const detailList = ref<ScoreDetail[]>([]);
+const detailTitle = ref('积分明细');
+
+const detailSummary = computed(() => {
+  let points = 0;
+  let late = 0;
+  let invalid = 0;
+  for (const item of detailList.value) {
+    if (item.isValid) {
+      points += Number(item.score ?? 0);
+    } else {
+      invalid += 1;
+    }
+    if (item.isLateSubmit) late += 1;
+  }
+  return { points, late, invalid };
+});
+
+const formatTime = (value?: string) => (value ? value.replace('T', ' ').slice(0, 19) : '—');
+
+const openDetail = async (row: ScoreRecord) => {
+  const month = row.scoreMonth?.slice(0, 7) ?? '';
+  detailTitle.value = `积分明细 · ${row.employeeName ?? ''}（${row.employeeCode ?? '—'}）· ${month}`;
+  detailList.value = [];
+  detailOpen.value = true;
+  detailLoading.value = true;
+  try {
+    const res = await scoreApi.details(row.employeeId, month);
+    detailList.value = res.data ?? [];
+  } catch (e: any) {
+    modal.msgError(e?.message || '查询积分明细失败');
+  } finally {
+    detailLoading.value = false;
+  }
+};
+
+/** 钉钉同步完成后刷新当前期间的积分列表与审批状态 */
+const handleSynced = () => {
+  getList();
+  loadApproval();
+};
+
 // ==================== 审批单详情（工作流办理/跳转共用） ====================
 const approvalDetailVisible = ref(false);
 const approvalDetailId = ref<string | number>('');
@@ -581,6 +694,24 @@ onMounted(() => {
     font-size: 12px;
     color: var(--el-text-color-secondary);
     line-height: 1.5;
+  }
+
+  .detail-summary {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--el-fill-color-lighter);
+    font-size: 13px;
+    color: var(--el-text-color-regular);
+
+    b {
+      margin-left: 4px;
+      color: var(--el-color-primary);
+      font-size: 14px;
+    }
   }
 }
 </style>
