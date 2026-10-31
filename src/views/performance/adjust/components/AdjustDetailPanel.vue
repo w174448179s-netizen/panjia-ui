@@ -10,19 +10,7 @@
           <el-tag :type="statusTagType(detail.status)" size="small">{{ statusLabel(detail.status) }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="调整类型">{{ adjustTypeLabel(detail.adjustType) }}</el-descriptions-item>
-        <el-descriptions-item label="调整范围">
-          <el-tag :type="detail.adjustScope === 'CONTRACT' ? 'warning' : 'info'" size="small" effect="plain">
-            {{ detail.adjustScope === 'CONTRACT' ? '合同级' : '明细级' }}
-          </el-tag>
-        </el-descriptions-item>
         <el-descriptions-item label="期间">{{ detail.period || '—' }}</el-descriptions-item>
-        <el-descriptions-item v-if="detail.adjustScope !== 'CONTRACT'" label="员工">
-          {{ detail.employeeName || employeeName(detail.employeeId) }}
-        </el-descriptions-item>
-        <!-- 合同级调整不归属单一门店/组别，仅明细级展示部门 -->
-        <el-descriptions-item v-if="detail.adjustScope !== 'CONTRACT' && detail.deptName" label="门店/组别">
-          <span>{{ detail.deptName }}</span>
-        </el-descriptions-item>
         <el-descriptions-item label="申请人">{{ detail.applicantName || '—' }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ detail.createTime || '—' }}</el-descriptions-item>
         <el-descriptions-item label="调整原因" :span="2">{{ detail.reason || '—' }}</el-descriptions-item>
@@ -123,7 +111,7 @@
               }}）
             </template>
             <template v-else>
-              （{{ detail.adjustScope === 'CONTRACT' ? '合同级调整：调整金额按各明细占比分摊' : '明细级调整：仅调整单条明细' }}）
+              （合同级调整：调整金额按各明细占比分摊）
             </template>
           </span>
         </div>
@@ -198,7 +186,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { performanceApi, receivedAdjustApi, type AdjustDetailVO } from '@/api/panjia/performance';
-import { useEmployeeMap } from '@/components/WorkflowHandle/useEmployeeMap';
 
 /**
  * 业绩调整单详情面板（唯一模板）。
@@ -220,8 +207,6 @@ const props = withDefaults(defineProps<{
 const loading = ref(false);
 const loadError = ref('');
 const detail = ref<AdjustDetailVO | null>(null);
-
-const { load: loadEmployees, name: employeeName } = useEmployeeMap();
 
 const ADJUST_TYPE_MAP: Record<string, string> = {
   AMOUNT: '业绩调整',
@@ -395,10 +380,9 @@ const rowClassName = ({ row }: { row: any }) => (row.target ? 'target-row' : '')
 onMounted(async () => {
   loading.value = true;
   try {
-    const fetchDetail = props.kind === 'received'
-      ? receivedAdjustApi.getDetail(props.businessId)
-      : performanceApi.getAdjustDetail(props.businessId);
-    const [res] = await Promise.all([fetchDetail, loadEmployees()]);
+    const res = props.kind === 'received'
+      ? await receivedAdjustApi.getDetail(props.businessId)
+      : await performanceApi.getAdjustDetail(props.businessId);
     detail.value = (res as any).data ?? null;
     if (!detail.value) {
       loadError.value = props.kind === 'received' ? '未找到该实收调整单' : '未找到该业绩调整单';

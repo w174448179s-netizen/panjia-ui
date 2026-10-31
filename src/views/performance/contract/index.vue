@@ -371,67 +371,6 @@
       </el-table>
       <!-- 明细弹窗保持纯只读：调整（含增加角色人）统一走列表行「调整」打开的可编辑弹窗 -->
     </el-dialog>
-    <el-dialog
-      v-model="detailAdjustDialog.visible"
-      title="明细业绩调整"
-      width="480px"
-      destroy-on-close
-    >
-      <el-form
-        ref="detailAdjustFormRef"
-        :model="detailAdjustForm"
-        :rules="detailAdjustRules"
-        label-width="90px"
-      >
-        <el-form-item label="调整范围">
-          <el-tag type="info">明细级（单条调整）</el-tag>
-        </el-form-item>
-        <el-form-item label="员工">
-          <span>{{ detailAdjustDialog.employeeName }}</span>
-        </el-form-item>
-        <el-form-item label="新签业绩">
-          <!-- 当前明细的应收业绩（performance_amount），调后应收 = 新签业绩 + 调整金额 -->
-          <span class="amount-red">¥{{ formatAmount(detailAdjustDialog.amount) }}</span>
-        </el-form-item>
-        <el-form-item label="调整类型">
-          <el-select v-model="detailAdjustForm.adjustType" style="width: 100%">
-            <el-option label="业绩调整" value="AMOUNT" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="detailAdjustForm.adjustType === 'AMOUNT'" label="调整金额" prop="adjustAmount">
-          <el-input-number
-            v-model="detailAdjustForm.adjustAmount"
-            :precision="2"
-            :step="100"
-            :min="-Number(detailAdjustDialog.amount || 0)"
-            style="width: 100%"
-            placeholder="正数增加业绩，负数减少业绩"
-          />
-          <div class="form-tip adjust-preview">
-            <span>当前：<span class="amount">¥{{ formatAmount(detailAdjustDialog.amount) }}</span></span>
-            <span :class="adjustDeltaClass(detailAdjustForm.adjustAmount)">
-              {{ (detailAdjustForm.adjustAmount ?? 0) >= 0 ? '+' : '' }}{{ formatAmount(detailAdjustForm.adjustAmount ?? 0) }}
-            </span>
-            <span>→ 调整后：<span class="amount">¥{{ formatAmount(detailAdjustTargetAmount) }}</span></span>
-          </div>
-        </el-form-item>
-        <el-form-item label="调整原因" prop="reason">
-          <el-input
-            v-model="detailAdjustForm.reason"
-            type="textarea"
-            :rows="3"
-            placeholder="请输入调整原因（审批必填）"
-            maxlength="500"
-            show-word-limit
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="detailAdjustDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="detailAdjustSubmitting" @click="submitDetailAdjust">提交审批</el-button>
-      </template>
-    </el-dialog>
-
     <!-- 业绩冲正/补录弹窗 -->
     <ContractOffsetDialog ref="offsetDialogRef" @submitted="getList" />
     <!-- 合同退单弹窗（全额冲退，审批通过生成负新签+负实收） -->
@@ -702,90 +641,11 @@ const handleRowCommand = (cmd: string, row: PerformanceManageContract) => {
   }
 };
 
-// ==================== 明细级业绩调整弹窗 ====================
-const detailAdjustFormRef = ref();
-const detailAdjustSubmitting = ref(false);
-const detailAdjustDialog = reactive({
-  visible: false,
-  factId: '',
-  employeeId: '',
-  employeeName: '',
-  amount: 0,                // 当前明细的新签业绩（PerformanceManageRow.amount = performance_amount）
-});
-const detailAdjustForm = reactive({
-  adjustType: 'AMOUNT',
-  adjustAmount: undefined as number | undefined,  // 录入的是调整金额（正增负减），提交时折算为调整后金额
-  reason: '',
-});
-// 调整后金额 = 当前新签业绩 + 调整金额（仅用于界面提示；提交给后台的仍是调整后金额）
-const detailAdjustTargetAmount = computed(() =>
-  round2(num(detailAdjustDialog.amount) + num(detailAdjustForm.adjustAmount)));
-const detailAdjustRules = {
-  reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
-  adjustAmount: [
-    {
-      validator: (_rule: unknown, value: number | undefined, callback: (err?: Error) => void) => {
-        if (detailAdjustForm.adjustType === 'AMOUNT' && (value === undefined || value === null)) {
-          callback(new Error('请输入调整金额（正数增加，负数减少）'));
-        } else {
-          callback();
-        }
-      },
-      trigger: 'blur',
-    },
-  ],
-};
-
-const openDetailAdjustDialog = (row: PerformanceManageRow) => {
-  detailAdjustDialog.factId = String(row.id);
-  detailAdjustDialog.employeeId = String(row.employeeId);
-  detailAdjustDialog.employeeName = row.employeeName || '—';
-  detailAdjustDialog.amount = row.amount ?? 0;
-  detailAdjustForm.adjustType = 'AMOUNT';
-  detailAdjustForm.adjustAmount = undefined;
-  detailAdjustForm.reason = '';
-  detailAdjustDialog.visible = true;
-};
-
-const submitDetailAdjust = async () => {
-  await detailAdjustFormRef.value?.validate();
-  detailAdjustSubmitting.value = true;
-  try {
-    await performanceApi.createAdjust({
-      factId: detailAdjustDialog.factId,
-      period: detailDialog.period,
-      employeeId: detailAdjustDialog.employeeId,
-      adjustType: detailAdjustForm.adjustType,
-      adjustScope: 'DETAIL',
-      factType: detailDialog.factType,
-      // 界面录入调整金额（正增负减），后台口径不变：提交当前业绩 + 调整金额 = 调整后金额
-      targetAmount: round2(num(detailAdjustDialog.amount) + num(detailAdjustForm.adjustAmount)),
-      reason: detailAdjustForm.reason.trim(),
-    } as any);
-    ElMessage.success('调整单已提交审批');
-    detailAdjustDialog.visible = false;
-    loadDetailList();
-  } catch (e) {
-    // 错误已由拦截器提示
-  } finally {
-    detailAdjustSubmitting.value = false;
-  }
-};
-
 // ==================== 工具函数 ====================
 const num = (v: number | string | undefined | null): number => {
   if (v === undefined || v === null || v === '') return 0;
   const n = Number(v);
   return Number.isNaN(n) ? 0 : n;
-};
-
-/** 金额保留两位小数（避免浮点累加误差，提交口径与后台 BigDecimal setScale(2) 一致）。 */
-const round2 = (v: number): number => Math.round((v + Number.EPSILON) * 100) / 100;
-
-/** 调整金额差额着色：增加（正）绿色、减少（负）红色、0 不着色。 */
-const adjustDeltaClass = (v: number | undefined): string => {
-  const d = num(v);
-  return d > 0 ? 'delta-up' : d < 0 ? 'delta-down' : '';
 };
 
 /**

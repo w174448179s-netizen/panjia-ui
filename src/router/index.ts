@@ -89,20 +89,6 @@ export const constantRoutes: RouteRecordRaw[] = [
       }
     ]
   },
-  {
-    path: '/performance/contract',
-    component: Layout,
-    hidden: true,
-    redirect: 'noredirect',
-    children: [
-      {
-        path: 'detail',
-        component: () => import('@/views/performance/contract/detail.vue'),
-        name: 'PerformanceContractDetail',
-        meta: { title: '合同业绩明细', activeMenu: '/performance/manage', noCache: true }
-      }
-    ]
-  }
 ];
 
 // 动态路由，基于用户权限动态去加载

@@ -320,7 +320,6 @@ async function submit() {
   try {
     await performanceApi.createAdjust({
       adjustType: 'MANUAL_OFFSET',
-      adjustScope: 'CONTRACT',
       contractNo: info.value.contractNo,
       orderNo: info.value.orderNo,
       factType: 'PERF_EXPECT',

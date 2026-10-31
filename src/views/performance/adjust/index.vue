@@ -106,25 +106,11 @@
           :default-sort="{ prop: 'createTime', order: 'descending' }"
         >
           <el-table-column label="期间" align="center" prop="period" width="100" />
-          <el-table-column label="调整范围" align="center" width="100">
-            <template #default="scope">
-              <el-tag :type="scope.row.adjustScope === 'CONTRACT' ? 'warning' : 'info'" size="small" effect="plain">
-                {{ scope.row.adjustScope === 'CONTRACT' ? '合同级' : '明细级' }}
-              </el-tag>
-            </template>
-          </el-table-column>
           <el-table-column label="调整对象" align="center" min-width="160" show-overflow-tooltip>
             <template #default="scope">
-              <template v-if="scope.row.adjustScope === 'CONTRACT'">
-                <el-button link type="primary" class="adjust-object-link" @click="handleDetail(scope.row)">
-                  {{ adjustObjectNo(scope.row) }}
-                </el-button>
-              </template>
-              <template v-else>
-                <el-button link type="primary" class="adjust-object-link" @click="handleDetail(scope.row)">
-                  {{ scope.row.employeeName || scope.row.employeeId || '—' }}
-                </el-button>
-              </template>
+              <el-button link type="primary" class="adjust-object-link" @click="handleDetail(scope.row)">
+                {{ adjustObjectNo(scope.row) }}
+              </el-button>
             </template>
           </el-table-column>
           <el-table-column label="门店/组别" align="center" min-width="150" show-overflow-tooltip>
@@ -217,129 +203,6 @@
       </div>
     </el-card>
 
-    <!-- 新增弹窗 -->
-    <el-dialog
-      v-model="formDialog.visible"
-      :title="formDialog.title"
-      width="640px"
-      append-to-body
-      destroy-on-close
-    >
-      <el-form
-        ref="formRef"
-        :model="formData"
-        :rules="formRules"
-        label-width="100px"
-        :disabled="formDialog.mode === 'detail'"
-      >
-        <el-form-item label="调整类型" prop="adjustType">
-          <el-select v-model="formData.adjustType" placeholder="请选择调整类型" style="width: 100%">
-            <el-option
-              v-for="opt in createTypeOptions"
-              :key="opt.value"
-              :label="opt.label"
-              :value="opt.value"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="期间" prop="period">
-          <el-date-picker
-            v-model="formData.period"
-            type="month"
-            value-format="YYYY-MM"
-            placeholder="选择月份"
-            style="width: 100%"
-            @change="loadFactOptions"
-          />
-        </el-form-item>
-        <el-form-item label="员工" prop="employeeId">
-          <EmployeeSelect
-            v-model="formData.employeeId"
-            :clearable="false"
-            @change="onFormEmployeeChange"
-          />
-        </el-form-item>
-        <el-form-item v-if="formData.employeeId" label="门店/组别">
-          <el-input :model-value="selectedEmployeeDept" disabled placeholder="选择员工后自动带出" />
-        </el-form-item>
-        <el-form-item label="关联业绩" prop="factId">
-          <el-select
-            v-model="formData.factId"
-            placeholder="先选期间和员工后自动加载"
-            :loading="factLoading"
-            :disabled="!formData.period || !formData.employeeId"
-            style="width: 100%"
-            @change="onFactChange"
-          >
-            <el-option
-              v-for="f in factOptions"
-              :key="f.id"
-              :label="factOptionLabel(f)"
-              :value="f.id"
-            />
-          </el-select>
-          <div v-if="formData.factId" class="fact-amount-hint">
-            当前新签业绩：¥{{ formatNumber(selectedFact?.amount) }}
-          </div>
-          <el-alert
-            v-if="inFlight"
-            type="warning"
-            show-icon
-            :closable="false"
-            title="该合同已有审批中的业绩调整单，请待其审批完成或撤回后再发起新调整"
-            style="margin-top: 8px"
-          />
-        </el-form-item>
-        <el-form-item v-if="formData.adjustType === 'AMOUNT'" label="调整金额" prop="deltaAmount">
-          <el-input-number
-            v-model="formData.deltaAmount"
-            :min="-99999999"
-            :max="99999999"
-            :precision="2"
-            :step="100"
-            style="width: 100%"
-            @change="onDeltaChange"
-          />
-          <div class="form-hint">输入本次调整金额（正=调增，负=调减），调整后业绩自动算出</div>
-        </el-form-item>
-        <el-form-item v-if="formData.adjustType === 'AMOUNT'" label="调整后业绩" prop="targetAmount">
-          <el-input-number
-            v-model="formData.targetAmount"
-            :min="0"
-            :max="99999999"
-            :precision="2"
-            :step="100"
-            style="width: 100%"
-            @change="onTargetChange"
-          />
-          <div class="form-hint">也可直接输入调整后的目标总金额，调整金额自动算出</div>
-        </el-form-item>
-        <el-form-item label="调整原因" prop="reason">
-          <el-input
-            v-model="formData.reason"
-            type="textarea"
-            :rows="3"
-            placeholder="请输入调整原因"
-            maxlength="500"
-            show-word-limit
-          />
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <el-button @click="formDialog.visible = false">关 闭</el-button>
-        <el-button
-          v-if="formDialog.mode === 'create'"
-          type="primary"
-          :loading="submitLoading || inFlightChecking"
-          :disabled="inFlight"
-          @click="handleSubmit"
-        >
-          提 交
-        </el-button>
-      </template>
-    </el-dialog>
-
     <!-- 详情弹窗：与「我的待办 → 业绩调整审批」共用同一份模板，避免两处口径漂移 -->
     <el-dialog
       v-model="detailDialog.visible"
@@ -362,11 +225,10 @@
 
 <script setup lang="ts">
 import { performanceApi } from '@/api/panjia/performance';
-import type { PerformanceAdjust, AdjustQuery, AdjustCreateForm, PerformanceFact } from '@/api/panjia/performance';
+import type { PerformanceAdjust, AdjustQuery } from '@/api/panjia/performance';
 import AdjustDetailPanel from './components/AdjustDetailPanel.vue';
 import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
-import type { PerformanceEmployeeOption } from '@/api/panjia/performance';
 import modal from '@/plugins/modal';
 import { useRoute } from 'vue-router';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
@@ -415,8 +277,6 @@ const adjustTypeMap: Record<string, string> = {
   SUPPLEMENT: '新签补录' // 2026-10-28 起补录走审批（从实收单发起）
 };
 const adjustTypeOptions = Object.entries(adjustTypeMap).map(([value, label]) => ({ value, label }));
-/** 新建可选类型：本弹窗为明细级调整，仅支持业绩调整；合同级三类（含加人）请从合同业绩页发起 */
-const createTypeOptions = adjustTypeOptions.filter(o => o.value === 'AMOUNT');
 
 const statusMap: Record<string, string> = {
   SUBMITTED: '已提交',
@@ -532,14 +392,6 @@ const resetQuery = () => {
 const adjustObjectNo = (row: PerformanceAdjust): string =>
   resolveBizNo(row.bizType, row.contractNo, row.orderNo) || '—';
 
-/** 普通金额格式化：两位小数，无 ¥ 前缀 */
-const formatNumber = (val: number | string | undefined | null): string => {
-  if (val === undefined || val === null || val === '') return '0.00';
-  const n = Number(val);
-  if (Number.isNaN(n)) return '0.00';
-  return n.toFixed(2);
-};
-
 /** 原始金额：绝对值口径，带 ¥ 前缀；缺失显示 — */
 const formatOrigin = (val: number | string | undefined | null): string => {
   if (val === undefined || val === null || val === '') return '—';
@@ -562,183 +414,20 @@ const addMemberTotalChanged = (row: {
   return !Number.isNaN(after) && !Number.isNaN(origin) && Math.abs(after - origin) > 0.004;
 };
 
-/** 合同级新签类调整（业绩调整/扣减/增加/历史加人单）：调整前金额列展示的是合同总额，加「合同总额」角标 */
-const isContractPerfAdjust = (row: { adjustType?: string; adjustScope?: string }): boolean =>
-  row.adjustScope === 'CONTRACT'
-  && ['AMOUNT', 'DEDUCT', 'INCREASE', 'ADD_MEMBER'].includes(row.adjustType ?? '');
+/** 新签类调整（业绩调整/扣减/增加/历史加人单）：调整前金额列展示的是合同总额，加「合同总额」角标 */
+const isContractPerfAdjust = (row: { adjustType?: string }): boolean =>
+  ['AMOUNT', 'DEDUCT', 'INCREASE', 'ADD_MEMBER'].includes(row.adjustType ?? '');
 
-// ==================== 新增 / 详情弹窗 ====================
-const formDialog = reactive({
-  visible: false,
-  mode: 'create' as 'create' | 'detail',
-  title: '新增调整单'
-});
-const formRef = ref();
-const submitLoading = ref(false);
-/** 所选合同是否存在审批中的业绩调整单（前端预检，true 时禁用提交） */
-const inFlight = ref(false);
-const inFlightChecking = ref(false);
-
-/** 详情弹窗：与「我的待办 → 业绩调整审批」共用 AdjustDetailPanel，仅传 businessId */
+// ==================== 详情弹窗 ====================
+/** 与「我的待办 → 业绩调整审批」共用 AdjustDetailPanel，仅传 businessId */
 const detailDialog = reactive({
   visible: false,
   businessId: '' as string | number
 });
 
-// 关联业绩事实下拉
-const factOptions = ref<PerformanceFact[]>([]);
-const factLoading = ref(false);
-const selectedFact = computed<PerformanceFact | undefined>(() =>
-  factOptions.value.find((f) => f.id === formData.factId)
-);
-const factOptionLabel = (f: PerformanceFact) => {
-  const type = f.factType === 'PERF_REAL' ? '实收' : '应收';
-  return `${type} · ${f.sourceKey} · ¥${formatNumber(f.amount)}`;
-};
-
-const defaultFormData = (): AdjustCreateForm & { factId: string; deltaAmount?: number } => ({
-  factId: '',
-  period: '',
-  employeeId: '',
-  deptId: '',
-  adjustType: '',
-  targetAmount: undefined as number | undefined,
-  deltaAmount: undefined as number | undefined,
-  reason: ''
-});
-
-const formData = reactive(defaultFormData());
-
-/** 所选事实当前业绩（调整金额 ↔ 调整后业绩联动基准） */
-const factBaseAmount = computed(() => Number(selectedFact.value?.amount ?? 0));
-
-/** 录调整金额 → 自动算调整后业绩 */
-const onDeltaChange = () => {
-  if (formData.deltaAmount != null && !Number.isNaN(Number(formData.deltaAmount))) {
-    const next = factBaseAmount.value + Number(formData.deltaAmount);
-    formData.targetAmount = Number(next.toFixed(2));
-  }
-};
-
-/** 录调整后业绩 → 自动算调整金额 */
-const onTargetChange = () => {
-  if (formData.targetAmount != null && !Number.isNaN(Number(formData.targetAmount))) {
-    const next = Number(formData.targetAmount) - factBaseAmount.value;
-    formData.deltaAmount = Number(next.toFixed(2));
-  }
-};
-
-/** 表单内已选员工（EmployeeSelect 选中后缓存，用于自动带出部门/回显部门名） */
-const selectedFormEmployee = ref<PerformanceEmployeeOption | null>(null);
-
-/** 门店/组别只读回显：优先取员工主档，其次取所选业绩明细所在部门 */
-const selectedEmployeeDept = computed(() => {
-  const emp = String(selectedFormEmployee.value?.employeeId ?? '') === String(formData.employeeId)
-    ? selectedFormEmployee.value
-    : null;
-  return emp?.deptName || selectedFact.value?.deptName || '';
-});
-
-const formRules = {
-  adjustType: [{ required: true, message: '请选择调整类型', trigger: 'change' }],
-  period: [{ required: true, message: '请选择期间', trigger: 'change' }],
-  employeeId: [{ required: true, message: '请选择员工', trigger: 'change' }],
-  deptId: [{ required: true, message: '请选择门店/组别', trigger: 'change' }],
-  factId: [{ required: true, message: '请选择关联业绩事实', trigger: 'change' }],
-  reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
-  targetAmount: [{ required: true, message: '请输入调整金额或调整后业绩', trigger: 'blur' }]
-};
-
-// 选完员工：自动带出部门，并尝试加载该员工的业绩事实
-const onFormEmployeeChange = async (
-  _employeeId: string | number | undefined,
-  emp: PerformanceEmployeeOption | null,
-) => {
-  selectedFormEmployee.value = emp;
-  if (emp?.deptId) {
-    formData.deptId = String(emp.deptId);
-  }
-  formData.factId = '';
-  await loadFactOptions();
-};
-
-// 切换关联业绩：联动基准变了，清空已算的调整金额/调整后业绩，并预检该合同在途调整单
-const onFactChange = async () => {
-  formData.deltaAmount = undefined;
-  formData.targetAmount = undefined;
-  inFlight.value = false;
-  const fact = selectedFact.value;
-  const contractNo = fact?.contractNo;
-  if (!contractNo || !formData.period) return;
-  inFlightChecking.value = true;
-  try {
-    const res = await performanceApi.checkAdjustInFlight(contractNo, formData.period, fact.factType ?? 'PERF_EXPECT');
-    inFlight.value = !!res.data;
-  } catch {
-    inFlight.value = false;
-  } finally {
-    inFlightChecking.value = false;
-  }
-};
-
-const loadFactOptions = async () => {
-  factOptions.value = [];
-  if (!formData.period || !formData.employeeId) return;
-  factLoading.value = true;
-  try {
-    const res = await performanceApi.listFacts({
-      period: formData.period,
-      employeeId: formData.employeeId,
-      factStatus: 'ACTIVE',
-      pageSize: 100
-    });
-    factOptions.value = res.data?.rows ?? [];
-  } finally {
-    factLoading.value = false;
-  }
-};
-
-const handleCreate = () => {
-  Object.assign(formData, defaultFormData());
-  selectedFormEmployee.value = null;
-  factOptions.value = [];
-  inFlight.value = false;
-  inFlightChecking.value = false;
-  formDialog.mode = 'create';
-  formDialog.title = '新增调整单';
-  formDialog.visible = true;
-};
-
 const handleDetail = (row: any) => {
   detailDialog.businessId = row.id;
   detailDialog.visible = true;
-};
-
-const handleSubmit = async () => {
-  if (!formRef.value) return;
-  try {
-    await formRef.value.validate();
-  } catch {
-    return;
-  }
-  submitLoading.value = true;
-  try {
-    const data: AdjustCreateForm = {
-      factId: formData.factId || undefined,
-      period: formData.period,
-      employeeId: formData.employeeId,
-      deptId: formData.deptId,
-      adjustType: formData.adjustType,
-      targetAmount: formData.adjustType === 'AMOUNT' ? formData.targetAmount : undefined,
-      reason: formData.reason
-    };
-    await performanceApi.createAdjust(data);
-    modal.msgSuccess('提交成功');
-    formDialog.visible = false;
-    getList();
-  } finally {
-    submitLoading.value = false;
-  }
 };
 
 // 工作流跳转：查看态打开详情（审批办理已改为「我的待办」原地弹窗）
@@ -824,24 +513,6 @@ onMounted(() => {
     font-variant-numeric: tabular-nums;
   }
 
-  .transfer-arrow {
-    color: var(--el-color-primary);
-  }
-
-  .form-hint {
-    font-size: 12px;
-    color: var(--el-text-color-secondary);
-    line-height: 1.4;
-    margin-top: 4px;
-  }
-
-  .fact-amount-hint {
-    font-size: 12px;
-    color: var(--el-color-primary);
-    line-height: 1.4;
-    margin-top: 4px;
-  }
-
   .empty-wrap {
     padding: 40px 0;
   }
@@ -850,10 +521,6 @@ onMounted(() => {
     display: flex;
     justify-content: flex-end;
     margin-top: 4px;
-  }
-
-  .detail-desc {
-    margin-top: 12px;
   }
 }
 </style>

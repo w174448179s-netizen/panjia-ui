@@ -583,7 +583,6 @@ async function submit() {
     adjustType: adjustType.value,
     period: info.value.period,
     factType: 'PERF_EXPECT',
-    adjustScope: 'CONTRACT',
     contractNo: info.value.contractNo,
     orderNo: info.value.orderNo,
     reason: why,

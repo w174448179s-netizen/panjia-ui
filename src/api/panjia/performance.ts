@@ -51,7 +51,6 @@ export interface PerformanceAdjust {
   deptName?: string;
   adjustType: string;         // AMOUNT / DEDUCT / INCREASE / ADD_MEMBER(历史) / MANUAL_OFFSET / SUPPLEMENT
   adjustTypeName?: string;
-  adjustScope?: string;      // CONTRACT / DETAIL
   contractNo?: string;
   /** 订单号（一手房/房产金融等同合同号多订单场景的精确业务键） */
   orderNo?: string;
@@ -121,10 +120,9 @@ export interface AdjustQuery extends PageQuery {
 export interface AdjustCreateForm {
   factId?: string;
   period: string;
-  employeeId?: string;       // 明细级调整时必填（被调整事实所属员工）；合同级/ADD_MEMBER 不传
-  deptId?: string;           // 同上，明细级必填
+  employeeId?: string;       // 员工（合同级调整不传，后端按明细回填）
+  deptId?: string;           // 门店/组别（同上）
   adjustType: string;        // AMOUNT / DEDUCT / INCREASE / ADD_MEMBER(历史) / MANUAL_OFFSET / RECEIVED_AMOUNT
-  adjustScope?: string;      // CONTRACT / DETAIL
   contractNo?: string;       // 合同级调整时填
   orderNo?: string;          // 订单号（同合同号多订单时订单号优先精确匹配；为空后端退化按合同号）
   factType?: string;         // PERF_REAL / PERF_EXPECT（RECEIVED_AMOUNT 固定 PERF_REAL）
@@ -132,7 +130,7 @@ export interface AdjustCreateForm {
   reason: string;
   payloadJson?: string;
   // ---- 实收调整（RECEIVED_AMOUNT，合同级，2026-10-10）----
-  // 只需 adjustType/adjustScope/contractNo/factType/period/targetAmount/reason：
+  // 只需 adjustType/contractNo/factType/period/targetAmount/reason：
   // period=实收期间（YYYY-MM），targetAmount=调整后实收合计（正多收负少收），
   // 后端按实收明细等比分摊并快照 payload，无需传明细行
   // ---- 增加角色人（ADD_MEMBER，合同级）专用 ----
