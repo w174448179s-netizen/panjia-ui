@@ -60,7 +60,7 @@
           <div class="table-heading">
             <span class="panel-kicker">Performance Score</span>
             <h3>积分查询</h3>
-            <p>共 {{ total }} 条记录；总积分/出勤天数来自日报导入，平均积分 = 总积分 / 出勤天数。</p>
+            <p>共 {{ total }} 条记录；总积分来自日报导入，出勤天数取考勤汇总并扣除随心假、年假、产假等免考核假期，平均积分 = 总积分 / 出勤天数。</p>
           </div>
         </div>
       </template>

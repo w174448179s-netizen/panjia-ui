@@ -146,6 +146,14 @@ export const receivedApi = {
   /** 驳回后重新提交 */
   resubmit: (id: string | number) =>
     panjiaRequest.post<void>(`/performance/received/${id}/resubmit`),
+  /** 驳回后调整实收明细并重新提交审批（仅 REJECTED） */
+  reviseAndResubmit: (
+    id: string | number,
+    data: {
+      reason: string;
+      detailTargets: Array<{ factId: string; amount?: number; shareRatio?: number }>;
+    },
+  ) => panjiaRequest.post<void>(`/performance/received/${id}/revise-and-resubmit`, data),
   cancel: (id: string | number) =>
     panjiaRequest.post<void>(`/performance/received/${id}/cancel`),
   /** 按合同号批量审批（CompletableFuture 挂起等待，返回每张单处理结果） */

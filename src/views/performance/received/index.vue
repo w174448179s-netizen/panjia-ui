@@ -197,6 +197,8 @@
               <template v-if="!row.periods">
                 <el-button v-if="row.status === 'SUBMITTED' && checkPermi(['perf:received:approve'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.id)">审批</el-button>
                 <el-button v-if="!isAgent && row.status === 'APPROVED' && !isRefundRow(row as ReceivedApply)" link type="warning" @click="openReceivedAdjust(row)">调整</el-button>
+                <!-- 驳回后先调整再重提：明细直接修正，提交即重新进入审批（调整单粒度，需先筛选到具体期间） -->
+                <el-button v-if="!isAgent && row.status === 'REJECTED' && !isRefundRow(row as ReceivedApply)" link type="warning" @click="openRejectedRevise(row as ReceivedApply)">调整</el-button>
                 <!-- 待匹配新签（该订单当期无新签、无审批单）：唯一操作是补录新签 -->
                 <el-button v-if="row.pendingMatch && checkPermi(['perf:fact:supplement'])" link type="success" @click="openExpectSupplement(row as ReceivedApply)">补录</el-button>
                 <el-button v-if="row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重提</el-button>
@@ -449,7 +451,7 @@
     <!-- 业务明细直接审批弹窗（与「我的待办」共用同一 WorkflowHandle 组件） -->
     <WorkflowHandle ref="workflowHandleRef" @handled="getList" />
 
-    <!-- 实收调整弹窗（RECEIVED_AMOUNT，合同级）：入口在实收明细页，审批通过的单据才可调整 -->
+    <!-- 实收调整弹窗（RECEIVED_AMOUNT，合同级）：已通过单走调整单审批；驳回单走「调整后重提」 -->
     <ReceivedAdjustDialog ref="receivedAdjustDialogRef" @submitted="getList" />
     <!-- 新签补录弹窗：入口为「待匹配新签」到账行（该订单当期无新签），提交总监审批后自动补建实收单 -->
     <ExpectSupplementDialog ref="expectSupplementDialogRef" @submitted="getList" />
@@ -492,6 +494,18 @@ const canCancel = (row: ReceivedApply): boolean => {
 const receivedAdjustDialogRef = ref();
 const openReceivedAdjust = (row: ReceivedApply) => {
   receivedAdjustDialogRef.value?.open({
+    contractNo: resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '',
+    orderNo: row.orderNo,
+    bizType: row.bizType,
+    propertyAddress: row.propertyAddress,
+    period: row.period,
+  });
+};
+
+// ==================== 驳回后调整并重提（明细直接修正后重新提交） ====================
+const openRejectedRevise = (row: ReceivedApply) => {
+  receivedAdjustDialogRef.value?.openForRevise({
+    applyId: row.id,
     contractNo: resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '',
     orderNo: row.orderNo,
     bizType: row.bizType,
