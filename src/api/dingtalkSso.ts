@@ -18,3 +18,13 @@ export function dingTalkSsoLogin(data: { code: string; clientId?: string }) {
     data
   });
 }
+
+/** 钉钉 PC 端 OAuth2 免登：用回调授权码换取系统 token */
+export function dingTalkOAuthLogin(data: { code: string; clientId?: string }) {
+  return request({
+    url: '/auth/dingtalk/oauth-login',
+    headers: { isToken: false, repeatSubmit: false },
+    method: 'post',
+    data
+  });
+}

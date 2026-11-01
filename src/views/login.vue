@@ -104,6 +104,12 @@
             <span v-else>{{ $t('login.logging') }}</span>
           </el-button>
         </el-form-item>
+
+        <el-form-item class="dingtalk-row">
+          <el-button size="large" plain icon="ChatDotRound" class="dingtalk-button" @click.prevent="handleDingTalkLogin">
+            钉钉扫码登录
+          </el-button>
+        </el-form-item>
       </el-form>
     </div>
 
@@ -241,6 +247,11 @@ watch(
   },
   { immediate: true }
 );
+
+/** 钉钉扫码/授权登录：交给免登页完成 OAuth2 授权并落地后台首页 */
+const handleDingTalkLogin = () => {
+  router.push('/dingtalk-sso?redirect=/index');
+};
 
 const handleLogin = () => {
   loginRef.value?.validate(async (valid: boolean, fields: any) => {
@@ -562,6 +573,17 @@ onMounted(() => {
   height: 50px;
   border-radius: 16px;
   box-shadow: 0 18px 34px rgba(53, 109, 255, 0.22);
+}
+
+.dingtalk-row {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.dingtalk-button {
+  width: 100%;
+  height: 46px;
+  border-radius: 16px;
 }
 
 .login-form :deep(.el-input__wrapper) {
