@@ -24,15 +24,9 @@
         <span class="m-hero-unit">新签业绩（元）</span>
       </div>
 
-      <div class="m-grid">
-        <div>
-          <label>实收业绩</label>
-          <b>{{ formatMoney(row.realAmount) }}</b>
-        </div>
-        <div>
-          <label>业务类型</label>
-          <b>{{ bizTypeText(row.bizType) }}</b>
-        </div>
+      <div class="m-info">
+        <label>业务类型</label>
+        <b>{{ bizTypeText(row.bizType) }}</b>
       </div>
 
       <div v-if="row.propertyAddress" class="m-foot">{{ row.propertyAddress }}</div>
@@ -63,7 +57,7 @@
               <span class="m-tag">{{ item.roleType || item.roleName || '—' }}</span>
             </div>
             <div class="m-alloc-dept">{{ item.deptPath || '—' }}</div>
-            <div class="m-grid-3 m-alloc-grid">
+            <div class="m-grid m-alloc-grid">
               <div>
                 <label>角色占比</label>
                 <b>{{ formatRatio(item.shareRatio) }}</b>
@@ -71,10 +65,6 @@
               <div>
                 <label>新签业绩</label>
                 <b>{{ formatMoney(item.expectAmount) }}</b>
-              </div>
-              <div>
-                <label>实收业绩</label>
-                <b>{{ formatMoney(item.realAmount) }}</b>
               </div>
             </div>
           </div>
@@ -138,6 +128,19 @@ onMounted(load);
 <style scoped>
 .m-card-tap {
   cursor: pointer;
+}
+
+.m-info {
+  label {
+    display: block;
+    font-size: 12px;
+    color: #909399;
+  }
+
+  b {
+    font-size: 16px;
+    font-weight: 600;
+  }
 }
 
 .m-detail-link {

@@ -57,9 +57,11 @@ const load = async () => {
   if (!month.value) return;
   loading.value = true;
   try {
+    // 后端按日期解析（yyyy-MM-dd），月份统一转成当月 1 号
+    const monthDate = `${month.value}-01`;
     const res: any = await scoreApi.myList({
-      monthStart: month.value,
-      monthEnd: month.value,
+      monthStart: monthDate,
+      monthEnd: monthDate,
       pageNum: 1,
       pageSize: 50
     });
