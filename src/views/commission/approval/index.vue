@@ -204,7 +204,7 @@
               <!-- 合并行（未选期间、跨多期）不提供单期操作：审批/作废以申请单为粒度，需先在「期间」筛选到具体月份 -->
               <template v-if="!row.periods">
                 <el-button v-if="row.status === 'SUBMITTED' && row.applicationId && checkPermi(['workflow:task:edit'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.applicationId)">审批</el-button>
-                <!-- 可作废：审批中 / 已驳回 / 已锁定；封账期间不可作废 -->
+                <!-- 可作废：审批中 / 已驳回 / 已锁定；封账期间不可作废（驳回已是终态，明细已冲销释放事实） -->
                 <el-button v-if="['SUBMITTED', 'REJECTED', 'LOCKED'].includes(row.status) && canCancel(row as CommissionContractVO) && !row.periodClosed" link type="info" @click="cancel(row as CommissionContractVO)">作废</el-button>
               </template>
               <el-tooltip v-else content="同一合同跨多期合并展示，请在上方「期间」筛选到具体月份后操作" placement="top">
@@ -627,7 +627,7 @@ const doBatchApprove = async () => {
   }
 };
 
-// 作废：已发起单据作废（审批中/已驳回/草稿/已锁定）
+// 作废：已发起单据作废（审批中/已驳回/已锁定）
 const cancel = async (row: CommissionContractVO) => {
   if (!row.applicationId) return;
   const isLocked = row.status === 'LOCKED';
