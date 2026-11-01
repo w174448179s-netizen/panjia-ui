@@ -15,14 +15,14 @@
       </div>
 
       <div class="m-hero">
-        <span class="m-hero-num">{{ row.attendDays ?? 0 }}</span>
+        <span class="m-hero-num">{{ formatDays(row.attendDays) }}</span>
         <span class="m-hero-unit">出勤天数</span>
       </div>
 
       <div class="m-grid-3">
         <div>
           <label>休息</label>
-          <b>{{ row.restDays ?? 0 }}</b>
+          <b>{{ formatDays(row.restDays) }}</b>
         </div>
         <div>
           <label>迟到</label>
@@ -34,15 +34,15 @@
         </div>
         <div>
           <label>旷工</label>
-          <b>{{ row.absentDays ?? 0 }}</b>
+          <b>{{ formatDays(row.absentDays) }}</b>
         </div>
         <div>
           <label>事假</label>
-          <b>{{ row.personalLeaveDays ?? 0 }}</b>
+          <b>{{ formatDays(row.personalLeaveDays) }}</b>
         </div>
         <div>
           <label>病假</label>
-          <b>{{ (row.sickClinicDays ?? 0) + (row.sickHospitalDays ?? 0) }}</b>
+          <b>{{ formatDays((row.sickClinicDays ?? 0) + (row.sickHospitalDays ?? 0)) }}</b>
         </div>
       </div>
 
@@ -139,7 +139,7 @@ import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { attendanceApi } from '@/api/panjia/attendance';
 import type { AttendanceDetail, AttendanceRecord } from '@/api/panjia/types';
-import { currentMonth } from '../utils';
+import { currentMonth, formatDays } from '../utils';
 
 /** 可修改字段（与 PC 考勤修改申请、后端白名单一致） */
 const FIELD_DEFS = [

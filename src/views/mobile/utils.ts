@@ -6,6 +6,14 @@ export function currentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+/** 天数展示：整数不显示小数点（0.00 → 0），小数最多两位，空值显示 0 */
+export function formatDays(value?: number | string | null): string {
+  if (value === null || value === undefined || value === '') return '0';
+  const num = Number(value);
+  if (Number.isNaN(num)) return String(value);
+  return Number.isInteger(num) ? String(num) : String(Number(num.toFixed(2)));
+}
+
 /** 角色占比展示：小数转百分比，空值显示 — */
 export function formatRatio(value?: number | string | null): string {
   if (value === null || value === undefined || value === '') return '—';
