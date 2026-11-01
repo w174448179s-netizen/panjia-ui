@@ -48,6 +48,12 @@ export const constantRoutes: RouteRecordRaw[] = [
     hidden: true
   },
   {
+    // 钉钉 H5 微应用免登入口（免登录白名单）
+    path: '/dingtalk-sso',
+    component: () => import('@/views/dingtalk-sso/index.vue'),
+    hidden: true
+  },
+  {
     path: '/register',
     component: () => import('@/views/register.vue'),
     hidden: true
