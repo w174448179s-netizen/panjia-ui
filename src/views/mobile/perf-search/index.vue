@@ -126,10 +126,6 @@ onMounted(load);
 </script>
 
 <style scoped>
-.m-card-tap {
-  cursor: pointer;
-}
-
 .m-info {
   label {
     display: block;
@@ -141,68 +137,6 @@ onMounted(load);
     font-size: 16px;
     font-weight: 600;
   }
-}
-
-.m-detail-link {
-  margin-top: 8px;
-  font-size: 12px;
-  color: #1f6feb;
-  text-align: right;
-}
-
-.m-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: flex;
-  align-items: flex-end;
-  background: rgba(0, 0, 0, 0.45);
-}
-
-.m-sheet {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-height: 82vh;
-  overflow: hidden;
-  background: #f2f4f7;
-  border-radius: 16px 16px 0 0;
-}
-
-.m-sheet-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 14px 16px 10px;
-  background: #fff;
-}
-
-.m-sheet-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.m-sheet-sub {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: #909399;
-}
-
-.m-sheet-close {
-  padding: 0 6px;
-  font-size: 22px;
-  line-height: 1;
-  color: #909399;
-  background: transparent;
-  border: 0;
-}
-
-.m-sheet-body {
-  flex: 1;
-  padding: 12px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .m-alloc {

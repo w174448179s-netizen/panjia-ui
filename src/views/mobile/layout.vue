@@ -5,7 +5,6 @@
         <p class="m-hello">你好，{{ userStore.nickname || '同事' }}</p>
         <h1>{{ title }}</h1>
       </div>
-      <button class="m-quit" type="button" @click="handleLogout">退出</button>
     </header>
 
     <main class="m-body">
@@ -28,11 +27,10 @@
 
 <script setup lang="ts" name="MobileLayout">
 import { computed } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { useUserStore } from '@/store/modules/user';
 
 const route = useRoute();
-const router = useRouter();
 const userStore = useUserStore();
 
 const tabs = [
@@ -44,11 +42,6 @@ const tabs = [
 ];
 
 const title = computed(() => (route.meta.title as string) || '综合查询');
-
-const handleLogout = async () => {
-  await userStore.logout();
-  router.replace('/login');
-};
 </script>
 
 <style lang="scss">
@@ -83,12 +76,12 @@ const handleLogout = async () => {
   opacity: 0.85;
 }
 
-.m-quit {
+.m-btn {
   padding: 6px 12px;
   font-size: 13px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.18);
-  border: 0;
+  color: #1f6feb;
+  background: #ecf3ff;
+  border: 1px solid #c6dcff;
   border-radius: 14px;
 }
 
@@ -267,6 +260,94 @@ const handleLogout = async () => {
     background: #1f6feb;
     border-color: #1f6feb;
   }
+}
+
+.m-card-tap {
+  cursor: pointer;
+}
+
+.m-detail-link {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #1f6feb;
+  text-align: right;
+}
+
+.m-tag-red {
+  color: #f56c6c;
+  background: #fef0f0;
+}
+
+/* 底部抽屉（各移动端页面共用） */
+.m-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.m-sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 82vh;
+  overflow: hidden;
+  background: #f2f4f7;
+  border-radius: 16px 16px 0 0;
+}
+
+.m-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  background: #fff;
+}
+
+.m-sheet-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.m-sheet-sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #909399;
+}
+
+.m-sheet-close {
+  padding: 0 6px;
+  font-size: 22px;
+  line-height: 1;
+  color: #909399;
+  background: transparent;
+  border: 0;
+}
+
+.m-sheet-body {
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.m-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  background: #fff;
+  border-radius: 10px;
+}
+
+.m-list-value {
+  font-weight: 600;
+  color: #1f6feb;
 }
 
 .m-gate {
