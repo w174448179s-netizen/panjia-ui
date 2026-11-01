@@ -5,13 +5,13 @@
       <el-form :model="queryParams" :inline="true">
         <el-form-item label="考勤月份">
           <el-date-picker
-            v-model="monthRange"
-            type="monthrange"
-            range-separator="至"
-            start-placeholder="开始月份"
-            end-placeholder="结束月份"
-            value-format="YYYY-MM-DD"
-            style="width: 260px"
+            v-model="queryMonth"
+            type="month"
+            value-format="YYYY-MM"
+            placeholder="请选择月份"
+            clearable
+            style="width: 180px"
+            @change="handleQuery"
           />
         </el-form-item>
         <el-form-item>
@@ -196,7 +196,8 @@ import modal from '@/plugins/modal';
 const loading = ref(false);
 const attendanceList = ref<AttendanceRecord[]>([]);
 const total = ref(0);
-const monthRange = ref<[string, string] | []>([]);
+/** 查询月份（YYYY-MM），按月查询与手机端一致 */
+const queryMonth = ref('');
 /** 当前 Tab：attendance 考勤查询 / rectify 我的修改申请 */
 const activeTab = ref('attendance');
 
@@ -219,13 +220,13 @@ const queryParams = reactive<AttendanceQuery>({
 const getList = async () => {
   loading.value = true;
   try {
-    const [monthStart, monthEnd] = monthRange.value || [];
+    const month = queryMonth.value ? `${queryMonth.value}-01` : undefined;
     // 仅传月份条件；员工身份由后端按登录用户强制限定
     const res = await attendanceApi.myList({
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
-      monthStart: monthStart || undefined,
-      monthEnd: monthEnd || undefined
+      monthStart: month,
+      monthEnd: month
     });
     attendanceList.value = res.data?.rows ?? [];
     total.value = res.data?.total ?? 0;
@@ -244,7 +245,7 @@ const handleQuery = () => {
 };
 
 const resetQuery = () => {
-  monthRange.value = [];
+  queryMonth.value = '';
   queryParams.pageNum = 1;
   rectifyQuery.pageNum = 1;
   getList();
@@ -352,12 +353,12 @@ const rectifyQuery = reactive<AttendanceRectifyQuery>({ pageNum: 1, pageSize: 10
 const getRectifyList = async () => {
   rectifyLoading.value = true;
   try {
-    const [monthStart, monthEnd] = monthRange.value || [];
+    const month = queryMonth.value ? `${queryMonth.value}-01` : undefined;
     const res = await attendanceApi.rectifyMyPage({
       pageNum: rectifyQuery.pageNum,
       pageSize: rectifyQuery.pageSize,
-      monthStart: monthStart || undefined,
-      monthEnd: monthEnd || undefined
+      monthStart: month,
+      monthEnd: month
     });
     rectifyList.value = res.data?.rows ?? [];
     rectifyTotal.value = res.data?.total ?? 0;

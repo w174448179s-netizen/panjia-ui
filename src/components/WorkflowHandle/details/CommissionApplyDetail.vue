@@ -237,13 +237,13 @@ const formatRatio = (val: number | string | undefined | null): string => {
 };
 
 const STATUS_MAP: Record<string, string> = {
-  DRAFT: '待提交', SUBMITTED: '审批中', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
+  SUBMITTED: '审批中', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
 };
 /** SUBMITTED 全程「审批中」，与结佣明细列表、工作流系统页（字典 waiting）保持一致 */
 const statusLabel = (s: string) => STATUS_MAP[s] || s || '—';
 const statusTagType = (s: string) => {
   const map: Record<string, string> = {
-    DRAFT: 'info', SUBMITTED: 'warning', APPROVED: 'success', LOCKED: 'success', REJECTED: 'danger', CANCELLED: 'info',
+    SUBMITTED: 'warning', APPROVED: 'success', LOCKED: 'success', REJECTED: 'danger', CANCELLED: 'info',
   };
   return (map as any)[s] || 'info';
 };

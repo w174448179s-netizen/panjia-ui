@@ -19,7 +19,7 @@ export interface CommissionApplication {
   /** 调整前应收合计（提交快照；仅 expectedAdjusted=true 时有值，供展示「原值 → 调整后值」） */
   originalExpectedAmount?: number;
   currentNode?: string;      // DIRECTOR / FINANCE / null（T-04 后实收==应收时财务节点跳过，流程直接结束）
-  status: string;        // DRAFT / SUBMITTED / APPROVED / LOCKED / REJECTED / CANCELLED
+  status: string;        // SUBMITTED / APPROVED / LOCKED / REJECTED / CANCELLED
   approvedMonth?: string;
   processInstanceId?: string;
   applicantId?: number;
@@ -146,7 +146,7 @@ export interface CommissionContractVO {
   /** 该期间是否已封账（封账后不可作废/调整） */
   periodClosed?: boolean;
   deptId?: number;
-  status: string;           // DRAFT / SUBMITTED / LOCKED / REJECTED / CANCELLED
+  status: string;           // SUBMITTED / LOCKED / REJECTED / CANCELLED
   receivedStatus?: string;   // 实收审批状态 APPROVED / SUBMITTED / DRAFT / null
   applicantId?: number;
   createTime?: string;

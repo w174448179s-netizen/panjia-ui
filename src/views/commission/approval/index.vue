@@ -450,19 +450,18 @@ const handleDeptChange = () => {
 // 与工作流系统页（我发起的/我的已办，全局字典 waiting）保持同一叫法——
 // 系统页状态是粗粒度运行中，无法按节点细分，两段式会导致页面间不一致
 const STATUS_MAP: Record<string, string> = {
-  DRAFT: '草稿', SUBMITTED: '审批中', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
+  SUBMITTED: '审批中', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
 };
 const statusLabel = (row: CommissionContractVO) => STATUS_MAP[row.status] || row.status || '—';
 // 筛选下拉只列实际会出现在列表中的状态：
-// APPROVED（审批通过直接落 LOCKED，不经过 APPROVED）不会出现；
-// DRAFT 仅历史遗留（自动建单已取消，新发起即提交审批，不再产生草稿）
+// APPROVED（审批通过直接落 LOCKED，不经过 APPROVED）不会出现
 const HIDDEN_FILTER_STATUS = ['APPROVED'];
 const statusOptions = Object.entries(STATUS_MAP)
   .filter(([value]) => !HIDDEN_FILTER_STATUS.includes(value))
   .map(([value, label]) => ({ value, label }));
 const statusTagType = (s: string) => {
   const map: Record<string, string> = {
-    DRAFT: 'info', SUBMITTED: 'warning', APPROVED: 'primary', LOCKED: 'success', REJECTED: 'danger', CANCELLED: 'info',
+    SUBMITTED: 'warning', APPROVED: 'primary', LOCKED: 'success', REJECTED: 'danger', CANCELLED: 'info',
   };
   return (map as any)[s] || 'info';
 };

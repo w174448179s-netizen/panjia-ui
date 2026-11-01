@@ -54,6 +54,63 @@ export const constantRoutes: RouteRecordRaw[] = [
     hidden: true
   },
   {
+    // 员工移动端（综合查询），钉钉 H5 内使用
+    path: '/m',
+    component: () => import('@/views/mobile/layout.vue'),
+    hidden: true,
+    redirect: '/m/score',
+    children: [
+      {
+        path: 'score',
+        name: 'MobileScore',
+        component: () => import('@/views/mobile/score/index.vue'),
+        meta: { title: '积分查询' }
+      },
+      {
+        path: 'attendance',
+        name: 'MobileAttendance',
+        component: () => import('@/views/mobile/attendance/index.vue'),
+        meta: { title: '考勤查询' }
+      },
+      {
+        path: 'payroll',
+        name: 'MobilePayroll',
+        component: () => import('@/views/mobile/payroll/index.vue'),
+        meta: { title: '工资查询' }
+      },
+      {
+        path: 'performance',
+        name: 'MobilePerformance',
+        component: () => import('@/views/mobile/performance/index.vue'),
+        meta: { title: '业绩汇总' }
+      },
+      {
+        path: 'perf-search',
+        name: 'MobilePerfSearch',
+        component: () => import('@/views/mobile/perf-search/index.vue'),
+        meta: { title: '业绩查询' }
+      },
+      {
+        path: 'perf-rank',
+        name: 'MobilePerfRank',
+        component: () => import('@/views/mobile/perf-rank/index.vue'),
+        meta: { title: '业绩排行' }
+      },
+      {
+        path: 'contract',
+        name: 'MobileContract',
+        component: () => import('@/views/mobile/contract/index.vue'),
+        meta: { title: '合同查询' }
+      },
+      {
+        path: 'more',
+        name: 'MobileMore',
+        component: () => import('@/views/mobile/more/index.vue'),
+        meta: { title: '更多' }
+      }
+    ]
+  },
+  {
     path: '/register',
     component: () => import('@/views/register.vue'),
     hidden: true

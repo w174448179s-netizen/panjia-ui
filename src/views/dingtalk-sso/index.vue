@@ -33,7 +33,11 @@ const fail = (e: unknown) => {
   tip.value = e instanceof Error ? e.message : String(e);
 };
 
-/** 用免登授权码换系统 token，成功后直接进首页（路由守卫会拉取用户信息与菜单） */
+/** 免登成功后的落地页：默认进移动端，PC 端可用 ?redirect=/index 指定 */
+const redirectTarget = () =>
+  typeof route.query.redirect === 'string' && route.query.redirect ? route.query.redirect : '/m';
+
+/** 用免登授权码换系统 token，成功后直接落地（路由守卫会拉取用户信息与菜单） */
 const signIn = async (code: string) => {
   const res: any = await dingTalkSsoLogin({ code, clientId: import.meta.env.VITE_APP_CLIENT_ID });
   const token = res?.data?.access_token;
@@ -41,7 +45,7 @@ const signIn = async (code: string) => {
     throw new Error(res?.data?.msg || '钉钉免登未返回登录凭证');
   }
   setToken(token);
-  router.replace('/index');
+  router.replace(redirectTarget());
 };
 
 /** 按需加载钉钉 JSAPI */
@@ -62,9 +66,9 @@ const start = async () => {
   failed.value = false;
   tip.value = '正在获取钉钉身份…';
   try {
-    // 已登录直接进首页
+    // 已登录直接落地
     if (getToken()) {
-      router.replace('/index');
+      router.replace(redirectTarget());
       return;
     }
     // 调试 / 回调场景：URL 直接带 code
