@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <span>钉钉同步</span>
-          <span class="sub-tip">考勤与积分均可按月手工同步，记录保留在各自页签</span>
+          <span class="sub-tip">考勤、积分、钉钉账号均可手工同步，记录保留在各自页签</span>
         </div>
       </template>
 
@@ -14,6 +14,9 @@
         </el-tab-pane>
         <el-tab-pane label="积分同步" name="score">
           <DingTalkSyncPanel type="SCORE" />
+        </el-tab-pane>
+        <el-tab-pane label="钉钉账号" name="employee">
+          <DingTalkSyncPanel type="EMPLOYEE" />
         </el-tab-pane>
       </el-tabs>
     </el-card>

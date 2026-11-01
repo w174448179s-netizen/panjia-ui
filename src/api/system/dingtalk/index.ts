@@ -1,13 +1,13 @@
 import type { AxiosPromise } from '@/utils/api-types';
 import panjiaRequest from '@/api/panjia';
 
-/** 钉钉同步类型：考勤 / 积分 */
-export type DingTalkSyncType = 'ATTENDANCE' | 'SCORE';
+/** 钉钉同步类型：考勤 / 积分 / 人员映射 */
+export type DingTalkSyncType = 'ATTENDANCE' | 'SCORE' | 'EMPLOYEE';
 
 /** 钉钉同步记录（一次同步一行，按月可查） */
 export interface DingTalkSyncLog {
   id: string;
-  /** ATTENDANCE / SCORE */
+  /** ATTENDANCE / SCORE / EMPLOYEE */
   syncType: string;
   /** 归属期间 YYYY-MM */
   period?: string;
@@ -27,13 +27,13 @@ export interface DingTalkSyncLog {
 export interface DingTalkLogQuery {
   pageNum: number;
   pageSize: number;
-  /** ATTENDANCE(考勤) / SCORE(积分) */
+  /** ATTENDANCE(考勤) / SCORE(积分) / EMPLOYEE(人员映射) */
   syncType: DingTalkSyncType;
 }
 
 /**
  * 钉钉同步接口（panjia-im-dingtalk 业务模块，前缀 /api/panjia）。
- * 考勤需 dingtalk:sync:attendance，积分需 dingtalk:sync:score。
+ * 考勤需 dingtalk:sync:attendance，积分需 dingtalk:sync:score，人员映射需 dingtalk:sync:employee。
  */
 export const dingtalkApi = {
   /** 手动同步考勤（异步任务，立即返回 RUNNING 记录） */
@@ -51,6 +51,10 @@ export const dingtalkApi = {
       undefined,
       { timeout: 30000 }
     );
+  },
+  /** 手动同步人员映射（钉钉通讯录 → IM 账号映射表，异步任务，立即返回 RUNNING 记录） */
+  syncEmployee(): AxiosPromise<DingTalkSyncLog> {
+    return panjiaRequest.post<DingTalkSyncLog>('/dingtalk/sync/employee', undefined, { timeout: 30000 });
   },
   /** 同步记录分页 */
   logs(query: DingTalkLogQuery): AxiosPromise<{ rows: DingTalkSyncLog[]; total: number }> {
