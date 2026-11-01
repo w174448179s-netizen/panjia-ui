@@ -357,8 +357,12 @@
         <el-table-column label="姓名" align="center" min-width="100">
           <template #default="{ row }">{{ row.employeeName || '—' }}</template>
         </el-table-column>
-        <el-table-column label="所属角色" align="center" min-width="100" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.roleType || row.roleName || '—' }}</template>
+        <el-table-column label="所属角色" align="center" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.roleType || row.roleName || '—' }}
+            <!-- 未匹配新签角色的实收行：单独成行，新签业绩记 0，避免静默丢失 -->
+            <el-tag v-if="row.unmatchedReal" type="warning" size="small" effect="plain" class="adjust-tag">未匹配新签角色</el-tag>
+          </template>
         </el-table-column>
         <el-table-column label="角色占比" align="center" width="90">
           <template #default="{ row }">{{ formatRatio(row.shareRatio) }}</template>
@@ -369,7 +373,8 @@
         <!-- 新签业绩：已调整时在该行展示「原值 → 调整后业绩」，折算后同形式；加人调整的新人行带「新签调整」标记 -->
         <el-table-column label="新签业绩" align="right" width="200">
           <template #default="{ row }">
-            <template v-if="isRowAdjusted(row)">
+            <span v-if="row.unmatchedReal" class="amount-gray">—</span>
+            <template v-else-if="isRowAdjusted(row)">
               <span class="amount-strike">{{ formatMoney(row.originalExpectAmount) }}</span>
               <span class="amount-arrow">→</span>
               <span class="amount-red">{{ formatMoney(row.expectAmount) }}</span>
@@ -380,7 +385,8 @@
         </el-table-column>
         <el-table-column label="折算后" align="right" width="180">
           <template #default="{ row }">
-            <template v-if="isRowAdjusted(row)">
+            <span v-if="row.unmatchedReal" class="amount-gray">—</span>
+            <template v-else-if="isRowAdjusted(row)">
               <span class="amount-strike">{{ formatMoney(row.originalExpectConvertedAmount) }}</span>
               <span class="amount-arrow">→</span>
               <span class="amount-ink">{{ formatMoney(row.expectConvertedAmount) }}</span>

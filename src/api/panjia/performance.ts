@@ -403,6 +403,8 @@ export interface PerformanceSearchDetailRow {
   settled?: boolean;           // 是否已结算
   settleDate?: string;        // 结算日期
   manualAdjust?: boolean;     // 增加角色人（ADD_MEMBER）调整产生的新签行，展示「新签调整」标记
+  /** 「未匹配新签角色」的实收行：该工号在本合同有多个新签角色且实收角色对不上，单独成行展示（新签业绩记 0） */
+  unmatchedReal?: boolean;
 }
 
 // ========== API ==========
