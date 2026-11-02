@@ -104,12 +104,6 @@
             <span v-else>{{ $t('login.logging') }}</span>
           </el-button>
         </el-form-item>
-
-        <el-form-item class="dingtalk-row">
-          <el-button size="large" plain icon="ChatDotRound" class="dingtalk-button" @click.prevent="handleDingTalkLogin">
-            钉钉扫码登录
-          </el-button>
-        </el-form-item>
       </el-form>
     </div>
 

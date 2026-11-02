@@ -97,6 +97,12 @@
           </el-button>
         </el-form-item>
 
+        <el-form-item class="dingtalk-row">
+          <el-button size="large" icon="ChatDotRound" class="dingtalk-button" @click.prevent="handleDingTalkLogin">
+            钉钉扫码登录
+          </el-button>
+        </el-form-item>
+
         <div class="form-footer">
           <span class="footer-tag">本地部署 · 数据不出店</span>
         </div>
@@ -224,6 +230,11 @@ watch(
   },
   { immediate: true }
 );
+
+/** 钉钉扫码/授权登录：交给免登页完成 OAuth2 授权并落地后台首页 */
+const handleDingTalkLogin = () => {
+  router.push('/dingtalk-sso?redirect=/index');
+};
 
 const handleLogin = () => {
   loginRef.value?.validate(async (valid: boolean, fields: any) => {
@@ -564,6 +575,26 @@ onMounted(() => {
 
   &:hover {
     background: linear-gradient(135deg, #e04a00, #ff5a00);
+  }
+}
+
+.dingtalk-row {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.dingtalk-button {
+  width: 100%;
+  height: 46px;
+  border-radius: 16px;
+  color: #ff5a00;
+  border-color: rgba(255, 90, 0, 0.45);
+  background: rgba(255, 90, 0, 0.06);
+
+  &:hover {
+    color: #ffffff;
+    border-color: #ff5a00;
+    background: linear-gradient(135deg, #ff5a00, #ff8a3d);
   }
 }
 

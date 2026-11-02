@@ -8,7 +8,7 @@
     <div v-if="loading" class="m-tip">加载中…</div>
     <div v-else-if="!rows.length" class="m-empty">{{ month }} 暂无考勤数据</div>
 
-    <div v-for="row in rows" :key="row.id" class="m-card m-card-tap" @click="openDetail(row)">
+    <div v-for="row in rows" :key="row.id" class="m-card">
       <div class="m-card-head">
         <span>{{ row.employeeName || '—' }} · {{ row.deptName || '—' }}</span>
         <span>{{ row.attendMonth }}</span>
@@ -19,36 +19,44 @@
         <span class="m-hero-unit">出勤天数</span>
       </div>
 
-      <div class="m-grid-3">
+      <div class="m-grid">
         <div>
           <label>休息</label>
           <b>{{ formatDays(row.restDays) }}</b>
         </div>
         <div>
           <label>迟到</label>
-          <b>{{ row.lateCount ?? 0 }}</b>
+          <b>{{ Number(row.lateCount ?? 0) }}</b>
         </div>
         <div>
           <label>缺卡</label>
-          <b>{{ row.missingCardCount ?? 0 }}</b>
+          <b>{{ Number(row.missingCardCount ?? 0) }}</b>
         </div>
         <div>
-          <label>旷工</label>
-          <b>{{ formatDays(row.absentDays) }}</b>
-        </div>
-        <div>
-          <label>事假</label>
-          <b>{{ formatDays(row.personalLeaveDays) }}</b>
-        </div>
-        <div>
-          <label>病假</label>
-          <b>{{ formatDays((row.sickClinicDays ?? 0) + (row.sickHospitalDays ?? 0)) }}</b>
+          <label>请假</label>
+          <b>{{ formatDays(leaveTotal(row)) }}</b>
         </div>
       </div>
 
-      <div v-if="row.remark" class="m-foot">备注：{{ row.remark }}</div>
+      <!-- 考勤明细：按出勤 / 异常 / 请假分组，只显示有数据的项 -->
+      <div class="m-detail-head" @click="toggleDetail(row)">
+        <span>考勤明细</span>
+        <span class="m-detail-toggle">{{ detailOpen(row) ? '收起' : '展开' }}</span>
+      </div>
+
+      <div v-if="detailOpen(row)" class="m-detail">
+        <div v-for="group in detailGroups(row)" :key="group.title" class="m-detail-group">
+          <div class="m-detail-title">{{ group.title }}</div>
+          <div v-for="item in group.items" :key="item.label" class="m-detail-row">
+            <span>{{ item.label }}</span>
+            <b>{{ item.text }}</b>
+          </div>
+        </div>
+        <div v-if="row.remark" class="m-foot">备注：{{ row.remark }}</div>
+      </div>
+
       <div class="m-actions">
-        <span class="m-detail-link">查看每日考勤明细 ›</span>
+        <span class="m-detail-link" @click="openDetail(row)">查看每日考勤明细 ›</span>
         <button type="button" class="m-btn" @click.stop="openApply(row)">申请修改</button>
       </div>
     </div>
@@ -167,6 +175,52 @@ const month = ref(currentMonth());
 const loading = ref(false);
 const rows = ref<AttendanceRecord[]>([]);
 
+/** 每张卡片的明细展开状态，默认展开 */
+const expanded = ref<Record<string, boolean>>({});
+const detailOpen = (row: AttendanceRecord) => expanded.value[row.id] !== false;
+const toggleDetail = (row: AttendanceRecord) => {
+  expanded.value = { ...expanded.value, [row.id]: !detailOpen(row) };
+};
+
+const num = (value?: number | null) => Number(value ?? 0);
+
+/** 请假合计：事假 + 病假（诊所）+ 病假（二甲） */
+const leaveTotal = (row: AttendanceRecord) =>
+  num(row.personalLeaveDays) + num(row.sickClinicDays) + num(row.sickHospitalDays);
+
+interface DetailItem {
+  label: string;
+  text: string;
+}
+
+/** 考勤明细分组：出勤固定展示，异常/请假仅展示有数据的项，避免满屏 0 */
+const detailGroups = (row: AttendanceRecord) => {
+  const groups: { title: string; items: DetailItem[] }[] = [
+    {
+      title: '出勤',
+      items: [
+        { label: '出勤天数', text: `${formatDays(row.attendDays)} 天` },
+        { label: '休息天数', text: `${formatDays(row.restDays)} 天` }
+      ]
+    }
+  ];
+
+  const abnormal: DetailItem[] = [];
+  if (num(row.lateCount) > 0) abnormal.push({ label: '迟到次数', text: `${num(row.lateCount)} 次` });
+  if (num(row.lateMinutes) > 0) abnormal.push({ label: '迟到时长', text: `${num(row.lateMinutes)} 分钟` });
+  if (num(row.missingCardCount) > 0) abnormal.push({ label: '缺卡次数', text: `${num(row.missingCardCount)} 次` });
+  if (num(row.absentDays) > 0) abnormal.push({ label: '旷工', text: `${formatDays(row.absentDays)} 天` });
+  if (abnormal.length) groups.push({ title: '异常', items: abnormal });
+
+  const leave: DetailItem[] = [];
+  if (num(row.personalLeaveDays) > 0) leave.push({ label: '事假', text: `${formatDays(row.personalLeaveDays)} 天` });
+  if (num(row.sickClinicDays) > 0) leave.push({ label: '病假（诊所）', text: `${formatDays(row.sickClinicDays)} 天` });
+  if (num(row.sickHospitalDays) > 0) leave.push({ label: '病假（二甲）', text: `${formatDays(row.sickHospitalDays)} 天` });
+  if (leave.length) groups.push({ title: '请假', items: leave });
+
+  return groups;
+};
+
 const detailVisible = ref(false);
 const detailLoading = ref(false);
 const detailMonth = ref('');
@@ -270,6 +324,48 @@ onMounted(load);
 </script>
 
 <style scoped>
+.m-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0 6px;
+  margin-top: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  border-top: 1px solid #f0f2f5;
+}
+
+.m-detail-toggle {
+  font-size: 13px;
+  font-weight: 400;
+  color: #909399;
+}
+
+.m-detail-group {
+  padding-top: 8px;
+}
+
+.m-detail-title {
+  padding: 4px 0;
+  font-size: 13px;
+  color: #909399;
+}
+
+.m-detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 0;
+  font-size: 14px;
+  color: #606266;
+
+  b {
+    font-weight: 600;
+    color: #303133;
+  }
+}
+
 .m-actions {
   display: flex;
   align-items: center;
