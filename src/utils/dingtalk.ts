@@ -37,6 +37,17 @@ const requestAuthCode = async (corpId: string): Promise<string> => {
   });
 };
 
+/** 用免登授权码换取系统 token 并写入本地（H5 JSAPI 与小程序 authCode 通用） */
+export const dingTalkLoginByCode = async (code: string): Promise<string> => {
+  const res: any = await dingTalkSsoLogin({ code, clientId: import.meta.env.VITE_APP_CLIENT_ID });
+  const token = res?.data?.access_token;
+  if (!token) {
+    throw new Error(res?.data?.msg || '钉钉免登未返回登录凭证');
+  }
+  setToken(token);
+  return token;
+};
+
 /**
  * 钉钉容器内原地免登：JSAPI 取 code 换 token，全程停留当前页面。
  * 用于移动端首页直接落地 /m，不经过 /dingtalk-sso 中转页，避免钉钉安全容器拦截。
@@ -47,12 +58,5 @@ export const dingTalkAutoLogin = async (): Promise<string> => {
   if (!corpId) {
     throw new Error('后端未配置钉钉 CorpId（参数管理中的 panjia.dingtalk.corp_id）');
   }
-  const code = await requestAuthCode(corpId);
-  const res: any = await dingTalkSsoLogin({ code, clientId: import.meta.env.VITE_APP_CLIENT_ID });
-  const token = res?.data?.access_token;
-  if (!token) {
-    throw new Error(res?.data?.msg || '钉钉免登未返回登录凭证');
-  }
-  setToken(token);
-  return token;
+  return dingTalkLoginByCode(await requestAuthCode(corpId));
 };

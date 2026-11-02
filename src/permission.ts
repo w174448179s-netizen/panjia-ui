@@ -6,7 +6,7 @@ import { usePermissionStore } from '@/store/modules/permission';
 import { useSettingsStore } from '@/store/modules/settings';
 import { useUserStore } from '@/store/modules/user';
 import { getToken } from '@/utils/auth';
-import { dingTalkAutoLogin, isDingTalkContainer } from '@/utils/dingtalk';
+import { dingTalkAutoLogin, dingTalkLoginByCode, isDingTalkContainer } from '@/utils/dingtalk';
 import { isHandledRequestError, isRelogin } from '@/utils/request';
 import { isHttp, isPathMatch } from '@/utils/validate';
 import router from './router';
@@ -72,6 +72,19 @@ router.beforeEach(async (to, from) => {
     if (isWhiteList(to.path)) {
       // 在免登录白名单，直接进入
       return true;
+    }
+    // 钉钉小程序 web-view 入口：用小程序侧传来的 authCode 免登，成功后去掉参数再进入
+    const authCode = to.query.authCode;
+    if (isMobilePath(to.path) && typeof authCode === 'string' && authCode) {
+      try {
+        await dingTalkLoginByCode(authCode);
+        NProgress.done();
+        const restQuery = { ...to.query };
+        delete restQuery.authCode;
+        return { path: to.path, replace: true, query: restQuery, hash: to.hash };
+      } catch {
+        // 免登失败继续走登录页兜底
+      }
     }
     // 钉钉容器内直接打开移动端：在当前页面原地免登，不跳转中转页，避免钉钉提示「后续页面非钉钉提供」
     if (isMobilePath(to.path) && isDingTalkContainer()) {
