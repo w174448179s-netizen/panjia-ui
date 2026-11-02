@@ -86,7 +86,8 @@
           <el-table-column label="角色占比" align="center" width="90">
             <template #default="scope">{{ formatRatio(scope.row.shareRatio) }}</template>
           </el-table-column>
-          <!-- 实收金额：同合同+员工+角色维度，正数行=累计到本行期间、负数退单行=当期负部；
+          <!-- 实收金额：同合同+员工+角色维度，正数行=全部实收期间正向实收合并（不含冲正）、
+               负数退单/冲正行=全部实收期间负向实收合并（分多笔退单相加）；两向互不抵消；
                实收调整（含结佣联动）生效时展示「原值 → 调整后值」 -->
           <el-table-column label="实收金额" align="right" width="200">
             <template #default="scope">
