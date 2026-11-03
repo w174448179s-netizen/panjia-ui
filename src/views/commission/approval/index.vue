@@ -107,8 +107,10 @@
         </el-table-column>
         <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="{ row }">
+            <!-- 补收只读行无结佣详情，仅纯文本展示 -->
+            <span v-if="row.status === 'RECEIVED_ONLY'" class="cell-sub">{{ contractOrOrderNo(row as CommissionContractVO) }}</span>
             <!-- 点击打开结佣申请详情 -->
-            <el-button type="primary" link class="contract-link" @click="viewDetail(row as CommissionContractVO)">
+            <el-button v-else type="primary" link class="contract-link" @click="viewDetail(row as CommissionContractVO)">
               {{ contractOrOrderNo(row as CommissionContractVO) }}
             </el-button>
           </template>
@@ -130,7 +132,9 @@
           <template #default="{ row }">
             <el-tooltip
               v-if="num(row.amount) === 0"
-              content="新签业绩缺失，请先导入或补录该合同新签"
+              :content="row.status === 'RECEIVED_ONLY'
+                ? '补收行无新签业绩（退单后追回的实收），不计结佣'
+                : '新签业绩缺失，请先导入或补录该合同新签'"
               placement="top"
             >
               <span class="amount amount-zero">¥0.00</span>
@@ -200,16 +204,20 @@
         <el-table-column label="操作" align="center" width="300" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
-              <el-button link type="primary" @click="viewDetail(row as CommissionContractVO)">详情</el-button>
-              <!-- 合并行（未选期间、跨多期）不提供单期操作：审批/作废以申请单为粒度，需先在「期间」筛选到具体月份 -->
-              <template v-if="!row.periods">
-                <el-button v-if="row.status === 'SUBMITTED' && row.applicationId && checkPermi(['workflow:task:edit'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.applicationId)">审批</el-button>
-                <!-- 可作废：审批中 / 已驳回 / 已锁定；封账期间不可作废（驳回已是终态，明细已冲销释放事实） -->
-                <el-button v-if="['SUBMITTED', 'REJECTED', 'LOCKED'].includes(row.status) && canCancel(row as CommissionContractVO) && !row.periodClosed" link type="info" @click="cancel(row as CommissionContractVO)">作废</el-button>
+              <!-- 补收只读行：无申请单，不提供详情/审批/作废 -->
+              <span v-if="row.status === 'RECEIVED_ONLY'" class="cell-sub">补收仅展示</span>
+              <template v-else>
+                <el-button link type="primary" @click="viewDetail(row as CommissionContractVO)">详情</el-button>
+                <!-- 合并行（未选期间、跨多期）不提供单期操作：审批/作废以申请单为粒度，需先在「期间」筛选到具体月份 -->
+                <template v-if="!row.periods">
+                  <el-button v-if="row.status === 'SUBMITTED' && row.applicationId && checkPermi(['workflow:task:edit'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.applicationId)">审批</el-button>
+                  <!-- 可作废：审批中 / 已驳回 / 已锁定；封账期间不可作废（驳回已是终态，明细已冲销释放事实） -->
+                  <el-button v-if="['SUBMITTED', 'REJECTED', 'LOCKED'].includes(row.status) && canCancel(row as CommissionContractVO) && !row.periodClosed" link type="info" @click="cancel(row as CommissionContractVO)">作废</el-button>
+                </template>
+                <el-tooltip v-else content="同一合同跨多期合并展示，请在上方「期间」筛选到具体月份后操作" placement="top">
+                  <span class="cell-sub">按期间操作</span>
+                </el-tooltip>
               </template>
-              <el-tooltip v-else content="同一合同跨多期合并展示，请在上方「期间」筛选到具体月份后操作" placement="top">
-                <span class="cell-sub">按期间操作</span>
-              </el-tooltip>
             </div>
           </template>
         </el-table-column>
@@ -451,17 +459,20 @@ const handleDeptChange = () => {
 // 系统页状态是粗粒度运行中，无法按节点细分，两段式会导致页面间不一致
 const STATUS_MAP: Record<string, string> = {
   SUBMITTED: '审批中', APPROVED: '已通过', LOCKED: '已锁定', REJECTED: '已驳回', CANCELLED: '已作废',
+  // 补收只读行：到账月无正向新签、且此前已退单（退多后追回的实收），不占用结佣单
+  RECEIVED_ONLY: '补收',
 };
 const statusLabel = (row: CommissionContractVO) => STATUS_MAP[row.status] || row.status || '—';
 // 筛选下拉只列实际会出现在列表中的状态：
 // APPROVED（审批通过直接落 LOCKED，不经过 APPROVED）不会出现
-const HIDDEN_FILTER_STATUS = ['APPROVED'];
+const HIDDEN_FILTER_STATUS = ['APPROVED', 'RECEIVED_ONLY'];
 const statusOptions = Object.entries(STATUS_MAP)
   .filter(([value]) => !HIDDEN_FILTER_STATUS.includes(value))
   .map(([value, label]) => ({ value, label }));
 const statusTagType = (s: string) => {
   const map: Record<string, string> = {
     SUBMITTED: 'warning', APPROVED: 'primary', LOCKED: 'success', REJECTED: 'danger', CANCELLED: 'info',
+    RECEIVED_ONLY: 'info',
   };
   return (map as any)[s] || 'info';
 };

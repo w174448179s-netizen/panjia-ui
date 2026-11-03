@@ -100,6 +100,13 @@
             <el-tag v-if="refundedPeriod(row as ReceivedApply)" type="danger" size="small" effect="plain" class="adjust-tag">
               已退单 {{ refundedPeriod(row as ReceivedApply) }}
             </el-tag>
+            <el-tooltip
+              v-if="(row as ReceivedApply).supplement"
+              content="补收：该月无正向新签，实收为退单后退回金额，不计新签也不并入结佣单"
+              placement="top"
+            >
+              <el-tag type="info" size="small" effect="plain" class="adjust-tag">补收</el-tag>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column label="合同号/订单号" align="center" min-width="180" fixed="left">

@@ -84,8 +84,14 @@
       <!-- 合同维度表格 -->
       <el-table border class="data-table" :data="contractList" :empty-text="emptyText" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="50" />
-        <el-table-column label="期间" align="center" width="130" fixed="left">
-          <template #default="{ row }">{{ row.periods || row.period || '—' }}</template>
+        <el-table-column label="期间" align="center" width="150" fixed="left">
+          <template #default="{ row }">
+            <div>{{ row.periods || row.period || '—' }}</div>
+            <!-- 多期合并行：期间串仅为展示语义，发起时跨期正负合并成单并落账到当前月 -->
+            <el-tooltip v-if="row.periods" content="多期未结佣业绩合并为一行：发起时按合同跨期合并（正负不抵消），单据落账发起当月" placement="top">
+              <el-tag type="info" size="small" effect="plain">多期合并</el-tag>
+            </el-tooltip>
+          </template>
         </el-table-column>
         <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="{ row }">

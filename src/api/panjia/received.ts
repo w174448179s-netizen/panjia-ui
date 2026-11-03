@@ -40,6 +40,8 @@ export interface ReceivedApply {
   adjustPendingAmount?: number;
   /** 转人工审批的原因（仅审批中单据有值；如「新签与实收人数不一致（新签 3 人/实收 2 人）」） */
   manualReviewReason?: string;
+  /** 补收月：到账月无正向新签、且此前已退单（退多后退回的实收），不计新签也不并入结佣单 */
+  supplement?: boolean;
   itemCount: number;
   /** 业务类型（建单时快照落库，列表直接读列；「类型」筛选已下推 SQL） */
   bizType?: string;
