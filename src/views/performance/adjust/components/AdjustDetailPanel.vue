@@ -281,6 +281,7 @@ const isNewMemberRow = (row: {
 
 const STATUS_MAP: Record<string, string> = {
   SUBMITTED: '已提交',
+  PENDING_APPLY: '待原单审批',
   APPROVED: '已审批',
   REJECTED: '已拒绝',
   CANCELLED: '已取消',
@@ -290,6 +291,7 @@ const statusLabel = (s: string) => STATUS_MAP[s] || s || '—';
 const statusTagType = (s: string) => {
   const map: Record<string, string> = {
     SUBMITTED: 'warning',
+    PENDING_APPLY: 'info',
     APPROVED: 'primary',
     REJECTED: 'danger',
     CANCELLED: 'info',

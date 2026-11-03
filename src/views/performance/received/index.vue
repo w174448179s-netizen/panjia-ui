@@ -239,6 +239,25 @@
 
     <!-- 详情弹窗 -->
     <el-dialog v-model="showDetail" title="实收业绩审批单详情" width="960px" top="5vh">
+      <!-- 驳回后调整：展示挂靠在本单上的待生效调整单，避免审批人看不出本单含调整 -->
+      <el-alert
+        v-if="detailPendingAdjust"
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      >
+        <template #title>
+          本单含待生效实收调整（{{ adjustTypeLabel(detailPendingAdjust.adjustType) }} {{ detailPendingAdjust.adjustNo }}）：
+          实收合计 ¥{{ formatAmount(detailPendingAdjust.originalAmount) }} →
+          ¥{{ formatAmount(detailPendingAdjust.targetAmount) }}
+          <span :class="deltaClass(detailPendingAdjust.targetAmount, detailPendingAdjust.originalAmount)" style="font-weight: 600">
+            {{ deltaParen(detailPendingAdjust.targetAmount, detailPendingAdjust.originalAmount) }}
+          </span>
+          · 批准本单后该调整自动审批并生效
+        </template>
+        <div style="font-weight: 400">调整原因：{{ detailPendingAdjust.reason || '—' }}</div>
+      </el-alert>
       <!-- 审批中原因提示：人数不一致/实收不足，让审批人一眼知道为什么需要人工核对 -->
       <el-alert
         v-if="detailApp && detailApp.manualReviewReason"
@@ -472,7 +491,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { Loading } from '@element-plus/icons-vue';
 import { receivedApi, type ReceivedApply, type ReceivedFact, type BatchApproveResult } from '@/api/panjia/received';
 import { perfRefundApi } from '@/api/panjia/refund';
-import { performanceApi } from '@/api/panjia/performance';
+import { performanceApi, type AdjustDetailVO } from '@/api/panjia/performance';
 import { employeeApi } from '@/api/panjia/employee';
 import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
@@ -600,6 +619,12 @@ const deltaParen = (after?: number | string | null, before?: number | string | n
   if (diff === 0) return '';
   return `(${diff > 0 ? '+' : ''}${diff.toFixed(2)})`;
 };
+
+/** 实收调整类型文案（驳回后调整与实收调整单同口径） */
+const ADJUST_TYPE_MAP: Record<string, string> = {
+  AMOUNT: '业绩调整', DEDUCT: '业绩扣减', INCREASE: '业绩增加',
+};
+const adjustTypeLabel = (t?: string) => ADJUST_TYPE_MAP[t || ''] || '业绩调整';
 
 /**
  * 是否按「原值 → 调整后值」展示：需后端 expectedAdjusted 标记与原值同时成立。
@@ -801,6 +826,8 @@ const resetQuery = () => {
 const showDetail = ref(false);
 const detailApp = ref<ReceivedApply | null>(null);
 const detailFacts = ref<ReceivedFact[]>([]);
+/** 挂靠在本单上的待生效实收调整单（驳回后调整场景） */
+const detailPendingAdjust = ref<AdjustDetailVO | null>(null);
 /** 详情弹窗的「应收合计」是否按「原值 → 调整后值」展示（同一处判定复用三遍，提为 computed） */
 const detailAdjusted = computed(() => isAdjusted(detailApp.value));
 /** 详情弹窗的「实收合计」是否按「原值 → 调整后值」展示 */
@@ -810,6 +837,7 @@ const viewDetail = async (row: ReceivedApply) => {
   showDetail.value = true;
   detailApp.value = row;
   detailFacts.value = [];
+  detailPendingAdjust.value = null;
   await loadEmployeeMap();
   try {
     // 待匹配新签（无审批单）：直接取该组未绑定明细
@@ -827,6 +855,15 @@ const viewDetail = async (row: ReceivedApply) => {
       : await receivedApi.getDetail(row.id);
     detailApp.value = res.data?.apply ?? row;
     detailFacts.value = res.data?.facts ?? [];
+    // 驳回后调整：加载挂靠在本单上的待生效调整单（不存在则忽略）
+    if (detailApp.value?.pendingAdjustId) {
+      try {
+        const adj = await receivedApi.pendingAdjust(detailApp.value.pendingAdjustId);
+        detailPendingAdjust.value = (adj as any).data ?? null;
+      } catch {
+        detailPendingAdjust.value = null;
+      }
+    }
   } catch { /* 拦截器处理 */ }
 };
 

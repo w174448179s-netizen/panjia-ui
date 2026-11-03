@@ -11,6 +11,27 @@
         show-icon
         style="margin-bottom: 12px"
       />
+      <!-- 驳回后调整：审批人需要看到挂靠在本单上的待生效调整单（批准本单后自动审批生效） -->
+      <el-alert
+        v-if="pendingAdjust"
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      >
+        <template #title>
+          本单含待生效实收调整（{{ adjustTypeLabel(pendingAdjust.adjustType) }} {{ pendingAdjust.adjustNo }}）：
+          实收合计 ¥{{ formatAmount(pendingAdjust.originalAmount) }} →
+          ¥{{ formatAmount(pendingAdjust.targetAmount) }}
+          <span
+            v-if="deltaParen(pendingAdjust.targetAmount, pendingAdjust.originalAmount)"
+            :class="deltaClass(pendingAdjust.targetAmount, pendingAdjust.originalAmount)"
+            style="font-weight: 600"
+          >{{ deltaParen(pendingAdjust.targetAmount, pendingAdjust.originalAmount) }}</span>
+          · 批准本单后该调整自动审批并生效
+        </template>
+        <div style="font-weight: 400">调整原因：{{ pendingAdjust.reason || '—' }}</div>
+      </el-alert>
       <el-descriptions :column="3" border size="small" class="detail-desc">
         <el-descriptions-item label="审批单号">{{ detail.applyNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="期间">{{ detail.period || '—' }}</el-descriptions-item>
@@ -103,13 +124,45 @@
           </template>
         </el-table>
       </div>
+
+      <!-- 待生效调整的明细变化（仅列出有变动的行与新角色人） -->
+      <div v-if="pendingChanges.length" class="detail-table-wrap">
+        <div class="detail-table-title">本次调整明细（批准本单后生效，{{ pendingChanges.length }} 条）</div>
+        <el-table :data="pendingChanges" border size="small" max-height="300" class="detail-facts-table">
+          <el-table-column label="姓名" align="center" min-width="100">
+            <template #default="scope">
+              <span class="person-name">{{ scope.row.employeeName || '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="所属角色" align="center" min-width="100">
+            <template #default="scope">{{ scope.row.roleType || scope.row.roleName || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="调整前实收" align="right" width="140">
+            <template #default="scope">¥{{ formatAmount(scope.row.amount) }}</template>
+          </el-table-column>
+          <el-table-column label="调整后实收" align="right" width="140">
+            <template #default="scope">
+              <span class="amount amount-red">¥{{ formatAmount(scope.row.afterAmount) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="差额" align="right" width="120">
+            <template #default="scope">
+              <span
+                class="amount"
+                :class="deltaClass(scope.row.afterAmount, scope.row.amount)"
+              >{{ deltaParen(scope.row.afterAmount, scope.row.amount) || '0.00' }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { receivedApi, type ReceivedApply, type ReceivedFact } from '@/api/panjia/received';
+import type { AdjustDetailVO } from '@/api/panjia/performance';
 import { useEmployeeMap } from '../useEmployeeMap';
 
 const props = defineProps<{ businessId: string | number }>();
@@ -118,6 +171,8 @@ const loading = ref(false);
 const loadError = ref('');
 const detail = ref<ReceivedApply | null>(null);
 const facts = ref<ReceivedFact[]>([]);
+/** 挂靠在本单上的待生效实收调整单（驳回后调整场景） */
+const pendingAdjust = ref<AdjustDetailVO | null>(null);
 
 const { load: loadEmployees, name: employeeName } = useEmployeeMap();
 
@@ -172,6 +227,21 @@ const statusTagType = (s: string) => {
 };
 const nodeLabel = (node?: string) => (node === 'FINANCE' ? '财务审批' : node === 'DIRECTOR' ? '总监审批' : (node || '—'));
 
+const ADJUST_TYPE_MAP: Record<string, string> = {
+  AMOUNT: '业绩调整', DEDUCT: '业绩扣减', INCREASE: '业绩增加',
+};
+const adjustTypeLabel = (t?: string) => ADJUST_TYPE_MAP[t || ''] || '业绩调整';
+
+/** 待生效调整中有变化的行（新角色人 factId 为空且调整后有金额） */
+const pendingChanges = computed(() => {
+  const rows = pendingAdjust.value?.details ?? [];
+  return rows.filter((r) => {
+    const before = num(r.amount);
+    const after = num(r.afterAmount);
+    return after !== before || (!r.factId && after > 0);
+  });
+});
+
 // 门店/组别拆分：deptPath 形如「集团-门店-组别」，门店取倒数第二段，组别取最后一段
 const deptParts = (path: string): string[] => path.split('-').map((s) => s.trim()).filter(Boolean);
 const deptStore = (path: string): string => {
@@ -197,6 +267,15 @@ onMounted(async () => {
     detail.value = (res as any).data?.apply ?? null;
     facts.value = (res as any).data?.facts ?? [];
     if (!detail.value) loadError.value = '未找到该实收审批单';
+    // 驳回后调整：加载挂靠在本单上的待生效调整单（不存在则忽略）
+    if (detail.value?.pendingAdjustId) {
+      try {
+        const adj = await receivedApi.pendingAdjust(detail.value.pendingAdjustId);
+        pendingAdjust.value = (adj as any).data ?? null;
+      } catch {
+        pendingAdjust.value = null;
+      }
+    }
   } catch {
     loadError.value = '加载实收审批单详情失败';
   } finally {

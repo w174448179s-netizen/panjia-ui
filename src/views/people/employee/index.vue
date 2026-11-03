@@ -489,10 +489,12 @@
                 type="month"
                 format="YYYY-MM"
                 value-format="YYYY-MM-DD"
-                placeholder="改算薪配置必填；改状态/离职、基本信息请留空"
+                placeholder="调整门店/组别、算薪配置时选择生效月；其余可留空"
                 style="width: 100%"
               />
-              <span class="form-tip" style="margin-left:8px">留空则仅保存基本信息与状态变更，算薪配置不变</span>
+              <span class="form-tip" style="margin-left:8px">
+                调整门店/组别时留空则按当月生效；收支报表按该月切换部门归属
+              </span>
             </el-form-item>
           </el-col>
         </el-row>
@@ -1127,6 +1129,7 @@ const handleDetail = async (row: Employee) => {
 const FACT_TYPE_OPTIONS = [
   { code: 'LEVEL', desc: '职级' },
   { code: 'STATUS', desc: '状态' },
+  { code: 'DEPT', desc: '归属部门' },
   { code: 'SOCIAL', desc: '社保' },
   { code: 'SOCIAL_FEE', desc: '社保金额' },
   { code: 'HOUSING', desc: '公积金' },

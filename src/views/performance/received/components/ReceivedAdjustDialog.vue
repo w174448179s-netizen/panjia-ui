@@ -51,7 +51,7 @@
 
       <!-- 汇总行：调整类型 + 调整后合计录入（明细跟着变） -->
       <div class="adjust-summary-bar">
-        <div class="summary-cell" v-if="mode === 'adjust'">
+        <div class="summary-cell">
           <span class="summary-label">调整类型</span>
           <el-select v-model="adjustType" style="width: 140px" :disabled="pendingBlocked">
             <el-option label="业绩调整" value="AMOUNT" />
@@ -77,7 +77,7 @@
             :class="totalDelta > 0 ? 'amount-positive' : totalDelta < 0 ? 'amount-negative' : ''"
           >{{ totalDelta > 0 ? '+' : '' }}{{ totalDelta.toFixed(2) }}</span>
         </div>
-        <div class="summary-cell amount-cell" v-if="mode === 'adjust'">
+        <div class="summary-cell amount-cell">
           <span class="summary-label">调整金额</span>
           <el-input-number
             v-model="deltaInput"
@@ -93,7 +93,7 @@
         </div>
         <div class="summary-cell tip-cell">
           <template v-if="mode === 'revise'">
-            驳回调整：直接修改实收金额/角色占比，提交后立即重新进入审批
+            驳回调整：与实收调整单同一套逻辑生成调整单并重提原单，原单审批通过后调整单自动审批生效（仅一个审批）
           </template>
           <template v-else-if="adjustType === 'AMOUNT'">
             业绩调整：修改后实收总额必须保持不变（可增加角色人重新分配）
@@ -181,14 +181,14 @@
             />
           </template>
         </el-table-column>
-        <el-table-column v-if="mode === 'adjust'" label="状态" width="86" align="center">
+        <el-table-column label="状态" width="86" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.adjustPending" type="warning" size="small" effect="plain">审批中</el-tag>
             <el-tag v-else-if="row.isNew" type="success" size="small" effect="plain">新增角色人</el-tag>
-            <el-tag v-else type="info" size="small" effect="plain">待审批</el-tag>
+            <el-tag v-else type="info" size="small" effect="plain">{{ mode === 'revise' ? '待提交' : '待审批' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column v-if="mode === 'adjust'" label="操作" width="70" align="center">
+        <el-table-column label="操作" width="70" align="center">
           <template #default="{ row }">
             <el-button v-if="row.isNew" type="danger" link size="small" @click="removeRow(row as EditRow)">删除</el-button>
           </template>
@@ -198,10 +198,12 @@
         </template>
       </el-table>
 
-      <!-- 三类型（业绩调整/扣减/增加）均可增加角色人；驳回调整仅允许修改既有明细 -->
-      <div v-if="mode === 'adjust'" class="add-member-bar">
+      <!-- 驳回调整与正常调整一致：均可修改金额/占比并增加角色人 -->
+      <div class="add-member-bar">
         <el-button type="primary" plain size="small" icon="Plus" :disabled="pendingBlocked" @click="addMemberRow()">增加角色人</el-button>
-        <span class="add-tip">新增行选择员工并录入实收金额；全部修改随下方一次提交审批</span>
+        <span class="add-tip">{{ mode === 'revise'
+          ? '新增行选择员工并录入实收金额，修改后直接重新提交原审批单'
+          : '新增行选择员工并录入实收金额；全部修改随下方一次提交审批' }}</span>
       </div>
 
       <el-input
@@ -334,8 +336,8 @@ async function loadRows() {
   loading.value = true;
   try {
     if (mode.value === 'revise') {
-      const res = await receivedApi.getDetail(applyId.value!);
-      const facts = (res.data?.facts ?? []) as ReceivedFact[];
+      const res = await receivedApi.reviseDetails(applyId.value!);
+      const facts = (res.data ?? []) as ReceivedFact[];
       editRows.value = facts
         .filter(f => f.factId)
         .map(f => ({
@@ -533,42 +535,7 @@ async function submit() {
     return;
   }
 
-  // 驳回调整重提：明细直接落库，随后立即重新提交审批
-  if (mode.value === 'revise') {
-    if (!applyId.value) {
-      ElMessage.warning('审批单信息缺失，请刷新后重试');
-      return;
-    }
-    const overRatioRow = editRows.value.find(r => r.ratioPct != null && num(r.ratioPct) > 100);
-    if (overRatioRow) {
-      ElMessage.warning(`「${overRatioRow.employeeName || ''}」的角色占比不能大于 100%`);
-      return;
-    }
-    const changedRows = existing.filter(r => Math.abs(rowDelta(r)) >= 0.005 || !ratioUnchanged(r));
-    if (!changedRows.length) {
-      ElMessage.warning('无任何实收变动，无需调整');
-      return;
-    }
-    submitting.value = true;
-    try {
-      await receivedApi.reviseAndResubmit(applyId.value, {
-        reason: why,
-        detailTargets: existing.map(r => ({
-          factId: r.factId!,
-          amount: round2(num(r.targetAmount)),
-          shareRatio: ratioUnchanged(r) ? undefined : round6(num(r.ratioPct) / 100),
-        })),
-      });
-      ElMessage.success('已调整并重新提交审批');
-      visible.value = false;
-      emit('submitted');
-    } finally {
-      submitting.value = false;
-    }
-    return;
-  }
-
-  // 新角色人校验：必选员工、金额大于 0、同一员工不重复添加、不与既有实收人员重复
+  // 新角色人校验：必选员工、金额大于 0、同一员工不重复添加、不与既有实收人员重复（两种模式一致）
   const nrs = newRows.value;
   for (const nr of nrs) {
     if (!nr.employeeId) {
@@ -592,6 +559,13 @@ async function submit() {
       return;
     }
   }
+
+  const overRatioRow = editRows.value.find(r => r.ratioPct != null && num(r.ratioPct) > 100);
+  if (overRatioRow) {
+    ElMessage.warning(`「${overRatioRow.employeeName || ''}」的角色占比不能大于 100%`);
+    return;
+  }
+
   // 无任何变动（无新人、各行金额/占比均未改）时无需发起
   const anyRowChange = existing.some(r => Math.abs(rowDelta(r)) >= 0.005 || !ratioUnchanged(r));
   if (!nrs.length && !anyRowChange) {
@@ -599,7 +573,7 @@ async function submit() {
     return;
   }
 
-  // 三类型总额规则
+  // 三类型总额规则（驳回调整与正常调整一致）
   const delta = totalDelta.value;
   if (adjustType.value === 'AMOUNT' && Math.abs(delta) >= 0.005) {
     ElMessage.warning(`业绩调整必须保证修改后实收总额不变（当前变动 ${delta > 0 ? '+' : ''}${delta.toFixed(2)}），请调整明细金额`);
@@ -619,29 +593,44 @@ async function submit() {
     targetAmount: round2(num(r.targetAmount)),
     shareRatio: ratioUnchanged(r) ? undefined : round6(num(r.ratioPct) / 100),
   }));
+  const newMembers = nrs.length
+    ? nrs.map(nr => ({
+        employeeId: nr.employeeId!,
+        roleType: nr.roleType?.trim() || '合作人',
+        amount: round2(num(nr.targetAmount)),
+        shareRatio: nr.ratioPct != null ? round6(num(nr.ratioPct) / 100) : undefined,
+      }))
+    : undefined;
 
   submitting.value = true;
   try {
-    await receivedAdjustApi.create({
-      adjustType: adjustType.value,
-      period: formData.value.period,
-      contractNo: info.value.contractNo,
-      orderNo: info.value.orderNo,
-      reason: why,
-      detailTargets,
-      targetAmount: round2(targetTotal.value),
-      ...(nrs.length
-        ? {
-            newMembers: nrs.map(nr => ({
-              employeeId: nr.employeeId!,
-              roleType: nr.roleType?.trim() || '合作人',
-              amount: round2(num(nr.targetAmount)),
-              shareRatio: nr.ratioPct != null ? round6(num(nr.ratioPct) / 100) : undefined,
-            })),
-          }
-        : {}),
-    });
-    ElMessage.success('已提交审批，审批通过后自动生效');
+    if (mode.value === 'revise') {
+      if (!applyId.value) {
+        ElMessage.warning('审批单信息缺失，请刷新后重试');
+        return;
+      }
+      // 与调整单同一套入参：生成挂靠原单的调整单，并重新提交原审批单（仅一个审批）
+      await receivedApi.reviseAndResubmit(applyId.value, {
+        adjustType: adjustType.value,
+        reason: why,
+        detailTargets,
+        targetAmount: round2(targetTotal.value),
+        ...(newMembers ? { newMembers } : {}),
+      });
+      ElMessage.success('已按调整单生成快照并重新提交原单，原单审批通过后调整自动生效');
+    } else {
+      await receivedAdjustApi.create({
+        adjustType: adjustType.value,
+        period: formData.value.period,
+        contractNo: info.value.contractNo,
+        orderNo: info.value.orderNo,
+        reason: why,
+        detailTargets,
+        targetAmount: round2(targetTotal.value),
+        ...(newMembers ? { newMembers } : {}),
+      });
+      ElMessage.success('已提交审批，审批通过后自动生效');
+    }
     visible.value = false;
     emit('submitted');
   } finally {

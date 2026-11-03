@@ -1,5 +1,6 @@
 import panjiaRequest from './index';
 import type { PageQuery, PageResult } from './types';
+import type { AdjustDetailVO } from './performance';
 
 /** 实收业绩审批单（§2） */
 export interface ReceivedApply {
@@ -40,6 +41,8 @@ export interface ReceivedApply {
   adjustPendingAmount?: number;
   /** 转人工审批的原因（仅审批中单据有值；如「新签与实收人数不一致（新签 3 人/实收 2 人）」） */
   manualReviewReason?: string;
+  /** 挂靠在本单上的待生效调整单 ID（驳回后调整场景，原单审批通过后自动生效） */
+  pendingAdjustId?: string | number;
   /** 补收月：到账月无正向新签、且此前已退单（退多后退回的实收），不计新签也不并入结佣单 */
   supplement?: boolean;
   itemCount: number;
@@ -133,6 +136,12 @@ export const receivedApi = {
     panjiaRequest.get<string[]>('/performance/received/periods'),
   getDetail: (id: string | number) =>
     panjiaRequest.get<ReceivedDetail>(`/performance/received/${id}`),
+  /** 驳回后调整：挂靠在本单上的待生效调整单详情（审批人在实收权限下查看） */
+  pendingAdjust: (id: string | number) =>
+    panjiaRequest.get<AdjustDetailVO | null>(`/performance/received/${id}/pending-adjust`),
+  /** 驳回调整弹窗装载明细：按原始明细行返回，不做同人同角色同月合并 */
+  reviseDetails: (id: string | number) =>
+    panjiaRequest.get<ReceivedFact[]>(`/performance/received/${id}/revise-details`),
   /** 按合同/订单跨期间查实收明细（列表未选期间时合并行的详情，每行带期间） */
   getContractDetail: (contractNo?: string, orderNo?: string) =>
     panjiaRequest.get<ReceivedDetail>('/performance/received/contract-detail', { contractNo, orderNo }),
@@ -148,12 +157,15 @@ export const receivedApi = {
   /** 驳回后重新提交 */
   resubmit: (id: string | number) =>
     panjiaRequest.post<void>(`/performance/received/${id}/resubmit`),
-  /** 驳回后调整实收明细并重新提交审批（仅 REJECTED） */
+  /** 驳回后调整：按调整单逻辑生成挂靠原单的调整单并重新提交原审批单（仅 REJECTED） */
   reviseAndResubmit: (
     id: string | number,
     data: {
+      adjustType: 'AMOUNT' | 'DEDUCT' | 'INCREASE';
+      targetAmount: number;
       reason: string;
-      detailTargets: Array<{ factId: string; amount?: number; shareRatio?: number }>;
+      detailTargets: Array<{ factId: string; targetAmount: number; shareRatio?: number }>;
+      newMembers?: Array<{ employeeId: string; roleType: string; amount: number; shareRatio?: number }>;
     },
   ) => panjiaRequest.post<void>(`/performance/received/${id}/revise-and-resubmit`, data),
   cancel: (id: string | number) =>

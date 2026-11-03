@@ -357,7 +357,7 @@ export interface PerformanceSummaryRow {
   totalAmount: number;        // 新签业绩金额合计
 }
 
-/** 业绩排行行（/perf/fact/rank 返回，按员工聚合新签业绩金额降序） */
+/** 业绩排行行（/perf/fact/rank 返回，按员工聚合导入的新签原始业绩金额降序；不计人为业绩调整） */
 export interface PerformanceRankRow {
   rank: number;               // 排名（跨页连续）
   employeeId: string;

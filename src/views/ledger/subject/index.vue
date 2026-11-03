@@ -148,9 +148,9 @@ const isEdit = ref(false);
 const formRef = ref();
 
 interface SubjectForm {
-  id?: number;
+  id?: string | number;
   direction: LedgerDirection;
-  parentId: number | null;
+  parentId: string | number | null;
   subjectName: string;
   subjectCode?: string;
   level: number;
@@ -201,13 +201,13 @@ const parentOptions = computed(() =>
 
 const isAutoLocked = computed(() => isEdit.value && (form.level || 1) > 0 && hasChildrenInList(form.id));
 
-function hasChildrenInList(id?: number) {
+function hasChildrenInList(id?: string | number) {
   if (!id) return false;
-  return allSubjects.value.some((s) => s.parentId === id);
+  return allSubjects.value.some((s) => String(s.parentId) === String(id));
 }
 
 function buildTree(list: LedgerSubject[]): any[] {
-  const nodes = new Map<number, any>();
+  const nodes = new Map<string | number, any>();
   list.forEach((s) => nodes.set(s.id, { ...s, children: [] }));
   const roots: any[] = [];
   list.forEach((s) => {
@@ -219,7 +219,7 @@ function buildTree(list: LedgerSubject[]): any[] {
     }
   });
   const sortNodes = (arr: any[]) => {
-    arr.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
+    arr.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || String(a.id).localeCompare(String(b.id)));
     arr.forEach((n) => sortNodes(n.children));
   };
   sortNodes(roots);

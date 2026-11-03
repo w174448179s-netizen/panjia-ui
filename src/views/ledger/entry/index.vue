@@ -43,6 +43,11 @@
         <el-button type="primary" icon="Plus" v-hasPermi="['ledger:entry:add']" @click="handleAdd">
           新增录入
         </el-button>
+        <el-button icon="Upload" v-hasPermi="['ledger:entry:add']" @click="openImport">导入</el-button>
+        <el-button icon="Download" v-hasPermi="['ledger:entry:list']" @click="handleExport">导出</el-button>
+        <el-button icon="Document" v-hasPermi="['ledger:entry:list']" @click="handleDownloadTemplate">
+          下载模板
+        </el-button>
       </div>
 
       <el-alert
@@ -170,6 +175,36 @@
         <el-button type="primary" :loading="saving" @click="handleSubmit">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="importVisible" title="导入部门收支录入" width="560px" @closed="resetImport">
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        class="import-tip"
+        title="表格列：方向 / 科目路径 / 部门 / 金额 / 生效日期 / 失效日期 / 备注。方向可留空（按科目自动判定），科目路径按「一级/二级/三级」填写，部门必须是末级部门。"
+      />
+      <el-upload
+        drag
+        :auto-upload="false"
+        :limit="1"
+        accept=".xlsx,.xls"
+        :on-change="handleFileChange"
+        :on-remove="handleFileRemove"
+      >
+        <div class="el-upload__text">将 Excel 拖到此处，或<em>点击选择</em></div>
+      </el-upload>
+      <div v-if="importErrors.length" class="import-errors">
+        <div class="title">以下数据未通过校验（整批未导入）：</div>
+        <div v-for="(msg, i) in importErrors" :key="i" class="line">{{ msg }}</div>
+      </div>
+      <template #footer>
+        <el-button @click="importVisible = false">取消</el-button>
+        <el-button type="primary" :loading="importing" :disabled="!importFile" @click="submitImport">
+          开始导入
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -186,20 +221,24 @@ import {
 
 const loading = ref(false);
 const saving = ref(false);
+const importVisible = ref(false);
+const importing = ref(false);
+const importFile = ref<File | null>(null);
+const importErrors = ref<string[]>([]);
 const entries = ref<LedgerEntry[]>([]);
 const subjects = ref<LedgerSubject[]>([]);
 const activeDirection = ref<LedgerDirection>('INCOME');
 
 const query = reactive({
   period: currentMonth(),
-  deptId: null as number | null,
-  subjectId: null as number | null
+  deptId: null as string | number | null,
+  subjectId: null as string | number | null
 });
 
 interface EntryForm {
-  id?: number;
-  subjectId: number | null;
-  deptId: number | null;
+  id?: string | number;
+  subjectId: string | number | null;
+  deptId: string | number | null;
   amount: number | null;
   dateMode: 'MONTH' | 'RANGE';
   month: string;
@@ -232,7 +271,7 @@ const formRef = ref();
 /** 科目树：非末级/自动取数科目置灰，不可选 */
 const subjectTree = computed(() => {
   const list = subjects.value.filter((s) => s.direction === activeDirection.value);
-  const nodes = new Map<number, any>();
+  const nodes = new Map<string | number, any>();
   list.forEach((s) =>
     nodes.set(s.id, {
       ...s,
@@ -247,7 +286,7 @@ const subjectTree = computed(() => {
     else roots.push(node);
   });
   const mark = (arr: any[]) => {
-    arr.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
+    arr.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || String(a.id).localeCompare(String(b.id)));
     arr.forEach((n) => {
       mark(n.children);
       if (n.children.length > 0) n.disabled = true;
@@ -363,13 +402,15 @@ function handleEdit(row: LedgerEntry) {
   dialogVisible.value = true;
 }
 
-function handleSubjectChange(value: number) {
-  const subject = subjects.value.find((s) => s.id === value);
+function handleSubjectChange(value: string | number) {
+  // 雪花 ID 是字符串，必须按字符串比较，避免 Number 精度丢失
+  const subject = subjects.value.find((s) => String(s.id) === String(value));
   if (subject) form.subjectId = subject.id;
 }
 
 function handleDeptChange(value: string | number | undefined) {
-  form.deptId = value === undefined || value === null ? null : Number(value);
+  // 雪花 ID 保持后端下发的字符串原值，禁止 Number() 转换（会丢精度导致后端查不到部门）
+  form.deptId = value === undefined || value === null || value === '' ? null : value;
 }
 
 async function handleSubmit() {
@@ -395,7 +436,8 @@ async function handleSubmit() {
       ElMessage.success('录入已更新');
     } else {
       await ledgerApi.createEntry(payload);
-      ElMessage.success('录入已新增');
+      // 后端按 同科目 + 同部门 + 同生效/失效日期 做 upsert，已存在则更新
+      ElMessage.success('录入已保存（相同科目与日期的记录自动更新）');
     }
     dialogVisible.value = false;
     await loadEntries();
@@ -421,6 +463,61 @@ watch(
     if (form.dateMode === 'MONTH' && !form.month) form.month = query.period || currentMonth();
   }
 );
+
+/** 导入：选择文件后手动触发，避免误传空文件 */
+function openImport() {
+  importFile.value = null;
+  importErrors.value = [];
+  importVisible.value = true;
+}
+
+function handleFileChange(uploadFile: any) {
+  importFile.value = uploadFile?.raw ?? null;
+  importErrors.value = [];
+}
+
+function handleFileRemove() {
+  importFile.value = null;
+}
+
+function resetImport() {
+  importFile.value = null;
+  importErrors.value = [];
+}
+
+async function submitImport() {
+  if (!importFile.value) {
+    ElMessage.warning('请先选择 Excel 文件');
+    return;
+  }
+  importing.value = true;
+  try {
+    const res = await ledgerApi.importEntries(importFile.value);
+    if (res.failCount > 0) {
+      importErrors.value = res.errors || ['导入失败，请检查数据'];
+      ElMessage.error(`导入失败：${res.failCount} 行数据有误`);
+      return;
+    }
+    ElMessage.success(`导入成功 ${res.successCount} 行`);
+    importVisible.value = false;
+    await Promise.all([loadEntries(), loadSubjects()]);
+  } finally {
+    importing.value = false;
+  }
+}
+
+function handleExport() {
+  void ledgerApi.exportEntries({
+    period: query.period,
+    direction: activeDirection.value,
+    deptId: query.deptId,
+    subjectId: query.subjectId
+  });
+}
+
+function handleDownloadTemplate() {
+  void ledgerApi.downloadTemplate();
+}
 
 onMounted(async () => {
   await Promise.all([loadSubjects(), loadEntries()]);
@@ -473,5 +570,23 @@ onMounted(async () => {
 .preview-box .sub {
   color: #909399;
   font-size: 12px;
+}
+.import-tip {
+  margin-bottom: 12px;
+}
+.import-errors {
+  margin-top: 12px;
+  padding: 8px 12px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fef0f0;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 20px;
+  color: #f56c6c;
+}
+.import-errors .title {
+  font-weight: 600;
+  margin-bottom: 4px;
 }
 </style>
