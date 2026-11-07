@@ -524,15 +524,15 @@ async function submit() {
     return;
   }
 
-  // 新角色人校验（三类型均可加人）：必选员工、金额大于 0、同一员工不重复添加
+  // 新角色人校验（三类型均可加人）：必选员工、金额非空且不为 0（允许负数=负业绩分摊）、同一员工不重复添加
   const nrs = newRows.value;
   for (const nr of nrs) {
     if (!nr.employeeId) {
       ElMessage.warning('每个新角色人都需选择员工');
       return;
     }
-    if (nr.targetAmount == null || num(nr.targetAmount) <= 0) {
-      ElMessage.warning(`新角色人「${nr.employeeName || ''}」的业绩金额必须大于 0`);
+    if (nr.targetAmount == null || num(nr.targetAmount) === 0) {
+      ElMessage.warning(`新角色人「${nr.employeeName || ''}」的业绩金额不能为空或 0`);
       return;
     }
   }
