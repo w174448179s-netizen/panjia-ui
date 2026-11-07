@@ -99,7 +99,7 @@
             业绩调整：修改后实收总额必须保持不变（可增加角色人重新分配）
           </template>
           <template v-else-if="adjustType === 'DEDUCT'">
-            业绩扣减：修改后实收总额必须小于原金额；各行调整后实收不能为负
+            业绩扣减：修改后实收总额必须小于原金额
           </template>
           <template v-else>
             业绩增加：修改后实收总额必须大于原金额
@@ -156,7 +156,6 @@
               <el-input-number
                 v-model="row.targetAmount"
                 :precision="2"
-                :min="0"
                 :controls="false"
                 :disabled="pendingBlocked"
                 style="width: 140px"
@@ -521,27 +520,21 @@ async function submit() {
     ElMessage.warning('每行需填写调整后实收金额');
     return;
   }
-  // 实收行调整后金额不能为负
-  const negativeRow = existing.find(r => num(r.targetAmount) < 0);
-  if (negativeRow) {
-    ElMessage.warning(`「${negativeRow.employeeName || ''}」调整后实收金额不能为负`);
-    return;
-  }
   const invalidRatioRow = editRows.value.find(r => r.ratioPct != null && num(r.ratioPct) < 0);
   if (invalidRatioRow) {
     ElMessage.warning(`「${invalidRatioRow.employeeName || '新角色人'}」的角色占比不能为负`);
     return;
   }
 
-  // 新角色人校验：必选员工、金额大于 0、同一员工不重复添加、不与既有实收人员重复（两种模式一致）
+  // 新角色人校验：必选员工、金额非空且不为 0（允许负数=负实收分摊）、同一员工不重复添加、不与既有实收人员重复
   const nrs = newRows.value;
   for (const nr of nrs) {
     if (!nr.employeeId) {
       ElMessage.warning('每个新角色人都需选择员工');
       return;
     }
-    if (nr.targetAmount == null || num(nr.targetAmount) <= 0) {
-      ElMessage.warning(`新角色人「${nr.employeeName || ''}」的实收金额必须大于 0`);
+    if (nr.targetAmount == null || num(nr.targetAmount) === 0) {
+      ElMessage.warning(`新角色人「${nr.employeeName || ''}」的实收金额不能为空或 0`);
       return;
     }
   }
