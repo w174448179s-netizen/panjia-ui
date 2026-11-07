@@ -156,6 +156,14 @@ export interface CommissionContractVO {
   originalReceivedAmount?: number;
   /** 实收金额已被实收调整（含联动）改过 */
   receivedAmountAdjusted?: boolean;
+  /** 实收归属窗口下界（含，YYYY-MM；null=不限）。仅结佣发起页行有值，详情按同一窗口取明细 */
+  receivedWindowStart?: string | null;
+  /** 实收归属窗口上界（不含，YYYY-MM；null=不限）。仅结佣发起页行有值 */
+  receivedWindowEnd?: string | null;
+  /** 实收归属方向 POS/NEG。仅结佣发起页行有值：详情只取同方向实收，正负不抵消 */
+  receivedDirection?: 'POS' | 'NEG';
+  /** 实收归属需排除的期间（补收月，YYYY-MM）。仅结佣发起页行有值 */
+  receivedExcludePeriods?: string[];
 }
 
 /** 批量操作结果（批量发起 / 批量审批） */

@@ -112,7 +112,7 @@
         <el-table-column label="门店/组别" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">{{ row.deptPath || '—' }}</template>
         </el-table-column>
-        <el-table-column label="工号" width="90" align="center">
+        <el-table-column label="工号" width="80" align="center">
           <template #default="{ row }">{{ row.employeeCode || '—' }}</template>
         </el-table-column>
         <el-table-column label="姓名" min-width="90">
@@ -131,7 +131,7 @@
             <span v-else>{{ row.roleType || row.roleName || '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="角色占比" width="160" align="center">
+        <el-table-column label="角色占比" width="150" align="center">
           <template #default="{ row }">
             <el-input-number
               v-model="row.ratioPct"
@@ -140,34 +140,32 @@
               :max="100"
               :controls="false"
               :disabled="pendingBlocked"
+              :title="ratioText(row as EditRow)"
               placeholder="不改"
-              style="width: 120px"
+              style="width: 110px"
             />
-            <div class="cell-sub">{{ ratioText(row as EditRow) }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="实收金额（调整后）" width="210" align="right">
+        <el-table-column label="实收金额（调整后）" width="240" align="right">
           <template #default="{ row }">
-            <el-input-number
-              v-model="row.targetAmount"
-              :precision="2"
-              :min="0"
-              :controls="false"
-              :disabled="pendingBlocked"
-              style="width: 160px"
-              @update:model-value="(v: number | null) => handleRowAmount(row as EditRow, v)"
-            />
-            <div class="cell-sub" v-if="rowDelta(row as EditRow) !== 0">
-              <span class="amount-strike">{{ formatAmount(row.amount) }}</span>
-              <span class="amount-arrow">→</span>
-              <span :class="rowDelta(row as EditRow) > 0 ? 'amount-positive' : 'amount-negative'">
-                {{ formatAmount(row.targetAmount) }}（{{ rowDelta(row as EditRow) > 0 ? '+' : '' }}{{ rowDelta(row as EditRow).toFixed(2) }}）
-              </span>
+            <div class="amount-inline">
+              <template v-if="!row.isNew">
+                <span class="original-amount">{{ formatAmount(row.amount) }}</span>
+                <span class="amount-arrow">→</span>
+              </template>
+              <el-input-number
+                v-model="row.targetAmount"
+                :precision="2"
+                :min="0"
+                :controls="false"
+                :disabled="pendingBlocked"
+                style="width: 140px"
+                @update:model-value="(v: number | null) => handleRowAmount(row as EditRow, v)"
+              />
             </div>
-            <div class="cell-sub muted" v-else>{{ formatAmount(row.amount) }}（不变）</div>
           </template>
         </el-table-column>
-        <el-table-column label="调整金额" width="150" align="right">
+        <el-table-column label="调整金额" width="140" align="right">
           <template #default="{ row }">
             <el-input-number
               v-model="row.deltaInput"
@@ -176,7 +174,7 @@
               :controls="false"
               :disabled="pendingBlocked"
               placeholder="正增负减"
-              style="width: 130px"
+              style="width: 120px"
               @update:model-value="(v: number | null) => handleRowDelta(row as EditRow, v)"
             />
           </template>
@@ -761,6 +759,21 @@ defineExpose({ open, openForRevise });
   line-height: 18px;
   color: var(--el-text-color-secondary);
   margin-top: 2px;
+}
+
+/* 调整前 → 调整后：单行展示，避免行内两行文字造成视觉错位 */
+.amount-inline {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.original-amount {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  text-decoration: line-through;
 }
 
 .cell-sub.muted {
