@@ -858,9 +858,11 @@ const viewDetail = async (row: ReceivedApply) => {
     detailApp.value = res.data?.apply ?? row;
     detailFacts.value = res.data?.facts ?? [];
     // 驳回后调整：加载挂靠在本单上的待生效调整单（不存在则忽略）
-    if (detailApp.value?.pendingAdjustId) {
+    // 注意：接口入参是「审批单 ID」（后端按本单查挂靠调整），不是 pendingAdjustId（调整单 ID）
+    const applyId = detailApp.value?.id ?? row.id;
+    if (detailApp.value?.pendingAdjustId && applyId) {
       try {
-        const adj = await receivedApi.pendingAdjust(detailApp.value.pendingAdjustId);
+        const adj = await receivedApi.pendingAdjust(applyId);
         detailPendingAdjust.value = (adj as any).data ?? null;
       } catch {
         detailPendingAdjust.value = null;

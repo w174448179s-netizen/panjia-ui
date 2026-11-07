@@ -268,9 +268,10 @@ onMounted(async () => {
     facts.value = (res as any).data?.facts ?? [];
     if (!detail.value) loadError.value = '未找到该实收审批单';
     // 驳回后调整：加载挂靠在本单上的待生效调整单（不存在则忽略）
+    // 注意：接口入参是「审批单 ID」（后端按本单查挂靠调整），不是 pendingAdjustId（调整单 ID）
     if (detail.value?.pendingAdjustId) {
       try {
-        const adj = await receivedApi.pendingAdjust(detail.value.pendingAdjustId);
+        const adj = await receivedApi.pendingAdjust(props.businessId);
         pendingAdjust.value = (adj as any).data ?? null;
       } catch {
         pendingAdjust.value = null;
