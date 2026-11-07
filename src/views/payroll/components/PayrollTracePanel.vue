@@ -179,7 +179,7 @@ const formatDate = (val?: string | null): string => {
   return val.replace('T', ' ').substring(0, 19);
 };
 
-/* ───────────── 伯乐奖励计算过程（mentorBonusCalcProcess：[{month,base,ratio,bonus}]，结佣月口径） ───────────── */
+/* ───────────── 伯乐奖励计算过程（mentorBonusCalcProcess：[{month,base,ratio,bonus}]，按新签导入月逐期） ───────────── */
 interface MentorBonusCalcStep { month: string; base: number; ratio: number; bonus: number }
 
 const mentorBonusSteps = (row: PayrollDetail): MentorBonusCalcStep[] => {
@@ -191,9 +191,9 @@ const mentorBonusSteps = (row: PayrollDetail): MentorBonusCalcStep[] => {
   }
 };
 
-/** 结佣月文案：基数为千里马当月结佣业绩，比例取本算薪月职级规则 */
+/** 逐期文案：基数为该新签月的千里马结佣业绩，比例取该新签月伯乐职级规则 */
 const mentorBonusStepText = (s: MentorBonusCalcStep) =>
-  `${s.month || '—'} 千里马当月结佣业绩 ¥${fmt(s.base)} × ${Number((Number(s.ratio) * 100).toFixed(2))}% = ¥${fmt(s.bonus)}`;
+  `${s.month || '—'} 新签结佣业绩 ¥${fmt(s.base)} × 该期配置比例 ${Number((Number(s.ratio) * 100).toFixed(2))}% = ¥${fmt(s.bonus)}`;
 
 /* ───────────── 工资构成列定义（含溯源口径，带实际数值） ───────────── */
 interface ColDef { prop: string; label: string; source: string | ((row: PayrollDetail) => string) }
@@ -227,9 +227,9 @@ const INCOME_COLS: ColDef[] = [
       const add = Number((r as any).mentorAdd);
       return `伯乐加点 ${(add * 100).toFixed(1)}%（RATE_ADD，已计入最终提成比例）`;
     }
-    // 引擎已落地实际取数（结佣月口径）
+    // 引擎已落地实际取数（按新签导入月逐期）
     if (mentorBonusSteps(r).length) {
-      return '千里马当月结佣业绩 × 本算薪月职级规则比例';
+      return '千里马各新签月结佣业绩 × 该期伯乐职级规则比例（逐期累加）';
     }
     // 旧批次未记录计算过程：只展示金额，不臆造基数/比例
     return Number(r.mentorBonus) > 0

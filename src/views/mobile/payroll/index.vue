@@ -187,7 +187,7 @@ const stepText = (step: CalcStep) => {
   return `${base}${addNote}（含自购单加成 ¥${fmt2(step.spPerf)} 按 ${(Number(step.rate) * 100).toFixed(1)}% + ${points.toFixed(1)} 个点 = ¥${fmt2(step.spIncome)}）`;
 };
 
-/** 伯乐奖励计算过程（mentorBonusCalcProcess，引擎落地：结佣月/千里马当月结佣业绩/实际比例/金额） */
+/** 伯乐奖励计算过程（mentorBonusCalcProcess，引擎落地：新签导入月/该期结佣业绩/该期配置比例/该期金额） */
 interface MentorBonusCalcStep {
   month: string;
   base: number;
@@ -201,7 +201,7 @@ const mentorBonusSteps = (d: any): MentorBonusCalcStep[] => {
 };
 
 const mentorBonusStepText = (s: MentorBonusCalcStep) =>
-  `${s.month || '—'} 千里马当月结佣业绩 ¥${fmt2(s.base)} × ${Number((Number(s.ratio) * 100).toFixed(2))}% = ¥${fmt2(s.bonus)}`;
+  `${s.month || '—'} 新签结佣业绩 ¥${fmt2(s.base)} × 该期配置比例 ${Number((Number(s.ratio) * 100).toFixed(2))}% = ¥${fmt2(s.bonus)}`;
 
 /** 保底补足推导链 */
 const guaranteeSteps = (d: any): string[] => {
@@ -273,12 +273,12 @@ const incomeItems = computed<DetailLine[]>(() => {
     {
       label: '伯乐奖励',
       value: Number(d.mentorBonus ?? 0),
-      source: d.mentorAdd != null
-        ? `伯乐加点 ${(Number(d.mentorAdd) * 100).toFixed(1)}%（已计入最终提成比例）`
-        : mentorBonusSteps(d).length
-          ? '千里马当月结佣业绩 × 本算薪月职级规则比例'
-          : Number(d.mentorBonus) > 0
-            ? `按本算薪月职级规则比例计算 = ¥${fmt2(d.mentorBonus)}（历史批次未记录明细）`
+      source: mentorBonusSteps(d).length
+        ? '各新签月结佣业绩 × 该期伯乐职级规则比例（逐期累加）'
+        : Number(d.mentorBonus) > 0
+          ? `按各新签月职级规则比例计算 = ¥${fmt2(d.mentorBonus)}（历史批次未记录明细）`
+          : d.mentorAdd != null
+            ? `伯乐加点 ${(Number(d.mentorAdd) * 100).toFixed(2)}%（已计入最终提成比例）`
             : '',
       steps: mentorBonusSteps(d).map(mentorBonusStepText)
     },

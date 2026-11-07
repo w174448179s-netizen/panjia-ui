@@ -82,7 +82,7 @@ export interface PayrollDetail {
   totalDeduct?: number | string | null;
   /** 伯乐加点（仅 RATE_ADD 模式落地：加点费率×达标千里马数封顶，已计入 finalRate；AMOUNT_RATIO 为空。前端据此自适应显示百分比或金额） */
   mentorAdd?: number | string | null;
-  /** 伯乐奖励计算过程 JSON（[{month,base,ratio,bonus}]：month=结佣月，base=千里马当月结佣业绩，ratio=本算薪月配置比例） */
+  /** 伯乐奖励计算过程 JSON（[{month,base,ratio,bonus}]：month=新签导入月，base=该期千里马结佣业绩，ratio=该期配置比例） */
   mentorBonusCalcProcess?: string | null;
   /** 提成点调整溯源 JSON（RateAdjustItem 数组：type/rate/reason/source/adjustId） */
   rateAdjustJson?: string | null;
