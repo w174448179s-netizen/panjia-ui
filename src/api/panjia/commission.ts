@@ -93,6 +93,10 @@ export interface CommissionItemDetail {
   receivedAmount?: number;
   /** 实收金额原值（调整前：配对 rd 行 sourceKey 链最早 REVERSED 金额，实收加人新人行按 0；未调整时 = receivedAmount） */
   originalReceivedAmount?: number;
+  /** 本单实收合计（合同级到账窗口口径，与结佣列表行同源；不依赖员工/角色配对，明细行逐行求和可能偏少） */
+  contractReceivedAmount?: number;
+  /** 本单实收合计原值（合同级窗口口径，与 contractReceivedAmount 不等时展示「原值 → 调整后值」） */
+  contractOriginalReceivedAmount?: number;
 }
 
 export interface CommissionApplyQuery extends PageQuery {

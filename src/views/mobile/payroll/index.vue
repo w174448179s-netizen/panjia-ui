@@ -168,6 +168,8 @@ interface CalcStep {
   spPerf?: number;
   spIncome?: number;
   spBonus?: number;
+  /** 该期间的伯乐加点（RATE_ADD 期间才有值，已计入当期提点） */
+  mentorAdd?: number;
 }
 
 /** 结佣提成跨月分笔过程 */
@@ -178,10 +180,28 @@ const calcSteps = (d: any): CalcStep[] => {
 
 const stepText = (step: CalcStep) => {
   const base = `结佣业绩 ¥${fmt2(step.perf)} × ${step.month}快照提点 ${(Number(step.rate) * 100).toFixed(1)}% = ¥${fmt2(step.income)}`;
-  if (!Number(step.spPerf)) return base;
+  const mentorAdd = Number(step.mentorAdd) || 0;
+  const addNote = mentorAdd > 0 ? `（含伯乐加点 ${Number((mentorAdd * 100).toFixed(2))}%）` : '';
+  if (!Number(step.spPerf)) return base + addNote;
   const points = (Number(step.spBonus) / Number(step.spPerf)) * 100;
-  return `${base}（含自购单加成 ¥${fmt2(step.spPerf)} 按 ${(Number(step.rate) * 100).toFixed(1)}% + ${points.toFixed(1)} 个点 = ¥${fmt2(step.spIncome)}）`;
+  return `${base}${addNote}（含自购单加成 ¥${fmt2(step.spPerf)} 按 ${(Number(step.rate) * 100).toFixed(1)}% + ${points.toFixed(1)} 个点 = ¥${fmt2(step.spIncome)}）`;
 };
+
+/** 伯乐奖励计算过程（mentorBonusCalcProcess，引擎落地：结佣月/千里马当月结佣业绩/实际比例/金额） */
+interface MentorBonusCalcStep {
+  month: string;
+  base: number;
+  ratio: number;
+  bonus: number;
+}
+
+const mentorBonusSteps = (d: any): MentorBonusCalcStep[] => {
+  const arr = parseJson(d?.mentorBonusCalcProcess);
+  return Array.isArray(arr) ? (arr as MentorBonusCalcStep[]) : [];
+};
+
+const mentorBonusStepText = (s: MentorBonusCalcStep) =>
+  `${s.month || '—'} 千里马当月结佣业绩 ¥${fmt2(s.base)} × ${Number((Number(s.ratio) * 100).toFixed(2))}% = ¥${fmt2(s.bonus)}`;
 
 /** 保底补足推导链 */
 const guaranteeSteps = (d: any): string[] => {
@@ -255,7 +275,12 @@ const incomeItems = computed<DetailLine[]>(() => {
       value: Number(d.mentorBonus ?? 0),
       source: d.mentorAdd != null
         ? `伯乐加点 ${(Number(d.mentorAdd) * 100).toFixed(1)}%（已计入最终提成比例）`
-        : `千里马结佣 ¥${fmt2(Number(d.mentorBonus) / 0.02)} × 2% = ¥${fmt2(d.mentorBonus)}`
+        : mentorBonusSteps(d).length
+          ? '千里马当月结佣业绩 × 本算薪月职级规则比例'
+          : Number(d.mentorBonus) > 0
+            ? `按本算薪月职级规则比例计算 = ¥${fmt2(d.mentorBonus)}（历史批次未记录明细）`
+            : '',
+      steps: mentorBonusSteps(d).map(mentorBonusStepText)
     },
     { label: '奖金', value: Number(d.bonus ?? 0), source: '奖金审批单' },
     { label: '其他收入', value: Number(d.otherIncome ?? 0), source: '收入录入记录（补贴/补发等）' }

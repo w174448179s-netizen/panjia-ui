@@ -62,7 +62,7 @@ export interface PayrollDetail {
   taxSource?: string;
   /** 当月新签业绩（折算后金额） */
   newSignPerformance?: number;
-  /** 当月结佣业绩（不折算） */
+  /** 当月结佣业绩（按业务类型折算后的计薪基数） */
   commissionPerformance?: number;
   /** 当月新签业绩提成比例（职级personalRate） */
   newSignRate?: number;
@@ -82,6 +82,8 @@ export interface PayrollDetail {
   totalDeduct?: number | string | null;
   /** 伯乐加点（仅 RATE_ADD 模式落地：加点费率×达标千里马数封顶，已计入 finalRate；AMOUNT_RATIO 为空。前端据此自适应显示百分比或金额） */
   mentorAdd?: number | string | null;
+  /** 伯乐奖励计算过程 JSON（[{month,base,ratio,bonus}]：month=结佣月，base=千里马当月结佣业绩，ratio=本算薪月配置比例） */
+  mentorBonusCalcProcess?: string | null;
   /** 提成点调整溯源 JSON（RateAdjustItem 数组：type/rate/reason/source/adjustId） */
   rateAdjustJson?: string | null;
   /** 结佣提成跨月回溯计算过程 JSON（[{month,perf,rate,income}]，仅存在回溯时落地） */

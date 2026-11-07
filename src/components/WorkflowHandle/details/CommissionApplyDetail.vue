@@ -180,29 +180,22 @@ const totalExpectedConvertedAmount = computed(() => items.value.reduce((s, it) =
  *  若用快照会出现「新签合计 0 但折算后 -420.34」的自相矛盾 */
 const totalExpectedAmount = computed(() => items.value.reduce((s, it) => s + num(it.expectedAmount), 0));
 /**
- * 实收金额是「同合同+员工+角色+期间」维度的聚合值（正数行=累计到本行期间，负数退单行=当期负部），
- * 同人同角色跨期有多条结佣明细时（如正常期 + 退单冲减期）逐行求和会重复计数，
- * 故合计必须先按（员工+角色+期间）去重。
+ * 实收合计取后端下发的「本单合同级窗口实收」（与结佣列表行同源同口径）。
+ * 明细行实收仅展示能按「员工+角色」配对上的份额：实收角色对不上新签、
+ * 或实收人员在本单没有新签行时，逐行求和会偏少，故合计不再由明细行推导。
  */
-const distinctRealRows = computed(() => {
-  const map = new Map<string, CommissionItemDetail>();
-  for (const it of items.value) {
-    const key = `${it.employeeCode ?? it.employeeId ?? ''}|${it.roleType ?? it.roleName ?? ''}|${it.period ?? ''}`;
-    if (!map.has(key)) map.set(key, it);
-  }
-  return [...map.values()];
+const contractRealRow = computed(() => items.value.find((it) => it.contractReceivedAmount != null) ?? items.value[0]);
+const totalReceivedAmount = computed(() => num(contractRealRow.value?.contractReceivedAmount));
+const totalOriginalRealAmount = computed(() => {
+  const row = contractRealRow.value;
+  if (!row || row.contractOriginalReceivedAmount == null) return totalReceivedAmount.value;
+  return num(row.contractOriginalReceivedAmount);
 });
-/** 实收合计：按（员工+角色+期间）去重后求和（同表格列口径，但同组只计一次） */
-const totalReceivedAmount = computed(() => distinctRealRows.value.reduce((s, it) => s + num(it.receivedAmount), 0));
-/**
- * 实收合计「原值 → 调整后值」：实收调整 / 结佣联动 supersede rd 事实后，
- * 逐行 originalReceivedAmount（链最早值，未调整行=receivedAmount）按（员工+角色）去重求和为原值合计。
- * 命名区分应收业绩口径的合计。
- */
-const totalOriginalRealAmount = computed(() =>
-  distinctRealRows.value.reduce((s, it) => s + num(it.originalReceivedAmount ?? it.receivedAmount), 0));
-const isRealAmountAdjusted = computed(() =>
-  items.value.some((it) => it.originalReceivedAmount != null && num(it.originalReceivedAmount) !== num(it.receivedAmount)));
+const isRealAmountAdjusted = computed(() => {
+  const row = contractRealRow.value;
+  return !!row && row.contractOriginalReceivedAmount != null
+    && num(row.contractOriginalReceivedAmount) !== num(row.contractReceivedAmount);
+});
 /** 行级实收金额是否按「原值 → 调整后值」展示：原值与当前值不等即为已调整 */
 const isRealAdjusted = (
   row: { receivedAmount?: number | string | null; originalReceivedAmount?: number | string | null } | null | undefined,

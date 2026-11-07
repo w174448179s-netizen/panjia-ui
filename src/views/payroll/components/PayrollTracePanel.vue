@@ -148,7 +148,7 @@
       </el-table>
     </template>
     <div class="trace-footnote">
-      结佣业绩 = 已审批结佣业绩；新签业绩 = 应收业绩（门店团队成员）；折算后 = 业绩金额 × 当前生效折算因子（折算只作用于新签，结佣是贝壳实收到手值、原样取用，此列仅供对照）；签约/认购时间、房源地址、角色占比由业绩事实 enrich。
+      结佣业绩 = 已审批结佣业绩；新签业绩 = 应收业绩（门店团队成员）；折算后 = 业绩金额 × 折算因子（一手房 0.9024、其他 0.96；新签与结佣的计薪基数均按折算后金额，本列为实际参与算薪的基数）；签约/认购时间、房源地址、角色占比由业绩事实 enrich。
     </div>
   </el-dialog>
   </div>
@@ -178,6 +178,22 @@ const formatDate = (val?: string | null): string => {
   if (!val) return '';
   return val.replace('T', ' ').substring(0, 19);
 };
+
+/* ───────────── 伯乐奖励计算过程（mentorBonusCalcProcess：[{month,base,ratio,bonus}]，结佣月口径） ───────────── */
+interface MentorBonusCalcStep { month: string; base: number; ratio: number; bonus: number }
+
+const mentorBonusSteps = (row: PayrollDetail): MentorBonusCalcStep[] => {
+  try {
+    const arr = JSON.parse((row as any).mentorBonusCalcProcess || '[]');
+    return Array.isArray(arr) ? (arr as MentorBonusCalcStep[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+/** 结佣月文案：基数为千里马当月结佣业绩，比例取本算薪月职级规则 */
+const mentorBonusStepText = (s: MentorBonusCalcStep) =>
+  `${s.month || '—'} 千里马当月结佣业绩 ¥${fmt(s.base)} × ${Number((Number(s.ratio) * 100).toFixed(2))}% = ¥${fmt(s.bonus)}`;
 
 /* ───────────── 工资构成列定义（含溯源口径，带实际数值） ───────────── */
 interface ColDef { prop: string; label: string; source: string | ((row: PayrollDetail) => string) }
@@ -211,8 +227,14 @@ const INCOME_COLS: ColDef[] = [
       const add = Number((r as any).mentorAdd);
       return `伯乐加点 ${(add * 100).toFixed(1)}%（RATE_ADD，已计入最终提成比例）`;
     }
-    const apprentice = Number(r.mentorBonus) / 0.02;
-    return `千里马结佣 ¥${fmt(apprentice)} × 2% = ¥${fmt(r.mentorBonus)}`;
+    // 引擎已落地实际取数（结佣月口径）
+    if (mentorBonusSteps(r).length) {
+      return '千里马当月结佣业绩 × 本算薪月职级规则比例';
+    }
+    // 旧批次未记录计算过程：只展示金额，不臆造基数/比例
+    return Number(r.mentorBonus) > 0
+      ? `按本算薪月职级规则比例计算 = ¥${fmt(r.mentorBonus)}（历史批次未记录明细）`
+      : '';
   } },
   { prop: 'bonus', label: '奖金', source: '奖金审批单' },
   { prop: 'otherIncome', label: '其他收入', source: '收入录入记录（补贴/补发等）' },
@@ -302,15 +324,19 @@ interface CommissionCalcStep {
   spIncome?: number;
   /** 自购单加成金额（¥，引擎落地值；点数 = spBonus ÷ spPerf） */
   spBonus?: number;
+  /** 该期间的伯乐加点（RATE_ADD 期间才有值，已计入当期提点；切换金额比例后回溯期仍可见） */
+  mentorAdd?: number;
 }
 
 /** 分笔过程文案：自购单加成单独标注，其余按当期快照提点 */
 const stepText = (s: CommissionCalcStep, prefix = '结佣业绩'): string => {
   const base = `${prefix} ¥${fmt(s.perf)} × ${s.month}快照提点 ${(Number(s.rate) * 100).toFixed(1)}% = ¥${fmt(s.income)}`;
-  if (!Number(s.spPerf)) return base;
+  const mentorAdd = Number(s.mentorAdd) || 0;
+  const addNote = mentorAdd > 0 ? `（含伯乐加点 ${Number((mentorAdd * 100).toFixed(2))}%）` : '';
+  if (!Number(s.spPerf)) return base + addNote;
   // 引擎落地 spBonus 为加成金额（¥），加点数 = 加成金额 ÷ 自购单业绩
   const points = (Number(s.spBonus) / Number(s.spPerf)) * 100;
-  return `${base}（含自购单加成 ¥${fmt(s.spPerf)} 按 ${(Number(s.rate) * 100).toFixed(1)}% + ${points.toFixed(1)} 个点 = ¥${fmt(s.spIncome)}）`;
+  return `${base}${addNote}（含自购单加成 ¥${fmt(s.spPerf)} 按 ${(Number(s.rate) * 100).toFixed(1)}% + ${points.toFixed(1)} 个点 = ¥${fmt(s.spIncome)}）`;
 };
 
 const calcSteps = (row: PayrollDetail): CommissionCalcStep[] => {
@@ -358,7 +384,9 @@ const incomeItems = INCOME_COLS
       ? calcSteps(props.row).map((s) => stepText(s))
       : c.prop === 'guaranteeFill'
         ? guaranteeSteps(props.row)
-        : [] as string[],
+        : c.prop === 'mentorBonus'
+          ? mentorBonusSteps(props.row).map(mentorBonusStepText)
+          : [] as string[],
   }));
 
 const deductItems = DEDUCT_COLS
