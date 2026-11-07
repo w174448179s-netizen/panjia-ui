@@ -270,9 +270,6 @@
             <el-table-column label="底薪" prop="baseSalary" width="90" align="right">
               <template #default="{ row }">{{ num(row.baseSalary) }}</template>
             </el-table-column>
-            <el-table-column label="全勤" prop="fullAttendance" width="90" align="right">
-              <template #default="{ row }">{{ num(row.fullAttendance) }}</template>
-            </el-table-column>
             <el-table-column label="绩效" prop="bonus" width="90" align="right">
               <template #default="{ row }">{{ num(row.bonus) }}</template>
             </el-table-column>
@@ -683,7 +680,6 @@ const directorTreeData = computed<DirectorTreeNode[]>(() => {
       storeRate: Number(it.rate) || 0,
       storeIncome: Number(it.income) || 0,
       baseSalary: undefined,
-      fullAttendance: undefined,
       bonus: undefined,
       commissionPerformance: undefined,
       commissionIncome: undefined,
@@ -1087,7 +1083,7 @@ const managerSummary = ({ columns }: any) => {
   return sums;
 };
 
-const DIRECTOR_MONEY_PROPS = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'deptDiffAmount', 'storeIncome', 'baseSalary', 'fullAttendance', 'bonus', 'commissionPerformance', 'commissionIncome', 'mentorBonus', 'socialFee', 'housingFund', 'commercialInsurance', 'gross', 'tax', 'net'];
+const DIRECTOR_MONEY_PROPS = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'deptDiffAmount', 'storeIncome', 'baseSalary', 'bonus', 'commissionPerformance', 'commissionIncome', 'mentorBonus', 'socialFee', 'housingFund', 'commercialInsurance', 'gross', 'tax', 'net'];
 const DIRECTOR_DEDUCT = new Set(['deptEmployerSocialTotal', 'deptDiffAmount', 'socialFee', 'housingFund', 'commercialInsurance', 'tax']);
 const directorTotals = computed<Record<string, number>>(() => {
   // 只汇总顶层汇总行（directorDetails），避免树形子行 double-count；合计固定全量口径

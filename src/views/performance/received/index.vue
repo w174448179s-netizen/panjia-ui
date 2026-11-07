@@ -210,6 +210,8 @@
                 <el-button v-if="row.pendingMatch && checkPermi(['perf:fact:supplement'])" link type="success" @click="openExpectSupplement(row as ReceivedApply)">补录</el-button>
                 <el-button v-if="row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重提</el-button>
                 <el-button v-if="row.status === 'SUBMITTED' && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
+                <!-- 已作废：复用原单号重新绑定实收明细并重新发起审批 -->
+                <el-button v-if="row.status === 'CANCELLED' && checkPermi(['perf:received:restore']) && canCancel(row)" link type="primary" @click="restore(row)">恢复</el-button>
               </template>
               <el-tooltip v-else content="同一合同跨多期合并展示，请在上方「期间」筛选到具体月份后操作" placement="top">
                 <span class="cell-sub">按期间操作</span>
@@ -869,13 +871,27 @@ const viewDetail = async (row: ReceivedApply) => {
 
 const cancel = async (row: ReceivedApply) => {
   try {
-    await ElMessageBox.confirm(`确认作废实收审批单「${row.applyNo}」？作废后不可恢复。`, '提示', { type: 'warning' });
+    await ElMessageBox.confirm(`确认作废实收审批单「${row.applyNo}」？作废后可在“已作废”列表恢复。`, '提示', { type: 'warning' });
   } catch {
     return;
   }
   try {
     await receivedApi.cancel(row.id);
     ElMessage.success('已作废');
+    getList();
+  } catch { /* 拦截器处理 */ }
+};
+
+/** 恢复已作废单据：复用原单号重新绑定实收明细并重新进入审批 */
+const restore = async (row: ReceivedApply) => {
+  try {
+    await ElMessageBox.confirm(`确认恢复实收审批单「${row.applyNo}」？恢复后将重新进入审批流程。`, '提示', { type: 'warning' });
+  } catch {
+    return;
+  }
+  try {
+    await receivedApi.restore(row.id);
+    ElMessage.success('已恢复');
     getList();
   } catch { /* 拦截器处理 */ }
 };

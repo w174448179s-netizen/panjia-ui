@@ -104,8 +104,6 @@ export interface PayrollDetail {
   storeRate?: number;
   /** 店长 sheet：保底工资（职级 minSalary，如 8000） */
   minSalary?: number;
-  /** 总监 sheet：全勤奖（policy.fullAttendance 默认 500） */
-  fullAttendance?: number;
   /** 总监各门店提成明细 JSON（DirectorStoreItem 数组：deptId/newSign/social/billable/rate/income，导出按门店分行） */
   directorStoreItems?: string | null;
 }

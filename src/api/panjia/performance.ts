@@ -300,8 +300,6 @@ export interface ManageContractDetailQuery {
   orderNos?: string;         // 订单号，逗号分隔（可空；非空时按订单号精确限定单订单明细）
   /** 仅取「有效」实收明细（未绑定审批单或审批单已通过）；结佣发起页详情与行上实收同口径时传 true */
   onlyEffective?: boolean;
-  /** 剔除虚拟人（门店公共占位）明细；结佣发起页详情传 true */
-  excludeVirtual?: boolean;
 }
 
 /** 业绩管理合同维度分页结果（rows=当前页合同聚合行，明细懒加载） */

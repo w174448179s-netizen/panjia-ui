@@ -170,6 +170,9 @@ export const receivedApi = {
   ) => panjiaRequest.post<void>(`/performance/received/${id}/revise-and-resubmit`, data),
   cancel: (id: string | number) =>
     panjiaRequest.post<void>(`/performance/received/${id}/cancel`),
+  /** 恢复已作废单据（复用原单号重新发起审批） */
+  restore: (id: string | number) =>
+    panjiaRequest.post<void>(`/performance/received/${id}/restore`),
   /** 按合同号批量审批（CompletableFuture 挂起等待，返回每张单处理结果） */
   batchApproveByContractAsync: (period: string, contractNos: string[]) =>
     panjiaRequest.post<BatchApproveResult>('/performance/received/batch-approve-by-contract-async', {

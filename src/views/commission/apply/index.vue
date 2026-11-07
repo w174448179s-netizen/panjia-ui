@@ -711,8 +711,6 @@ const openDetail = async (row: CommissionContractVO) => {
         period: '',
         factType: 'PERF_EXPECT',
         contractNos: no,
-        // 虚拟人（门店公共占位）不参与结佣，明细弹窗剔除
-        excludeVirtual: true,
       }),
       performanceApi.listManageContractDetails({
         period: '',
