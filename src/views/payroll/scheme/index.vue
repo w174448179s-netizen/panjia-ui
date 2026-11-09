@@ -186,6 +186,11 @@
                 <el-input-number v-model="rc.gradeB" :min="0" :precision="1" :controls="false" style="width:100%" />
               </el-form-item>
             </el-col>
+            <el-col :span="8">
+              <el-form-item label="晚提交罚款">
+                <el-input-number v-model="rc.penaltyFee" :min="0" :precision="2" :controls="false" style="width:100%" />
+              </el-form-item>
+            </el-col>
           </el-row>
           <el-row :gutter="16">
             <el-col :span="8">
@@ -204,7 +209,7 @@
               </el-form-item>
             </el-col>
           </el-row>
-          <p class="form-tip">按平均积分定等级后扣固定金额（进应发扣减，不影响提成比例）；建议适用岗位选「仅店长」。</p>
+          <p class="form-tip">按平均积分定等级后扣固定金额（进应发扣减，不影响提成比例）；晚提交罚款按次数 × 单价扣，不分 A/B/C 等级；建议适用岗位选「仅店长」。</p>
         </template>
 
         <el-alert v-else-if="form.schemeType === 'NONE'" type="info" :closable="false" show-icon
@@ -283,7 +288,7 @@ const summary = (row: PerfScheme) => {
     case 'GRADE_RATE':
       return `A线${j.gradeA ?? 8}/B线${j.gradeB ?? 6}；扣点 A${fmtPct(j.deductA)} B${fmtPct(j.deductB)} C${fmtPct(j.deductC)}；晚提交${fmtMoney(j.penaltyFee)}/次`;
     case 'GRADE_AMOUNT':
-      return `A线${j.gradeA ?? 8}/B线${j.gradeB ?? 6}；扣款 A${fmtMoney(j.feeA)} B${fmtMoney(j.feeB)} C${fmtMoney(j.feeC)}`;
+      return `A线${j.gradeA ?? 8}/B线${j.gradeB ?? 6}；扣款 A${fmtMoney(j.feeA)} B${fmtMoney(j.feeB)} C${fmtMoney(j.feeC)}；晚提交${fmtMoney(j.penaltyFee)}/次`;
     case 'RATE_TIER':
       return (j.tiers ?? []).map((t: any) =>
         `[${t.min ?? 0},${t.max ?? '∞'})→${fmtPct(t.rate)}`).join(' ');
@@ -352,7 +357,10 @@ const serializeRc = (): string => {
         deductA: rc.deductA, deductB: rc.deductB, deductC: rc.deductC
       });
     case 'GRADE_AMOUNT':
-      return JSON.stringify({ gradeA: rc.gradeA, gradeB: rc.gradeB, feeA: rc.feeA, feeB: rc.feeB, feeC: rc.feeC });
+      return JSON.stringify({
+        gradeA: rc.gradeA, gradeB: rc.gradeB, penaltyFee: rc.penaltyFee,
+        feeA: rc.feeA, feeB: rc.feeB, feeC: rc.feeC
+      });
     case 'RATE_TIER':
       return JSON.stringify({ tiers: rc.tiers.map((t) => ({ min: t.min, max: t.max, rate: t.rate ?? 0 })) });
     case 'AMOUNT_TIER':

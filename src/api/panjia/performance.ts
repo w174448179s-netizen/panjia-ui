@@ -84,6 +84,8 @@ export interface AdjustDetailVO extends PerformanceAdjust {
   receivedTotal?: number;
   targetAmount?: number;
   details?: AdjustFactDetailVO[];
+  /** 实收联动提示：合同实收只在其它期间时，提示本次未联动、需用「实收调整」修正 */
+  linkageHint?: string;
 }
 
 /** 调整单·受影响的明细行 */
@@ -478,9 +480,9 @@ export const performanceApi = {
   voidByContract: (period: string, factType: string, contractNo: string, reason: string, orderNo?: string) =>
     panjiaRequest.post<number>(`/perf/fact/void-contract?period=${period}&factType=${factType}&contractNo=${encodeURIComponent(contractNo)}&reason=${encodeURIComponent(reason)}${orderNo ? `&orderNo=${encodeURIComponent(orderNo)}` : ''}`),
 
-  // 合同级恢复：该订单该期间全部已作废业绩一次性恢复（period 改为当前月）；orderNo 与合同号双键精确匹配
-  restoreByContract: (period: string, factType: string, contractNo: string, reason: string, orderNo?: string) =>
-    panjiaRequest.post<number>(`/perf/fact/restore-contract?period=${period}&factType=${factType}&contractNo=${encodeURIComponent(contractNo)}&reason=${encodeURIComponent(reason)}${orderNo ? `&orderNo=${encodeURIComponent(orderNo)}` : ''}`),
+  // 合同级恢复：该订单该期间全部已作废业绩一次性恢复（可指定目标月，默认当前月，period/sourceKey 同步改写）；orderNo 与合同号双键精确匹配
+  restoreByContract: (period: string, factType: string, contractNo: string, reason: string, orderNo?: string, targetPeriod?: string) =>
+    panjiaRequest.post<number>(`/perf/fact/restore-contract?period=${period}&factType=${factType}&contractNo=${encodeURIComponent(contractNo)}&reason=${encodeURIComponent(reason)}${orderNo ? `&orderNo=${encodeURIComponent(orderNo)}` : ''}${targetPeriod ? `&targetPeriod=${targetPeriod}` : ''}`),
 };
 
 // ========== 独立导出函数 ==========

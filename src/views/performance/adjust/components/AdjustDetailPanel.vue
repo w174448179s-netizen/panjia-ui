@@ -77,6 +77,16 @@
         </div>
       </div>
 
+      <!-- 实收联动提示：合同实收只在其它期间时，本次调整未联动实收，引导去实收调整 -->
+      <el-alert
+        v-if="detail.linkageHint"
+        type="warning"
+        :title="detail.linkageHint"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      />
+
       <!-- 合同信息（仅合同元数据，金额已在上方概览条展示，不再重复）；
            无合同号业务（一手房/家装荐客等）以订单号为锚点，contractNo 为空也要展示 -->
       <div v-if="detail.contractNo || detail.orderNo" class="detail-block">

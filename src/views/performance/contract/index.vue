@@ -375,6 +375,8 @@
     <ContractOffsetDialog ref="offsetDialogRef" @submitted="getList" />
     <!-- 合同退单弹窗（全额冲退，审批通过生成负新签+负实收） -->
     <ContractRefundDialog ref="refundDialogRef" @submitted="getList" />
+    <!-- 合同恢复弹窗（可指定恢复后落入的月份） -->
+    <ContractRestoreDialog ref="restoreDialogRef" @submitted="getList" />
   </div>
 </template>
 
@@ -389,6 +391,7 @@ import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
 import ContractAdjustDialog from './components/ContractAdjustDialog.vue';
 import ContractOffsetDialog from './components/ContractOffsetDialog.vue';
 import ContractRefundDialog from './components/ContractRefundDialog.vue';
+import ContractRestoreDialog from './components/ContractRestoreDialog.vue';
 import { useUserStore } from '@/store/modules/user';
 import { resolveBizNo } from '@/utils/panjiaBiz';
 import { checkPermi } from '@/utils/permission';
@@ -547,27 +550,13 @@ const handleVoidContract = async (row: PerformanceManageContract) => {
   }
 };
 
-const handleRestoreContract = async (row: PerformanceManageContract) => {
-  try {
-    const { value } = await ElMessageBox.prompt(
-      `将恢复合同「${row.contractNo}」本期全部已作废明细，恢复后业绩计入当前月。`,
-      '恢复合同业绩',
-      {
-        confirmButtonText: '确定恢复',
-        cancelButtonText: '取消',
-        inputType: 'textarea',
-        inputPlaceholder: '必填，如：误操作作废等',
-        inputValidator: (v) => !!v?.trim() || '请输入恢复原因',
-      },
-    );
-    await performanceApi.restoreByContract(queryParams.period, 'PERF_EXPECT', row.contractNo, value.trim(), row.orderNo);
-    ElMessage.success('已恢复，业绩计入当前月');
-    getList();
-  } catch (e: any) {
-    if (e !== 'cancel' && e?.message !== 'cancel') {
-      ElMessage.error(e?.message || '恢复失败');
-    }
-  }
+const restoreDialogRef = ref<{ open: (row: PerformanceManageContract, period: string) => void }>();
+
+// 恢复：弹窗选择目标月份（默认当前月），业绩落到所选月
+const handleRestoreContract = (row: PerformanceManageContract) => {
+  // 原期间优先取单期间行自身 period；未按期间筛选时回退到筛选条件（跨期合并串不可用）
+  const rowPeriod = /^\d{4}-\d{2}$/.test(row.period || '') ? row.period! : '';
+  restoreDialogRef.value?.open(row, rowPeriod || queryParams.period);
 };
 
 // ==================== 手工提交实收 ====================
