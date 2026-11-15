@@ -101,7 +101,7 @@
                     @click="handleUpdate(row)"
                   ></el-button>
                 </el-tooltip>
-                <el-tooltip content="删除" placement="top">
+                <el-tooltip v-if="row.configType !== 'Y'" content="删除" placement="top">
                   <el-button
                     v-hasPermi="['system:config:remove']"
                     link
@@ -109,6 +109,9 @@
                     icon="Delete"
                     @click="handleDelete(row)"
                   ></el-button>
+                </el-tooltip>
+                <el-tooltip v-else content="系统内置参数不可删除" placement="top">
+                  <el-button link type="danger" icon="Delete" disabled></el-button>
                 </el-tooltip>
               </template>
             </el-table-column>
@@ -131,15 +134,17 @@
           <el-input v-model="form.configName" placeholder="请输入参数名称" />
         </el-form-item>
         <el-form-item label="参数键名" prop="configKey">
-          <el-input v-model="form.configKey" placeholder="请输入参数键名" />
+          <el-input v-model="form.configKey" :disabled="builtinLocked" placeholder="请输入参数键名" />
+          <div v-if="builtinLocked" class="lock-tip">系统内置参数的键名不允许修改，只能改参数值</div>
         </el-form-item>
         <el-form-item label="参数键值" prop="configValue">
           <el-input v-model="form.configValue" type="textarea" placeholder="请输入参数键值" />
         </el-form-item>
         <el-form-item label="系统内置" prop="configType">
-          <el-radio-group v-model="form.configType">
+          <el-radio-group v-model="form.configType" :disabled="builtinLocked">
             <el-radio v-for="dict in sys_yes_no" :key="dict.value" :value="dict.value">{{ dict.label }}</el-radio>
           </el-radio-group>
+          <div v-if="builtinLocked" class="lock-tip">系统内置参数不允许改为自定义</div>
         </el-form-item>
         <el-form-item label="备注" prop="remark">
           <el-input v-model="form.remark" type="textarea" placeholder="请输入内容" />
@@ -201,6 +206,10 @@ const data = reactive<PageData<ConfigForm, ConfigQuery>>({
 });
 
 const { queryParams, form, rules } = toRefs(data);
+
+/** 编辑内置参数（config_type='Y'）时锁定参数键名与内置类型：键名/类型被改会导致代码取不到参数 */
+const editingBuiltin = ref(false);
+const builtinLocked = computed(() => editingBuiltin.value);
 const { dialog, resetForm, openDialog, showDialog, closeDialog } = useFormDialog({
   form,
   formRef: configFormRef,
@@ -227,6 +236,7 @@ const getList = async () => {
 const cancel = () => {
   closeDialog();
   resetForm();
+  editingBuiltin.value = false;
 };
 /** 搜索按钮操作 */
 const handleQuery = () => {
@@ -241,6 +251,7 @@ const handleTabChange = (tab: string | number) => {
 };
 /** 新增按钮操作 */
 const handleAdd = () => {
+  editingBuiltin.value = false;
   openDialog('添加参数');
 };
 /** 修改按钮操作 */
@@ -249,6 +260,7 @@ const handleUpdate = async (row?: Partial<ConfigVO>) => {
   const configId = row?.configId;
   const res = await getConfig(configId!);
   Object.assign(form.value, res.data);
+  editingBuiltin.value = form.value.configType === 'Y';
   showDialog('修改参数');
 };
 /** 内联保存参数值 */
@@ -307,6 +319,14 @@ onMounted(() => {
 
 .config-body {
   display: flex;
+}
+
+.lock-tip {
+  flex-basis: 100%;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--el-color-warning);
 }
 
 .config-tabs {

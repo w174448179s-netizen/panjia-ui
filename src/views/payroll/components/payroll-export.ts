@@ -224,12 +224,12 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
     },
   },
 
-  // ────────────── 总监 sheet（20 列） ──────────────
+  // ────────────── 总监 sheet（19 列） ──────────────
   DIRECTOR: {
     name: '总监工资',
     heads: [
       '姓名', '组别', '新签业绩', '社保业绩', '新签与结佣差额', '合计', '提成比例', '提成金额',
-      '底薪', '全勤', '绩效', '结佣业绩', '业绩提成', '结佣提成计算过程', '伯乐奖励',
+      '底薪', '绩效', '结佣业绩', '业绩提成', '结佣提成计算过程', '伯乐奖励',
       '社保', '公积金', '商业保险', '应发工资', '个税', '实发工资',
     ],
     row: (r) => {
@@ -246,7 +246,6 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         r.storeRate != null ? ratePercent(r.storeRate) : '',
         num(r.storeIncome),
         num(r.baseSalary),
-        num(r.fullAttendance),
         num(r.bonus),
         num(r.commissionPerformance),
         num(r.commissionIncome),
@@ -271,7 +270,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
           r.employeeName || '', r.deptName || '', num(newSign), neg(social), neg(diff),
           num(newSign - social - diff),
           r.storeRate != null ? ratePercent(r.storeRate) : '', num(r.storeIncome),
-          num(r.baseSalary), num(r.fullAttendance), num(r.bonus), num(r.commissionPerformance),
+          num(r.baseSalary), num(r.bonus), num(r.commissionPerformance),
           num(r.commissionIncome), calcProcessText(r), mentorBonusCell(r), neg(r.socialFee), neg(r.housingFund),
           neg(r.commercialInsurance), num(r.gross), neg(r.tax), num(r.net),
         ]];
@@ -284,11 +283,11 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         const itIncome = Number(it.income) || 0;
         const storeName = it.deptName || r.deptName || '';
         if (idx === 0) {
-          // 第一行：姓名 + 门店提成 + 底薪/全勤/绩效/社保等汇总
+          // 第一行：姓名 + 门店提成 + 底薪/绩效/社保等汇总
           return [
             r.employeeName || '', storeName, num(itNew), neg(itSocial), neg(itDiff), num(itBillable),
             ratePercent(it.rate), num(itIncome),
-            num(r.baseSalary), num(r.fullAttendance), num(r.bonus), num(r.commissionPerformance),
+            num(r.baseSalary), num(r.bonus), num(r.commissionPerformance),
             num(r.commissionIncome), calcProcessText(r), mentorBonusCell(r), neg(r.socialFee), neg(r.housingFund),
             neg(r.commercialInsurance), num(r.gross), neg(r.tax), num(r.net),
           ];
@@ -297,7 +296,7 @@ export const SHEET_CONFIGS: Record<PayrollRole, SheetConfig> = {
         return [
           '', storeName, num(itNew), neg(itSocial), neg(itDiff), num(itBillable),
           ratePercent(it.rate), num(itIncome),
-          '', '', '', '', '', '', '', '', '', '', '', '', '',
+          '', '', '', '', '', '', '', '', '', '', '', '',
         ];
       });
     },
@@ -346,7 +345,7 @@ function hrRow(r: PayrollDetail): (string | number)[] {
     '',                               // 出勤天数（无字段）
     neg(r.attendanceFee),
     '',                               // 是否全勤（无字段）
-    r.employeeRole === 'DIRECTOR' ? num(r.fullAttendance) : '',
+    '',                               // 全勤（已停用，保留列对齐天街工资表）
     '',                               // 考勤详情（无字段）
     neg(r.socialFee),
     neg(r.housingFund),

@@ -19,7 +19,7 @@ export interface CommissionApplication {
   /** 调整前应收合计（提交快照；仅 expectedAdjusted=true 时有值，供展示「原值 → 调整后值」） */
   originalExpectedAmount?: number;
   currentNode?: string;      // DIRECTOR / FINANCE / null（T-04 后实收==应收时财务节点跳过，流程直接结束）
-  status: string;        // DRAFT / SUBMITTED / APPROVED / LOCKED / REJECTED / CANCELLED
+  status: string;        // SUBMITTED / APPROVED / LOCKED / REJECTED / CANCELLED
   approvedMonth?: string;
   processInstanceId?: string;
   applicantId?: number;
@@ -93,6 +93,10 @@ export interface CommissionItemDetail {
   receivedAmount?: number;
   /** 实收金额原值（调整前：配对 rd 行 sourceKey 链最早 REVERSED 金额，实收加人新人行按 0；未调整时 = receivedAmount） */
   originalReceivedAmount?: number;
+  /** 本单实收合计（合同级到账窗口口径，与结佣列表行同源；不依赖员工/角色配对，明细行逐行求和可能偏少） */
+  contractReceivedAmount?: number;
+  /** 本单实收合计原值（合同级窗口口径，与 contractReceivedAmount 不等时展示「原值 → 调整后值」） */
+  contractOriginalReceivedAmount?: number;
 }
 
 export interface CommissionApplyQuery extends PageQuery {
@@ -146,7 +150,7 @@ export interface CommissionContractVO {
   /** 该期间是否已封账（封账后不可作废/调整） */
   periodClosed?: boolean;
   deptId?: number;
-  status: string;           // DRAFT / SUBMITTED / LOCKED / REJECTED / CANCELLED
+  status: string;           // SUBMITTED / LOCKED / REJECTED / CANCELLED
   receivedStatus?: string;   // 实收审批状态 APPROVED / SUBMITTED / DRAFT / null
   applicantId?: number;
   createTime?: string;
@@ -156,6 +160,14 @@ export interface CommissionContractVO {
   originalReceivedAmount?: number;
   /** 实收金额已被实收调整（含联动）改过 */
   receivedAmountAdjusted?: boolean;
+  /** 实收归属窗口下界（含，YYYY-MM；null=不限）。仅结佣发起页行有值，详情按同一窗口取明细 */
+  receivedWindowStart?: string | null;
+  /** 实收归属窗口上界（不含，YYYY-MM；null=不限）。仅结佣发起页行有值 */
+  receivedWindowEnd?: string | null;
+  /** 实收归属方向 POS/NEG。仅结佣发起页行有值：详情只取同方向实收，正负不抵消 */
+  receivedDirection?: 'POS' | 'NEG';
+  /** 实收归属需排除的期间（补收月，YYYY-MM）。仅结佣发起页行有值 */
+  receivedExcludePeriods?: string[];
 }
 
 /** 批量操作结果（批量发起 / 批量审批） */

@@ -89,6 +89,15 @@
             </div>
             <el-button type="success" plain icon="Upload" @click="importOpen = true">导入考勤</el-button>
             <el-button
+              v-hasPermi="['dingtalk:sync:attendance']"
+              type="primary"
+              plain
+              icon="Calendar"
+              @click="syncOpen = true"
+            >
+              钉钉同步
+            </el-button>
+            <el-button
               v-hasPermi="['people:attendance:add']"
               type="primary"
               plain
@@ -320,6 +329,11 @@
     <el-dialog v-model="importOpen" title="考勤数据导入" width="1080px" append-to-body destroy-on-close @closed="getList">
       <ImportAttendancePage />
     </el-dialog>
+
+    <!-- 钉钉同步入口：默认同步当前筛选的考勤期间 -->
+    <el-dialog v-model="syncOpen" title="钉钉考勤同步" width="1080px" append-to-body destroy-on-close>
+      <DingTalkSyncPanel type="ATTENDANCE" :default-period="period" embedded @finished="handleSynced" />
+    </el-dialog>
   </div>
 </template>
 
@@ -346,6 +360,7 @@ import { Lock } from '@element-plus/icons-vue';
 import AttendanceApprovalDetail from '@/components/WorkflowHandle/details/AttendanceApprovalDetail.vue';
 import AttendanceRectifyDetail from '@/components/WorkflowHandle/details/AttendanceRectifyDetail.vue';
 import ImportAttendancePage from '@/views/import/attendance/index.vue';
+import DingTalkSyncPanel from '@/views/people/dingtalk/components/DingTalkSyncPanel.vue';
 import { useWorkflowRouteOpen } from '@/hooks/workflow/useWorkflowRouteOpen';
 import { useDeptScope } from '@/hooks/useDeptScope';
 
@@ -357,6 +372,9 @@ const total = ref(0);
 
 /** 考勤导入弹窗（内嵌导入页组件） */
 const importOpen = ref(false);
+
+/** 钉钉同步弹窗（默认同步当前筛选期间） */
+const syncOpen = ref(false);
 
 // 门店/组别筛选：全系统统一数据权限口径（useDeptScope：默认本部门、树裁剪为子树、不可清空）
 const { deptLocked, defaultDeptId } = useDeptScope();
@@ -613,6 +631,12 @@ const openDetail = (row: AttendanceRecord) => {
   detailEmployeeId.value = row.employeeId ?? '';
   detailEmployeeName.value = row.employeeName ?? '';
   detailVisible.value = true;
+};
+
+/** 钉钉同步完成后刷新当前期间的汇总与审批状态 */
+const handleSynced = () => {
+  getList();
+  loadApproval();
 };
 
 // ==================== 修改记录（人事审计视角） ====================

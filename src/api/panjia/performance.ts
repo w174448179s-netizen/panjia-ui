@@ -51,7 +51,6 @@ export interface PerformanceAdjust {
   deptName?: string;
   adjustType: string;         // AMOUNT / DEDUCT / INCREASE / ADD_MEMBER(历史) / MANUAL_OFFSET / SUPPLEMENT
   adjustTypeName?: string;
-  adjustScope?: string;      // CONTRACT / DETAIL
   contractNo?: string;
   /** 订单号（一手房/房产金融等同合同号多订单场景的精确业务键） */
   orderNo?: string;
@@ -85,6 +84,8 @@ export interface AdjustDetailVO extends PerformanceAdjust {
   receivedTotal?: number;
   targetAmount?: number;
   details?: AdjustFactDetailVO[];
+  /** 实收联动提示：合同实收只在其它期间时，提示本次未联动、需用「实收调整」修正 */
+  linkageHint?: string;
 }
 
 /** 调整单·受影响的明细行 */
@@ -121,10 +122,9 @@ export interface AdjustQuery extends PageQuery {
 export interface AdjustCreateForm {
   factId?: string;
   period: string;
-  employeeId?: string;       // 明细级调整时必填（被调整事实所属员工）；合同级/ADD_MEMBER 不传
-  deptId?: string;           // 同上，明细级必填
+  employeeId?: string;       // 员工（合同级调整不传，后端按明细回填）
+  deptId?: string;           // 门店/组别（同上）
   adjustType: string;        // AMOUNT / DEDUCT / INCREASE / ADD_MEMBER(历史) / MANUAL_OFFSET / RECEIVED_AMOUNT
-  adjustScope?: string;      // CONTRACT / DETAIL
   contractNo?: string;       // 合同级调整时填
   orderNo?: string;          // 订单号（同合同号多订单时订单号优先精确匹配；为空后端退化按合同号）
   factType?: string;         // PERF_REAL / PERF_EXPECT（RECEIVED_AMOUNT 固定 PERF_REAL）
@@ -132,7 +132,7 @@ export interface AdjustCreateForm {
   reason: string;
   payloadJson?: string;
   // ---- 实收调整（RECEIVED_AMOUNT，合同级，2026-10-10）----
-  // 只需 adjustType/adjustScope/contractNo/factType/period/targetAmount/reason：
+  // 只需 adjustType/contractNo/factType/period/targetAmount/reason：
   // period=实收期间（YYYY-MM），targetAmount=调整后实收合计（正多收负少收），
   // 后端按实收明细等比分摊并快照 payload，无需传明细行
   // ---- 增加角色人（ADD_MEMBER，合同级）专用 ----
@@ -300,6 +300,8 @@ export interface ManageContractDetailQuery {
   factType: string;
   contractNos: string;       // 合同号，逗号分隔（单合同展开传 1 个）
   orderNos?: string;         // 订单号，逗号分隔（可空；非空时按订单号精确限定单订单明细）
+  /** 仅取「有效」实收明细（未绑定审批单或审批单已通过）；结佣发起页详情与行上实收同口径时传 true */
+  onlyEffective?: boolean;
 }
 
 /** 业绩管理合同维度分页结果（rows=当前页合同聚合行，明细懒加载） */
@@ -359,7 +361,7 @@ export interface PerformanceSummaryRow {
   totalAmount: number;        // 新签业绩金额合计
 }
 
-/** 业绩排行行（/perf/fact/rank 返回，按员工聚合新签业绩金额降序） */
+/** 业绩排行行（/perf/fact/rank 返回，按员工聚合导入的新签原始业绩金额降序；不计人为业绩调整） */
 export interface PerformanceRankRow {
   rank: number;               // 排名（跨页连续）
   employeeId: string;
@@ -405,6 +407,8 @@ export interface PerformanceSearchDetailRow {
   settled?: boolean;           // 是否已结算
   settleDate?: string;        // 结算日期
   manualAdjust?: boolean;     // 增加角色人（ADD_MEMBER）调整产生的新签行，展示「新签调整」标记
+  /** 「未匹配新签角色」的实收行：该工号在本合同有多个新签角色且实收角色对不上，单独成行展示（新签业绩记 0） */
+  unmatchedReal?: boolean;
 }
 
 // ========== API ==========
@@ -476,9 +480,9 @@ export const performanceApi = {
   voidByContract: (period: string, factType: string, contractNo: string, reason: string, orderNo?: string) =>
     panjiaRequest.post<number>(`/perf/fact/void-contract?period=${period}&factType=${factType}&contractNo=${encodeURIComponent(contractNo)}&reason=${encodeURIComponent(reason)}${orderNo ? `&orderNo=${encodeURIComponent(orderNo)}` : ''}`),
 
-  // 合同级恢复：该订单该期间全部已作废业绩一次性恢复（period 改为当前月）；orderNo 与合同号双键精确匹配
-  restoreByContract: (period: string, factType: string, contractNo: string, reason: string, orderNo?: string) =>
-    panjiaRequest.post<number>(`/perf/fact/restore-contract?period=${period}&factType=${factType}&contractNo=${encodeURIComponent(contractNo)}&reason=${encodeURIComponent(reason)}${orderNo ? `&orderNo=${encodeURIComponent(orderNo)}` : ''}`),
+  // 合同级恢复：该订单该期间全部已作废业绩一次性恢复（可指定目标月，默认当前月，period/sourceKey 同步改写）；orderNo 与合同号双键精确匹配
+  restoreByContract: (period: string, factType: string, contractNo: string, reason: string, orderNo?: string, targetPeriod?: string) =>
+    panjiaRequest.post<number>(`/perf/fact/restore-contract?period=${period}&factType=${factType}&contractNo=${encodeURIComponent(contractNo)}&reason=${encodeURIComponent(reason)}${orderNo ? `&orderNo=${encodeURIComponent(orderNo)}` : ''}${targetPeriod ? `&targetPeriod=${targetPeriod}` : ''}`),
 };
 
 // ========== 独立导出函数 ==========

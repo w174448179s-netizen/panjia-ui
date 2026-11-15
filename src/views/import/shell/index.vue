@@ -257,13 +257,14 @@ const beforeUpload = async (file: File) => {
     return false;
   }
   // 文件名月份与所选归属月不一致时二次确认：归属月决定数据计入哪个业绩期间，
-  // 同归属月重复导入会整批替换该月已有批次，选错期间（如 6 月文件导到 7 月）会冲掉正确批次
+  // 新签/实收/积分同归属月重复导入按增量合并；其它来源会整批替换该月已有批次
   const fileMonth = parseFileMonth(file.name);
   if (fileMonth && period.value && fileMonth !== period.value) {
     try {
       await ElMessageBox.confirm(
         `文件名「${file.name}」中的月份为 ${fileMonth}，与所选归属月 ${period.value} 不一致。`
-        + `归属月决定数据计入哪个业绩期间，同一归属月重复导入会整批替换该月已有批次。`
+        + `归属月决定数据计入哪个业绩期间：新签/实收/积分同一归属月重复导入按增量合并，`
+        + `其它来源会整批替换该月已有批次。`
         + `是否确认仍按归属月 ${period.value} 导入？`,
         '归属月与文件名不一致',
         {

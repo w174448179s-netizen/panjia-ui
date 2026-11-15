@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     v-model="visible"
-    title="实收业绩调整"
+    :title="dialogTitle"
     width="92%"
     top="4vh"
     append-to-body
@@ -16,8 +16,15 @@
         <el-descriptions-item label="房源地址">{{ info?.propertyAddress || '—' }}</el-descriptions-item>
       </el-descriptions>
 
+      <!-- 驳回调整重提：期间取自驳回单，不允许改动 -->
+      <el-form v-if="mode === 'revise'" label-width="90px" class="adjust-form">
+        <el-form-item label="实收期间">
+          <span>{{ formData.period || '—' }}</span>
+        </el-form-item>
+      </el-form>
+
       <!-- 实收期间（必选，period=实收明细归属期间；切换期间重新装载明细） -->
-      <el-form label-width="90px" class="adjust-form">
+      <el-form v-else label-width="90px" class="adjust-form">
         <el-form-item label="实收期间" required>
           <el-date-picker
             v-model="formData.period"
@@ -85,11 +92,14 @@
           <span class="form-hint">录入差额自动算出调整后合计</span>
         </div>
         <div class="summary-cell tip-cell">
-          <template v-if="adjustType === 'AMOUNT'">
+          <template v-if="mode === 'revise'">
+            驳回调整：与实收调整单同一套逻辑生成调整单并重提原单，原单审批通过后调整单自动审批生效（仅一个审批）
+          </template>
+          <template v-else-if="adjustType === 'AMOUNT'">
             业绩调整：修改后实收总额必须保持不变（可增加角色人重新分配）
           </template>
           <template v-else-if="adjustType === 'DEDUCT'">
-            业绩扣减：修改后实收总额必须小于原金额；各行调整后实收不能为负
+            业绩扣减：修改后实收总额必须小于原金额
           </template>
           <template v-else>
             业绩增加：修改后实收总额必须大于原金额
@@ -102,7 +112,7 @@
         <el-table-column label="门店/组别" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">{{ row.deptPath || '—' }}</template>
         </el-table-column>
-        <el-table-column label="工号" width="90" align="center">
+        <el-table-column label="工号" width="80" align="center">
           <template #default="{ row }">{{ row.employeeCode || '—' }}</template>
         </el-table-column>
         <el-table-column label="姓名" min-width="90">
@@ -121,7 +131,7 @@
             <span v-else>{{ row.roleType || row.roleName || '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="角色占比" width="160" align="center">
+        <el-table-column label="角色占比" width="150" align="center">
           <template #default="{ row }">
             <el-input-number
               v-model="row.ratioPct"
@@ -130,34 +140,31 @@
               :max="100"
               :controls="false"
               :disabled="pendingBlocked"
+              :title="ratioText(row as EditRow)"
               placeholder="不改"
-              style="width: 120px"
+              style="width: 110px"
             />
-            <div class="cell-sub">{{ ratioText(row as EditRow) }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="实收金额（调整后）" width="210" align="right">
+        <el-table-column label="实收金额（调整后）" width="240" align="right">
           <template #default="{ row }">
-            <el-input-number
-              v-model="row.targetAmount"
-              :precision="2"
-              :min="0"
-              :controls="false"
-              :disabled="pendingBlocked"
-              style="width: 160px"
-              @update:model-value="(v: number | null) => handleRowAmount(row as EditRow, v)"
-            />
-            <div class="cell-sub" v-if="rowDelta(row as EditRow) !== 0">
-              <span class="amount-strike">{{ formatAmount(row.amount) }}</span>
-              <span class="amount-arrow">→</span>
-              <span :class="rowDelta(row as EditRow) > 0 ? 'amount-positive' : 'amount-negative'">
-                {{ formatAmount(row.targetAmount) }}（{{ rowDelta(row as EditRow) > 0 ? '+' : '' }}{{ rowDelta(row as EditRow).toFixed(2) }}）
-              </span>
+            <div class="amount-inline">
+              <template v-if="!row.isNew">
+                <span class="original-amount">{{ formatAmount(row.amount) }}</span>
+                <span class="amount-arrow">→</span>
+              </template>
+              <el-input-number
+                v-model="row.targetAmount"
+                :precision="2"
+                :controls="false"
+                :disabled="pendingBlocked"
+                style="width: 140px"
+                @update:model-value="(v: number | null) => handleRowAmount(row as EditRow, v)"
+              />
             </div>
-            <div class="cell-sub muted" v-else>{{ formatAmount(row.amount) }}（不变）</div>
           </template>
         </el-table-column>
-        <el-table-column label="调整金额" width="150" align="right">
+        <el-table-column label="调整金额" width="140" align="right">
           <template #default="{ row }">
             <el-input-number
               v-model="row.deltaInput"
@@ -166,7 +173,7 @@
               :controls="false"
               :disabled="pendingBlocked"
               placeholder="正增负减"
-              style="width: 130px"
+              style="width: 120px"
               @update:model-value="(v: number | null) => handleRowDelta(row as EditRow, v)"
             />
           </template>
@@ -175,7 +182,7 @@
           <template #default="{ row }">
             <el-tag v-if="row.adjustPending" type="warning" size="small" effect="plain">审批中</el-tag>
             <el-tag v-else-if="row.isNew" type="success" size="small" effect="plain">新增角色人</el-tag>
-            <el-tag v-else type="info" size="small" effect="plain">待审批</el-tag>
+            <el-tag v-else type="info" size="small" effect="plain">{{ mode === 'revise' ? '待提交' : '待审批' }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="70" align="center">
@@ -188,10 +195,12 @@
         </template>
       </el-table>
 
-      <!-- 三类型（业绩调整/扣减/增加）均可增加角色人 -->
+      <!-- 驳回调整与正常调整一致：均可修改金额/占比并增加角色人 -->
       <div class="add-member-bar">
         <el-button type="primary" plain size="small" icon="Plus" :disabled="pendingBlocked" @click="addMemberRow()">增加角色人</el-button>
-        <span class="add-tip">新增行选择员工并录入实收金额；全部修改随下方一次提交审批</span>
+        <span class="add-tip">{{ mode === 'revise'
+          ? '新增行选择员工并录入实收金额，修改后直接重新提交原审批单'
+          : '新增行选择员工并录入实收金额；全部修改随下方一次提交审批' }}</span>
       </div>
 
       <el-input
@@ -213,7 +222,7 @@
         :loading="submitting"
         :disabled="editRows.length === 0 || pendingBlocked"
         @click="submit"
-      >提交审批</el-button>
+      >{{ mode === 'revise' ? '提交并重提' : '提交审批' }}</el-button>
     </template>
   </el-dialog>
 </template>
@@ -222,6 +231,7 @@
 import { ref, computed } from 'vue';
 import { ElMessage } from 'element-plus';
 import { performanceApi, receivedAdjustApi } from '@/api/panjia/performance';
+import { receivedApi, type ReceivedFact } from '@/api/panjia/received';
 import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 import type { PerformanceEmployeeOption, PerformanceManageRow } from '@/api/panjia/performance';
 
@@ -230,6 +240,11 @@ const emit = defineEmits<{ (e: 'submitted'): void }>();
 const visible = ref(false);
 const loading = ref(false);
 const submitting = ref(false);
+/** 弹窗模式：adjust=已通过单的实收调整（走调整单审批）；revise=驳回单调整后重提 */
+const mode = ref<'adjust' | 'revise'>('adjust');
+/** 驳回重提对应的审批单 ID */
+const applyId = ref<string | null>(null);
+const dialogTitle = computed(() => (mode.value === 'revise' ? '驳回调整后重提' : '实收业绩调整'));
 /** 该合同该期间存在审批中的实收调整单（checkInFlight + 行级 adjustPending 双保险） */
 const pendingBlocked = ref(false);
 
@@ -277,6 +292,8 @@ const totalDelta = computed(() => round2(targetTotal.value - originalTotal.value
 
 // ==================== 打开弹窗 ====================
 function open(payload: ReceivedInfo) {
+  mode.value = 'adjust';
+  applyId.value = null;
   info.value = payload;
   adjustType.value = 'AMOUNT';
   reason.value = '';
@@ -291,6 +308,22 @@ function open(payload: ReceivedInfo) {
   loadRows();
 }
 
+/** 驳回单调整后重提：期间取驳回单期间，明细取该单 ACTIVE 实收明细 */
+function openForRevise(payload: ReceivedInfo & { applyId: string | number }) {
+  mode.value = 'revise';
+  applyId.value = String(payload.applyId);
+  info.value = payload;
+  adjustType.value = 'AMOUNT';
+  reason.value = '';
+  totalInput.value = null;
+  deltaInput.value = null;
+  editRows.value = [];
+  pendingBlocked.value = false;
+  visible.value = true;
+  formData.value.period = payload.period || '';
+  loadRows();
+}
+
 /** 按期间 + 合同号拉取实收明细（复用合同明细查询 API，factType=PERF_REAL） */
 async function loadRows() {
   if (!info.value || !formData.value.period) {
@@ -299,6 +332,33 @@ async function loadRows() {
   }
   loading.value = true;
   try {
+    if (mode.value === 'revise') {
+      const res = await receivedApi.reviseDetails(applyId.value!);
+      const facts = (res.data ?? []) as ReceivedFact[];
+      editRows.value = facts
+        .filter(f => f.factId)
+        .map(f => ({
+          key: `rd-${f.factId}`,
+          factId: f.factId,
+          isNew: false,
+          employeeId: f.employeeId ? String(f.employeeId) : undefined,
+          employeeCode: f.employeeCode || '',
+          employeeName: f.employeeName || '',
+          deptPath: f.deptPath,
+          roleType: f.roleType,
+          roleName: f.roleName,
+          amount: num(f.amount),
+          targetAmount: num(f.amount),
+          deltaInput: 0,
+          ratioPct: f.shareRatio != null ? round4(num(f.shareRatio) * 100) : null,
+          originalRatioPct: f.shareRatio != null ? round4(num(f.shareRatio) * 100) : null,
+          adjustPending: false,
+        }));
+      pendingBlocked.value = false;
+      totalInput.value = originalTotal.value;
+      deltaInput.value = 0;
+      return;
+    }
     const [res, inFlight] = await Promise.all([
       performanceApi.listManageContractDetails({
         period: formData.value.period,
@@ -460,27 +520,21 @@ async function submit() {
     ElMessage.warning('每行需填写调整后实收金额');
     return;
   }
-  // 实收行调整后金额不能为负
-  const negativeRow = existing.find(r => num(r.targetAmount) < 0);
-  if (negativeRow) {
-    ElMessage.warning(`「${negativeRow.employeeName || ''}」调整后实收金额不能为负`);
-    return;
-  }
   const invalidRatioRow = editRows.value.find(r => r.ratioPct != null && num(r.ratioPct) < 0);
   if (invalidRatioRow) {
     ElMessage.warning(`「${invalidRatioRow.employeeName || '新角色人'}」的角色占比不能为负`);
     return;
   }
 
-  // 新角色人校验：必选员工、金额大于 0、同一员工不重复添加、不与既有实收人员重复
+  // 新角色人校验：必选员工、金额非空且不为 0（允许负数=负实收分摊）、同一员工不重复添加、不与既有实收人员重复
   const nrs = newRows.value;
   for (const nr of nrs) {
     if (!nr.employeeId) {
       ElMessage.warning('每个新角色人都需选择员工');
       return;
     }
-    if (nr.targetAmount == null || num(nr.targetAmount) <= 0) {
-      ElMessage.warning(`新角色人「${nr.employeeName || ''}」的实收金额必须大于 0`);
+    if (nr.targetAmount == null || num(nr.targetAmount) === 0) {
+      ElMessage.warning(`新角色人「${nr.employeeName || ''}」的实收金额不能为空或 0`);
       return;
     }
   }
@@ -496,6 +550,13 @@ async function submit() {
       return;
     }
   }
+
+  const overRatioRow = editRows.value.find(r => r.ratioPct != null && num(r.ratioPct) > 100);
+  if (overRatioRow) {
+    ElMessage.warning(`「${overRatioRow.employeeName || ''}」的角色占比不能大于 100%`);
+    return;
+  }
+
   // 无任何变动（无新人、各行金额/占比均未改）时无需发起
   const anyRowChange = existing.some(r => Math.abs(rowDelta(r)) >= 0.005 || !ratioUnchanged(r));
   if (!nrs.length && !anyRowChange) {
@@ -503,7 +564,7 @@ async function submit() {
     return;
   }
 
-  // 三类型总额规则
+  // 三类型总额规则（驳回调整与正常调整一致）
   const delta = totalDelta.value;
   if (adjustType.value === 'AMOUNT' && Math.abs(delta) >= 0.005) {
     ElMessage.warning(`业绩调整必须保证修改后实收总额不变（当前变动 ${delta > 0 ? '+' : ''}${delta.toFixed(2)}），请调整明细金额`);
@@ -523,29 +584,44 @@ async function submit() {
     targetAmount: round2(num(r.targetAmount)),
     shareRatio: ratioUnchanged(r) ? undefined : round6(num(r.ratioPct) / 100),
   }));
+  const newMembers = nrs.length
+    ? nrs.map(nr => ({
+        employeeId: nr.employeeId!,
+        roleType: nr.roleType?.trim() || '合作人',
+        amount: round2(num(nr.targetAmount)),
+        shareRatio: nr.ratioPct != null ? round6(num(nr.ratioPct) / 100) : undefined,
+      }))
+    : undefined;
 
   submitting.value = true;
   try {
-    await receivedAdjustApi.create({
-      adjustType: adjustType.value,
-      period: formData.value.period,
-      contractNo: info.value.contractNo,
-      orderNo: info.value.orderNo,
-      reason: why,
-      detailTargets,
-      targetAmount: round2(targetTotal.value),
-      ...(nrs.length
-        ? {
-            newMembers: nrs.map(nr => ({
-              employeeId: nr.employeeId!,
-              roleType: nr.roleType?.trim() || '合作人',
-              amount: round2(num(nr.targetAmount)),
-              shareRatio: nr.ratioPct != null ? round6(num(nr.ratioPct) / 100) : undefined,
-            })),
-          }
-        : {}),
-    });
-    ElMessage.success('已提交审批，审批通过后自动生效');
+    if (mode.value === 'revise') {
+      if (!applyId.value) {
+        ElMessage.warning('审批单信息缺失，请刷新后重试');
+        return;
+      }
+      // 与调整单同一套入参：生成挂靠原单的调整单，并重新提交原审批单（仅一个审批）
+      await receivedApi.reviseAndResubmit(applyId.value, {
+        adjustType: adjustType.value,
+        reason: why,
+        detailTargets,
+        targetAmount: round2(targetTotal.value),
+        ...(newMembers ? { newMembers } : {}),
+      });
+      ElMessage.success('已按调整单生成快照并重新提交原单，原单审批通过后调整自动生效');
+    } else {
+      await receivedAdjustApi.create({
+        adjustType: adjustType.value,
+        period: formData.value.period,
+        contractNo: info.value.contractNo,
+        orderNo: info.value.orderNo,
+        reason: why,
+        detailTargets,
+        targetAmount: round2(targetTotal.value),
+        ...(newMembers ? { newMembers } : {}),
+      });
+      ElMessage.success('已提交审批，审批通过后自动生效');
+    }
     visible.value = false;
     emit('submitted');
   } finally {
@@ -612,7 +688,7 @@ function allocateByAmount(amounts: number[], deltaTotal: number): number[] {
   return parts;
 }
 
-defineExpose({ open });
+defineExpose({ open, openForRevise });
 </script>
 
 <style scoped>
@@ -676,6 +752,21 @@ defineExpose({ open });
   line-height: 18px;
   color: var(--el-text-color-secondary);
   margin-top: 2px;
+}
+
+/* 调整前 → 调整后：单行展示，避免行内两行文字造成视觉错位 */
+.amount-inline {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.original-amount {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  text-decoration: line-through;
 }
 
 .cell-sub.muted {

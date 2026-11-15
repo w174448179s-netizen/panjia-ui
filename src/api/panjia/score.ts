@@ -17,6 +17,10 @@ export const scoreApi = {
   getById(id: string | number) {
     return panjiaRequest.get<ScoreRecord>(`/people/score/${id}`);
   },
+  /** 管理端积分每日明细（积分管理页「详情」，按员工 + 月份） */
+  details(employeeId: string | number, scoreMonth: string) {
+    return panjiaRequest.get<ScoreDetail[]>('/people/score/details', { employeeId, scoreMonth });
+  },
   /**
    * 本人/组织视角积分查询（综合查询→积分查询）。
    * 数据权限：超管/总监全量；店长本门店；其他仅本人。

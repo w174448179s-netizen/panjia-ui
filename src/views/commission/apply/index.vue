@@ -84,8 +84,14 @@
       <!-- 合同维度表格 -->
       <el-table border class="data-table" :data="contractList" :empty-text="emptyText" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="50" />
-        <el-table-column label="期间" align="center" width="130" fixed="left">
-          <template #default="{ row }">{{ row.periods || row.period || '—' }}</template>
+        <el-table-column label="期间" align="center" width="150" fixed="left">
+          <template #default="{ row }">
+            <div>{{ row.periods || row.period || '—' }}</div>
+            <!-- 多期合并行：期间串仅为展示语义，发起时跨期正负合并成单并落账到当前月 -->
+            <el-tooltip v-if="row.periods" content="多期未结佣业绩合并为一行：发起时按合同跨期合并（正负不抵消），单据落账发起当月" placement="top">
+              <el-tag type="info" size="small" effect="plain">多期合并</el-tag>
+            </el-tooltip>
+          </template>
         </el-table-column>
         <el-table-column label="合同号/订单号" align="center" min-width="180" show-overflow-tooltip fixed="left">
           <template #default="{ row }">
@@ -317,7 +323,7 @@
       </el-descriptions>
 
       <div class="detail-summary-bar">
-        <span>新签业绩构成：涉及 <b>{{ detailEmployees }}</b> 人 · <b>{{ detailList.length }}</b> 条明细（跨全部期间）</span>
+        <span>新签业绩构成：涉及 <b>{{ detailEmployees }}</b> 人 · <b>{{ detailList.length }}</b> 条明细（新签跨全部期间；实收按本行到账归属窗口、同方向）</span>
         <span class="detail-total">
           新签合计：<b :class="{ 'amount-negative': detailTotal < 0 }">{{ formatAmount(detailTotal) }}</b>
           <template v-if="detailConvertedTotal !== null">
@@ -355,9 +361,14 @@
             <span v-else class="amount amount-received">{{ formatAmount(row.receivedAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="新签业绩" align="right" width="120">
+        <el-table-column label="新签业绩" align="right" width="180">
           <template #default="{ row }">
-            <span :class="['amount', num(row.amount) < 0 ? 'amount-negative' : 'amount-ink']">{{ formatAmount(row.amount) }}</span>
+            <template v-if="row.originalAmount != null && num(row.originalAmount) !== num(row.amount)">
+              <span class="amount-strike">{{ formatAmount(row.originalAmount) }}</span>
+              <span class="amount-arrow">→</span>
+              <span :class="['amount', num(row.amount) < 0 ? 'amount-negative' : 'amount-ink']">{{ formatAmount(row.amount) }}</span>
+            </template>
+            <span v-else :class="['amount', num(row.amount) < 0 ? 'amount-negative' : 'amount-ink']">{{ formatAmount(row.amount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="折算后" align="right" width="120">
@@ -694,7 +705,7 @@ const openDetail = async (row: CommissionContractVO) => {
   detailLoading.value = true;
   try {
     // period 不传：跨全部期间汇总新签构成，与发起时明细合并口径一致
-    // 同时查 PERF_REAL 获取每人实收金额，按 工号+角色 合并到新签明细行
+    // 实收只取「有效」明细（未绑定审批单或审批单已通过），与行上实收口径一致
     const [expectRes, realRes]: [any, any] = await Promise.all([
       performanceApi.listManageContractDetails({
         period: '',
@@ -705,22 +716,39 @@ const openDetail = async (row: CommissionContractVO) => {
         period: '',
         factType: 'PERF_REAL',
         contractNos: no,
+        onlyEffective: true,
       }),
     ]);
+    // 与行上实收同口径：只取本行「到账归属窗口」内、同方向的有效实收（正负不抵消，补收月剔除）
+    const windowStart = row.receivedWindowStart ?? null;
+    const windowEnd = row.receivedWindowEnd ?? null;
+    const direction = row.receivedDirection;
+    const excludePeriods = new Set(row.receivedExcludePeriods ?? []);
     const realRows: PerformanceManageRow[] = realRes.data ?? [];
-    // 实收金额按 工号+角色 聚合（跨期合计）；originalAmount 为实收事实链调整前原值（未调整时=amount）
+    // 实收金额按 员工ID+角色 聚合（窗口内同方向合计）；originalAmount 为实收事实链调整前原值。
+    // 与新签明细用同一员工键（员工ID优先、工号兜底），避免工号变更/补行导致实收配不上
+    const empKey = (r: PerformanceManageRow) =>
+      r.employeeId ? `id:${r.employeeId}` : `code:${r.employeeCode ?? ''}`;
+    const shareKey = (r: PerformanceManageRow) => `${empKey(r)}|${r.roleType ?? ''}`;
     const realMap = new Map<string, number>();
     const realOriginalMap = new Map<string, number>();
     for (const r of realRows) {
       if (r.factStatus === 'VOIDED') continue;
-      const key = `${r.employeeCode ?? ''}|${r.roleType ?? ''}`;
-      realMap.set(key, (realMap.get(key) ?? 0) + num(r.amount));
+      const p = r.period ?? '';
+      if (windowStart && p && p < windowStart) continue;
+      if (windowEnd && p && p >= windowEnd) continue;
+      if (p && excludePeriods.has(p)) continue;
+      const amt = num(r.amount);
+      if (direction === 'POS' && amt < 0) continue;
+      if (direction === 'NEG' && amt > 0) continue;
+      const key = shareKey(r);
+      realMap.set(key, (realMap.get(key) ?? 0) + amt);
       realOriginalMap.set(key, (realOriginalMap.get(key) ?? 0) + num(r.originalAmount ?? r.amount));
     }
     detailList.value = (expectRes.data ?? []).map((r: PerformanceManageRow) => ({
       ...r,
-      receivedAmount: realMap.get(`${r.employeeCode ?? ''}|${r.roleType ?? ''}`) ?? 0,
-      originalReceivedAmount: realOriginalMap.get(`${r.employeeCode ?? ''}|${r.roleType ?? ''}`) ?? 0,
+      receivedAmount: realMap.get(shareKey(r)) ?? 0,
+      originalReceivedAmount: realOriginalMap.get(shareKey(r)) ?? 0,
     }));
   } catch { /* 拦截器处理 */ } finally {
     detailLoading.value = false;

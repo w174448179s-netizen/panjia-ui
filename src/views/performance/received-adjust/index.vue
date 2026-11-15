@@ -245,6 +245,7 @@ const handleWithdraw = async (row: any) => {
 // ==================== 枚举 ====================
 const statusMap: Record<string, string> = {
   SUBMITTED: '已提交',
+  PENDING_APPLY: '待原单审批',
   APPROVED: '已审批',
   REJECTED: '已拒绝',
   CANCELLED: '已取消',
@@ -272,6 +273,7 @@ type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger';
 const statusTagType = (status: string): TagType => {
   const map: Record<string, TagType> = {
     SUBMITTED: 'warning',
+    PENDING_APPLY: 'info',
     APPROVED: 'primary',
     REJECTED: 'danger',
     CANCELLED: 'info',

@@ -5,13 +5,13 @@
       <el-form :model="queryParams" :inline="true">
         <el-form-item label="考勤月份">
           <el-date-picker
-            v-model="monthRange"
-            type="monthrange"
-            range-separator="至"
-            start-placeholder="开始月份"
-            end-placeholder="结束月份"
-            value-format="YYYY-MM-DD"
-            style="width: 260px"
+            v-model="queryMonth"
+            type="month"
+            value-format="YYYY-MM"
+            placeholder="请选择月份"
+            clearable
+            style="width: 180px"
+            @change="handleQuery"
           />
         </el-form-item>
         <el-form-item>
@@ -30,16 +30,30 @@
             <el-table-column label="考勤月份" align="center" width="120">
               <template #default="{ row }">{{ row.attendMonth?.slice(0, 7) ?? '—' }}</template>
             </el-table-column>
-            <el-table-column label="出勤(天)" align="center" prop="attendDays" width="90" />
-            <el-table-column label="休息(天)" align="center" prop="restDays" width="90" />
+            <el-table-column label="出勤(天)" align="center" width="90">
+              <template #default="{ row }">{{ formatDays(row.attendDays) }}</template>
+            </el-table-column>
+            <el-table-column label="休息(天)" align="center" width="90">
+              <template #default="{ row }">{{ formatDays(row.restDays) }}</template>
+            </el-table-column>
             <el-table-column label="迟到次数" align="center" prop="lateCount" width="90" />
             <el-table-column label="迟到(分)" align="center" prop="lateMinutes" width="90" />
             <el-table-column label="缺卡次数" align="center" prop="missingCardCount" width="90" />
-            <el-table-column label="旷工(天)" align="center" prop="absentDays" width="80" />
-            <el-table-column label="事假(天)" align="center" prop="personalLeaveDays" width="80" />
-            <el-table-column label="病假诊所(天)" align="center" prop="sickClinicDays" width="100" />
-            <el-table-column label="病假二甲(天)" align="center" prop="sickHospitalDays" width="100" />
-            <el-table-column label="请假合计(天)" align="center" prop="leaveDays" width="100" />
+            <el-table-column label="旷工(天)" align="center" width="80">
+              <template #default="{ row }">{{ formatDays(row.absentDays) }}</template>
+            </el-table-column>
+            <el-table-column label="事假(天)" align="center" width="80">
+              <template #default="{ row }">{{ formatDays(row.personalLeaveDays) }}</template>
+            </el-table-column>
+            <el-table-column label="病假诊所(天)" align="center" width="100">
+              <template #default="{ row }">{{ formatDays(row.sickClinicDays) }}</template>
+            </el-table-column>
+            <el-table-column label="病假二甲(天)" align="center" width="100">
+              <template #default="{ row }">{{ formatDays(row.sickHospitalDays) }}</template>
+            </el-table-column>
+            <el-table-column label="请假合计(天)" align="center" width="100">
+              <template #default="{ row }">{{ formatDays(row.leaveDays) }}</template>
+            </el-table-column>
             <el-table-column label="备注" align="center" prop="remark" min-width="120" show-overflow-tooltip />
             <el-table-column label="操作" align="center" width="200" fixed="right">
               <template #default="{ row }">
@@ -196,9 +210,18 @@ import modal from '@/plugins/modal';
 const loading = ref(false);
 const attendanceList = ref<AttendanceRecord[]>([]);
 const total = ref(0);
-const monthRange = ref<[string, string] | []>([]);
+/** 查询月份（YYYY-MM），按月查询与手机端一致 */
+const queryMonth = ref('');
 /** 当前 Tab：attendance 考勤查询 / rectify 我的修改申请 */
 const activeTab = ref('attendance');
+
+/** 天数展示：整数不显示小数点（0.00 → 0），小数最多两位，空值显示 0 */
+const formatDays = (value?: number | string | null): string => {
+  if (value === null || value === undefined || value === '') return '0';
+  const num = Number(value);
+  if (Number.isNaN(num)) return String(value);
+  return Number.isInteger(num) ? String(num) : String(Number(num.toFixed(2)));
+};
 
 /** 每日明细弹窗（复用共享组件，与考勤管理「考勤汇总→详情」一致） */
 const detailVisible = ref(false);
@@ -219,13 +242,13 @@ const queryParams = reactive<AttendanceQuery>({
 const getList = async () => {
   loading.value = true;
   try {
-    const [monthStart, monthEnd] = monthRange.value || [];
+    const month = queryMonth.value ? `${queryMonth.value}-01` : undefined;
     // 仅传月份条件；员工身份由后端按登录用户强制限定
     const res = await attendanceApi.myList({
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
-      monthStart: monthStart || undefined,
-      monthEnd: monthEnd || undefined
+      monthStart: month,
+      monthEnd: month
     });
     attendanceList.value = res.data?.rows ?? [];
     total.value = res.data?.total ?? 0;
@@ -244,7 +267,7 @@ const handleQuery = () => {
 };
 
 const resetQuery = () => {
-  monthRange.value = [];
+  queryMonth.value = '';
   queryParams.pageNum = 1;
   rectifyQuery.pageNum = 1;
   getList();
@@ -352,12 +375,12 @@ const rectifyQuery = reactive<AttendanceRectifyQuery>({ pageNum: 1, pageSize: 10
 const getRectifyList = async () => {
   rectifyLoading.value = true;
   try {
-    const [monthStart, monthEnd] = monthRange.value || [];
+    const month = queryMonth.value ? `${queryMonth.value}-01` : undefined;
     const res = await attendanceApi.rectifyMyPage({
       pageNum: rectifyQuery.pageNum,
       pageSize: rectifyQuery.pageSize,
-      monthStart: monthStart || undefined,
-      monthEnd: monthEnd || undefined
+      monthStart: month,
+      monthEnd: month
     });
     rectifyList.value = res.data?.rows ?? [];
     rectifyTotal.value = res.data?.total ?? 0;

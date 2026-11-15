@@ -1,294 +1,295 @@
 <template>
-  <div class="ledger-dept" style="padding: 12px;">
-    <el-card>
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-semibold">部门收支表</h3>
-        <div class="flex items-center gap-3">
-          <el-date-picker
-            v-model="period"
-            type="month"
-            value-format="YYYY-MM"
-            placeholder="选择归属月"
-            clearable
-            @change="load"
-            @keydown.enter.prevent="load"
-          />
-          <el-select
-            v-model="selectedDeptId"
-            placeholder="全部部门"
-            clearable
-            filterable
-            style="width: 200px"
-            @change="filterData"
-          >
-            <el-option
-              v-for="d in deptList"
-              :key="d.deptId"
-              :label="d.deptName"
-              :value="d.deptId"
-            />
-          </el-select>
-          <el-button @click="load">刷新</el-button>
-          <el-button type="success" :disabled="!tableData.length" @click="exportExcel">导出</el-button>
-        </div>
+  <div class="app-container ledger-report-page">
+    <el-card shadow="never">
+      <div class="query-bar">
+        <span class="page-title">部门收支分析表</span>
+        <el-date-picker
+          v-model="period"
+          type="month"
+          value-format="YYYY-MM"
+          placeholder="归属月"
+          :clearable="false"
+          style="width: 150px"
+          @change="loadReport"
+        />
+        <el-button type="primary" plain icon="Search" @click="loadReport">生成报表</el-button>
+        <div class="flex-1" />
+        <el-button icon="Download" :disabled="!report" @click="exportExcel">导出 Excel</el-button>
       </div>
 
-      <el-table
-        v-loading="loading"
-        :data="tableData"
-        stripe
-        border
-        :summary-method="summaryMethod"
-        show-summary
-        :empty-text="period ? '该期间暂无部门收支数据' : '请先选择归属月'"
-      >
-        <el-table-column label="部门ID" prop="deptId" width="100" fixed="left" />
-        <el-table-column label="人数" prop="employeeCount" width="70" align="center" fixed="left" />
-        <!-- 收入项 -->
-        <el-table-column label="业绩提成" prop="commissionIncome" width="120" align="right">
-          <template #default="{ row }">¥{{ fmt(row.commissionIncome) }}</template>
-        </el-table-column>
-        <el-table-column label="团队提成" prop="teamIncome" width="110" align="right">
-          <template #default="{ row }">¥{{ fmt(row.teamIncome) }}</template>
-        </el-table-column>
-        <el-table-column label="门店提成" prop="storeIncome" width="110" align="right">
-          <template #default="{ row }">¥{{ fmt(row.storeIncome) }}</template>
-        </el-table-column>
-        <el-table-column label="底薪" prop="baseSalary" width="100" align="right">
-          <template #default="{ row }">¥{{ fmt(row.baseSalary) }}</template>
-        </el-table-column>
-        <el-table-column label="保底补足" prop="guaranteeFill" width="110" align="right">
-          <template #default="{ row }">¥{{ fmt(row.guaranteeFill) }}</template>
-        </el-table-column>
-        <el-table-column label="伯乐奖励" prop="mentorBonus" width="110" align="right">
-          <template #default="{ row }">¥{{ fmt(row.mentorBonus) }}</template>
-        </el-table-column>
-        <el-table-column label="奖金" prop="bonus" width="100" align="right">
-          <template #default="{ row }">¥{{ fmt(row.bonus) }}</template>
-        </el-table-column>
-        <el-table-column label="其他收入" prop="otherIncome" width="110" align="right">
-          <template #default="{ row }">¥{{ fmt(row.otherIncome) }}</template>
-        </el-table-column>
-        <el-table-column label="收入合计" prop="grossTotal" width="130" align="right">
-          <template #default="{ row }"><b>¥{{ fmt(row.grossTotal) }}</b></template>
-        </el-table-column>
-        <!-- 支出项 -->
-        <el-table-column label="社保" prop="socialFee" width="100" align="right">
-          <template #default="{ row }">¥{{ fmt(row.socialFee) }}</template>
-        </el-table-column>
-        <el-table-column label="公积金" prop="housingFund" width="100" align="right">
-          <template #default="{ row }">¥{{ fmt(row.housingFund) }}</template>
-        </el-table-column>
-        <el-table-column label="考勤扣款" prop="attendanceFee" width="110" align="right">
-          <template #default="{ row }">¥{{ fmt(row.attendanceFee) }}</template>
-        </el-table-column>
-        <el-table-column label="商业保险" prop="commercialInsurance" width="110" align="right">
-          <template #default="{ row }">¥{{ fmt(row.commercialInsurance) }}</template>
-        </el-table-column>
-        <el-table-column label="宿舍费" prop="dormitoryFee" width="100" align="right">
-          <template #default="{ row }">¥{{ fmt(row.dormitoryFee) }}</template>
-        </el-table-column>
-        <el-table-column label="其他支出" prop="otherDeduct" width="110" align="right">
-          <template #default="{ row }">¥{{ fmt(row.otherDeduct) }}</template>
-        </el-table-column>
-        <el-table-column label="支出合计" prop="deductTotal" width="130" align="right">
-          <template #default="{ row }">¥{{ fmt(row.deductTotal) }}</template>
-        </el-table-column>
-        <el-table-column label="个税" prop="tax" width="100" align="right">
-          <template #default="{ row }">¥{{ fmt(row.tax) }}</template>
-        </el-table-column>
-        <el-table-column label="实发合计" prop="netTotal" width="140" align="right" fixed="right">
-          <template #default="{ row }"><b class="text-primary">¥{{ fmt(row.netTotal) }}</b></template>
-        </el-table-column>
-        <el-table-column label="单位社保" prop="employerSocial" width="110" align="right" fixed="right">
-          <template #default="{ row }">¥{{ fmt(row.employerSocial) }}</template>
-        </el-table-column>
-      </el-table>
+      <div v-loading="loading" class="report-scroll">
+        <div v-if="report" class="report-sheet">
+          <div class="report-title">
+            {{ report.rootDeptName }} 部门收支分析表
+            <span class="period">{{ report.period }}</span>
+          </div>
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th class="subject-col">一级科目</th>
+                <th class="subject-col">二级科目</th>
+                <th class="subject-col">三级科目</th>
+                <th class="subject-col">四级科目</th>
+                <th v-for="col in report.columns" :key="col.deptId" class="dept-col">
+                  {{ col.deptName }}
+                </th>
+                <th class="total-col">合计</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(row, index) in report.rows"
+                :key="index"
+                :class="{
+                  'total-row': row.totalRow,
+                  'profit-row': row.totalRow && row.totalLabel === '营业利润'
+                }"
+              >
+                <template v-if="row.totalRow">
+                  <td :colspan="4" class="label-cell">{{ row.totalLabel }}</td>
+                </template>
+                <template v-else>
+                  <template v-for="level in 4" :key="level">
+                    <td
+                      v-if="row.spans[level - 1]"
+                      :rowspan="row.spans[level - 1]"
+                      :class="['subject-cell', `level-${level}`]"
+                    >
+                      {{ row.level === level ? row.subjectName : '' }}
+                    </td>
+                  </template>
+                </template>
+                <td
+                  v-for="ci in report.columns.length"
+                  :key="ci"
+                  class="money-cell"
+                  :class="{ negative: isNegative(row.values?.[ci - 1]) }"
+                >
+                  {{ displayMoney(row.values?.[ci - 1]) }}
+                </td>
+                <td class="money-cell total-cell" :class="{ negative: row.total != null && row.total < 0 }">
+                  {{ displayMoney(row.total) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="report-footer">
+            <span>说明：支出以负数展示；佣金收入取实收明细（有效明细+已审批），工资取薪资格应发合计；</span>
+            <span>手工录入按生效期间与归属月相交整笔计入；“未分配”为非末级部门上的数据。</span>
+          </div>
+        </div>
+        <el-empty v-else-if="!loading" description="请选择归属月生成报表" />
+      </div>
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import { payrollApi } from '@/api/panjia/payroll';
-import { employeeApi } from '@/api/panjia/employee';
-import type { DeptNode } from '@/api/panjia/types';
+import * as XLSX from 'xlsx';
+import { ledgerApi, type LedgerReport } from '@/api/panjia/ledger';
 
-interface DeptLedgerRow {
-  deptId: string;
-  employeeCount: number;
-  commissionIncome: number;
-  teamIncome: number;
-  storeIncome: number;
-  baseSalary: number;
-  guaranteeFill: number;
-  mentorBonus: number;
-  bonus: number;
-  otherIncome: number;
-  grossTotal: number;
-  socialFee: number;
-  housingFund: number;
-  attendanceFee: number;
-  commercialInsurance: number;
-  dormitoryFee: number;
-  otherDeduct: number;
-  deductTotal: number;
-  tax: number;
-  netTotal: number;
-  employerSocial: number;
+const loading = ref(false);
+const period = ref(currentMonth());
+const report = ref<LedgerReport | null>(null);
+
+function currentMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
-const period = ref(new Date().toISOString().slice(0, 7));
-const loading = ref(false);
-const selectedDeptId = ref('');
-const deptList = ref<DeptNode[]>([]);
-const allData = ref<DeptLedgerRow[]>([]);
-
-const fmt = (n: number) =>
-  n == null ? '0.00' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const tableData = computed(() => {
-  if (!selectedDeptId.value) return allData.value;
-  return allData.value.filter((r) => String(r.deptId) === String(selectedDeptId.value));
-});
-
-const loadDeptTree = async () => {
-  try {
-    const res = await employeeApi.deptTree();
-    deptList.value = (res as any).data ?? [];
-  } catch { /* ignore */ }
-};
-
-const load = async () => {
+async function loadReport() {
   if (!period.value) {
-    allData.value = [];
+    ElMessage.warning('请选择归属月');
     return;
   }
   loading.value = true;
   try {
-    // 获取该期间所有批次
-    const batchRes = await payrollApi.listBatches(period.value);
-    const batches = (batchRes as any).data ?? [];
-    if (!batches.length) {
-      allData.value = [];
-      return;
-    }
-    // 收集所有批次的明细
-    const allDetails: any[] = [];
-    for (const batch of batches) {
-      try {
-        const detailRes = await payrollApi.getDetails(batch.id);
-        const details = (detailRes as any).data ?? [];
-        allDetails.push(...details);
-      } catch { /* skip batch */ }
-    }
-    // 按部门聚合
-    const deptMap = new Map<string, DeptLedgerRow>();
-    const numKeys = [
-      'commissionIncome', 'teamIncome', 'storeIncome', 'baseSalary', 'guaranteeFill',
-      'mentorBonus', 'bonus', 'otherIncome', 'socialFee', 'housingFund', 'attendanceFee',
-      'commercialInsurance', 'dormitoryFee', 'otherDeduct', 'tax', 'net',
-      'employerSocial', 'gross', 'deduct',
-    ];
-    allDetails.forEach((d: any) => {
-      const deptId = String(d.deptId || '未知');
-      if (!deptMap.has(deptId)) {
-        deptMap.set(deptId, {
-          deptId,
-          employeeCount: 0,
-          commissionIncome: 0, teamIncome: 0, storeIncome: 0, baseSalary: 0,
-          guaranteeFill: 0, mentorBonus: 0, bonus: 0, otherIncome: 0, grossTotal: 0,
-          socialFee: 0, housingFund: 0, attendanceFee: 0,
-          commercialInsurance: 0, dormitoryFee: 0, otherDeduct: 0, deductTotal: 0,
-          tax: 0, netTotal: 0, employerSocial: 0,
-        });
-      }
-      const row = deptMap.get(deptId)!;
-      row.employeeCount++;
-      numKeys.forEach((k) => {
-        (row as any)[k === 'gross' ? 'grossTotal' : k === 'deduct' ? 'deductTotal' : k === 'net' ? 'netTotal' : k] +=
-          Number(d[k]) || 0;
-      });
-    });
-    allData.value = Array.from(deptMap.values()).sort((a, b) => b.grossTotal - a.grossTotal);
-  } catch {
-    allData.value = [];
+    report.value = await ledgerApi.getReport(period.value);
   } finally {
     loading.value = false;
   }
-};
+}
 
-const filterData = () => { /* computed handles filtering */ };
+function displayMoney(value?: number | null) {
+  if (value === null || value === undefined) return '';
+  if (Math.abs(value) < 0.005) return '-';
+  return value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
-// 汇总
-const MONEY_PROPS = [
-  'commissionIncome', 'teamIncome', 'storeIncome', 'baseSalary', 'guaranteeFill',
-  'mentorBonus', 'bonus', 'otherIncome', 'grossTotal', 'socialFee', 'housingFund',
-  'attendanceFee', 'commercialInsurance', 'dormitoryFee', 'otherDeduct',
-  'deductTotal', 'tax', 'netTotal', 'employerSocial',
-];
+function isNegative(value?: number | null) {
+  return typeof value === 'number' && value < 0;
+}
 
-const summaryMethod = ({ columns, data }: any) => {
-  const sums: string[] = [];
-  columns.forEach((col: any, idx: number) => {
-    if (idx === 0) {
-      sums[idx] = '合计';
+function exportExcel() {
+  if (!report.value) return;
+  const data = report.value;
+  const header = ['一级科目', '二级科目', '三级科目', '四级科目', ...data.columns.map((c) => c.deptName), '合计'];
+  const title = `${data.rootDeptName} 部门收支分析表（${data.period}）`;
+  const aoa: any[][] = [[title], header];
+  const merges: any[] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: header.length - 1 } }
+  ];
+
+  data.rows.forEach((row, rowIndex) => {
+    const excelRow = rowIndex + 2;
+    if (row.totalRow) {
+      const line: any[] = [row.totalLabel || '', '', '', ''];
+      for (let ci = 0; ci < data.columns.length; ci++) line.push(exportValue(row.values?.[ci]));
+      line.push(exportValue(row.total));
+      aoa.push(line);
+      merges.push({ s: { r: excelRow, c: 0 }, e: { r: excelRow, c: 3 } });
       return;
     }
-    if (col.property === 'employeeCount') {
-      sums[idx] = String(data.reduce((s: number, r: any) => s + (r[col.property] || 0), 0));
-      return;
+    const levels = ['', '', '', ''];
+    if (row.level >= 1 && row.level <= 4) {
+      levels[row.level - 1] = row.subjectName || '';
     }
-    if (MONEY_PROPS.includes(col.property)) {
-      const total = data.reduce((s: number, r: any) => s + (Number(r[col.property]) || 0), 0);
-      sums[idx] = '¥' + fmt(total);
-    } else {
-      sums[idx] = '';
+    const line: any[] = [...levels];
+    for (let ci = 0; ci < data.columns.length; ci++) line.push(exportValue(row.values?.[ci]));
+    line.push(exportValue(row.total));
+    aoa.push(line);
+
+    for (let lv = 0; lv < 4; lv++) {
+      const span = row.spans?.[lv] || 0;
+      if (span > 1 && levels[lv]) {
+        merges.push({ s: { r: excelRow, c: lv }, e: { r: excelRow + span - 1, c: lv } });
+      }
     }
   });
-  return sums;
-};
 
-const exportExcel = () => {
-  if (!tableData.value.length) return;
-  const headers = [
-    '部门ID', '人数', '业绩提成', '团队提成', '门店提成', '底薪', '保底补足', '伯乐奖励', '奖金', '其他收入', '收入合计',
-    '社保', '公积金', '考勤扣款', '商业保险', '宿舍费', '其他支出', '支出合计', '个税', '实发合计', '单位社保',
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges'] = merges;
+  ws['!cols'] = [
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 14 },
+    ...data.columns.map(() => ({ wch: 14 })),
+    { wch: 14 }
   ];
-  const keys = [
-    'deptId', 'employeeCount', 'commissionIncome', 'teamIncome', 'storeIncome', 'baseSalary',
-    'guaranteeFill', 'mentorBonus', 'bonus', 'otherIncome', 'grossTotal',
-    'socialFee', 'housingFund', 'attendanceFee', 'commercialInsurance',
-    'dormitoryFee', 'otherDeduct', 'deductTotal', 'tax', 'netTotal', 'employerSocial',
-  ];
-  const rows = tableData.value.map((r) =>
-    keys.map((k) => {
-      const v = (r as any)[k];
-      if (v == null) return '';
-      if (typeof v === 'number') return v.toFixed(2);
-      return String(v);
-    })
-  );
-  const csv = [headers, ...rows]
-    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    .join('\n');
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `部门收支表_${period.value}.csv`;
-  link.click();
-  window.URL.revokeObjectURL(url);
-  ElMessage.success('导出成功');
-};
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '部门收支分析');
+  XLSX.writeFile(wb, `${data.rootDeptName}_部门收支分析表_${data.period}.xlsx`);
+}
 
-onMounted(() => {
-  loadDeptTree();
-  load();
-});
+function exportValue(value?: number | null) {
+  if (value === null || value === undefined || Math.abs(value) < 0.005) return '';
+  return value;
+}
+
+onMounted(loadReport);
 </script>
 
 <style scoped>
-.text-primary { color: var(--el-color-primary); }
+.ledger-report-page {
+  padding: 16px;
+}
+.query-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.page-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-right: 8px;
+}
+.flex-1 {
+  flex: 1;
+}
+.report-scroll {
+  overflow: auto;
+  min-height: 200px;
+}
+.report-sheet {
+  min-width: 900px;
+}
+.report-title {
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  padding: 12px 0 16px;
+  color: #303133;
+}
+.report-title .period {
+  margin-left: 12px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #606266;
+}
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+.report-table th,
+.report-table td {
+  border: 1px solid #cfd8e3;
+  padding: 6px 8px;
+  text-align: center;
+  vertical-align: middle;
+}
+.report-table th {
+  background: #eef3f9;
+  font-weight: 600;
+  color: #303133;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.report-table .subject-col {
+  width: 120px;
+}
+.report-table .dept-col {
+  width: 120px;
+}
+.report-table .total-col {
+  width: 110px;
+}
+.subject-cell {
+  text-align: left;
+  font-weight: 500;
+  background: #fbfcfe;
+}
+.subject-cell.level-1 {
+  background: #f2f6fb;
+  font-weight: 600;
+}
+.money-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.total-cell {
+  font-weight: 600;
+  background: #fafbfd;
+}
+.negative {
+  color: #c0392b;
+}
+.total-row td {
+  background: #f7f9fc;
+  font-weight: 700;
+}
+.total-row .label-cell {
+  text-align: left;
+  letter-spacing: 1px;
+}
+.profit-row td {
+  background: #eef7ee;
+  color: #1f7a33;
+}
+.report-footer {
+  margin-top: 8px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 </style>

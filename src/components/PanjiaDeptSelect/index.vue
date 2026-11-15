@@ -2,7 +2,7 @@
   <el-tree-select
     :model-value="modelValue"
     :data="treeData"
-    :props="{ label: 'deptName', children: 'children' }"
+    :props="{ label: 'deptName', children: 'children', disabled: 'disabled' }"
     node-key="deptId"
     value-key="deptId"
     :placeholder="placeholder"
@@ -44,6 +44,8 @@ const props = withDefaults(
     width?: string;
     /** true=按登录用户部门数据权限裁剪（默认）；false=全量部门树（财务台账用） */
     scope?: boolean;
+    /** true=仅末级部门可选（父级节点置灰） */
+    leafOnly?: boolean;
   }>(),
   {
     modelValue: null,
@@ -55,6 +57,7 @@ const props = withDefaults(
     size: 'default',
     width: '100%',
     scope: true,
+    leafOnly: false,
   },
 );
 
@@ -65,7 +68,18 @@ const emit = defineEmits<{
 
 const { deptTreeRaw, deptTreeData, loadDeptTree } = useDeptScope();
 
-const treeData = computed(() => (props.scope ? deptTreeData.value : deptTreeRaw.value));
+const markLeafOnly = (nodes: any[]): any[] =>
+  nodes.map((node) => {
+    const children = Array.isArray(node.children) && node.children.length > 0
+      ? markLeafOnly(node.children)
+      : undefined;
+    return { ...node, children, disabled: Boolean(children && children.length) };
+  });
+
+const treeData = computed(() => {
+  const base = props.scope ? deptTreeData.value : deptTreeRaw.value;
+  return props.leafOnly ? markLeafOnly(base as any[]) : base;
+});
 
 onMounted(() => {
   loadDeptTree();

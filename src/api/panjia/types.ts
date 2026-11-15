@@ -292,6 +292,48 @@ export interface VirtualEmployeeInitResult {
   conflictedCodes: string[];
 }
 
+// ==================== IM 账号映射（本地员工 ↔ 钉钉/企微/飞书账号） ====================
+
+/** IM 账号映射行（同步任务自动生成，支持人工绑定/解绑） */
+export interface ImUserMapping {
+  mappingId: string | number;
+  /** 渠道（DINGTALK/WECOM/FEISHU） */
+  channel: string;
+  corpId?: string | null;
+  /** 渠道侧用户 ID */
+  externalUserId?: string | null;
+  /** 渠道姓名 */
+  externalName?: string | null;
+  /** 渠道手机号 */
+  externalMobile?: string | null;
+  /** 渠道工号 */
+  externalCode?: string | null;
+  /** 渠道账号是否在职 */
+  externalActive?: boolean;
+  employeeId?: string | number | null;
+  employeeName?: string | null;
+  /** 系统登录账号 ID */
+  userId?: string | number | null;
+  /** 系统登录账号名 */
+  userName?: string | null;
+  /** 匹配方式（CODE/MOBILE/MANUAL/NONE） */
+  matchType?: string;
+  /** 最近同步时间（yyyy-MM-dd HH:mm:ss） */
+  lastSyncTime?: string | null;
+}
+
+/** IM 账号映射分页查询参数 */
+export interface ImUserMappingQuery extends PageQuery {
+  /** 渠道（DINGTALK/WECOM/FEISHU） */
+  channel?: string;
+  /** 匹配状态（MATCHED/UNMATCHED） */
+  matchStatus?: string;
+  /** 姓名/工号/手机号/userid 模糊 */
+  keyword?: string;
+  /** 渠道账号是否在职 */
+  active?: boolean;
+}
+
 // ==================== 导入域 V2.0（单据导入：业绩/考勤/积分/费用） ====================
 
 /** 单据导入批次 */

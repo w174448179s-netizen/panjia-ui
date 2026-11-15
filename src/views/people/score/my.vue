@@ -33,17 +33,15 @@
             @clear="handleQuery"
           />
         </el-form-item>
-        <el-form-item label="积分期间">
+        <el-form-item label="积分月份">
           <el-date-picker
-            v-model="dateRange"
-            type="monthrange"
-            range-separator="—"
+            v-model="queryMonth"
+            type="month"
             value-format="YYYY-MM"
-            start-placeholder="开始月份"
-            end-placeholder="结束月份"
+            placeholder="请选择月份"
             clearable
-            style="width: 260px"
-            @change="handleDateRangeChange"
+            style="width: 180px"
+            @change="handleQuery"
           />
         </el-form-item>
         <el-form-item>
@@ -60,7 +58,7 @@
           <div class="table-heading">
             <span class="panel-kicker">Performance Score</span>
             <h3>积分查询</h3>
-            <p>共 {{ total }} 条记录；总积分/出勤天数来自日报导入，平均积分 = 总积分 / 出勤天数。</p>
+            <p>共 {{ total }} 条记录；总积分来自日报导入，出勤天数取考勤汇总并扣除随心假、年假、产假等免考核假期，平均积分 = 总积分 / 出勤天数。</p>
           </div>
         </div>
       </template>
@@ -207,32 +205,22 @@ const isManager = computed(() => {
   return roles.some((r: string) => ['superadmin', 'director', 'manager'].includes(r));
 });
 
-const dateRange = ref<[string, string] | null>(null);
+/** 查询月份（YYYY-MM），按月查询与手机端一致 */
+const queryMonth = ref('');
 
 const queryParams = reactive<ScoreQuery>({
   pageNum: 1,
   pageSize: 10,
   employeeCode: '',
   employeeName: '',
-  deptId: undefined,
-  monthStart: undefined,
-  monthEnd: undefined
+  deptId: undefined
 });
-
-const handleDateRangeChange = (val: [string, string] | null) => {
-  if (val && val.length === 2) {
-    queryParams.monthStart = `${val[0]}-01`;
-    queryParams.monthEnd = `${val[1]}-01`;
-  } else {
-    queryParams.monthStart = undefined;
-    queryParams.monthEnd = undefined;
-  }
-};
 
 const getList = async () => {
   loading.value = true;
   try {
-    const res = await scoreApi.myList({ ...queryParams });
+    const month = queryMonth.value ? `${queryMonth.value}-01` : undefined;
+    const res = await scoreApi.myList({ ...queryParams, monthStart: month, monthEnd: month });
     scoreList.value = res.data?.rows ?? [];
     total.value = res.data?.total ?? 0;
   } catch (e: any) {
@@ -249,12 +237,10 @@ const handleQuery = () => {
 
 const resetQuery = () => {
   queryFormRef.value?.resetFields();
-  dateRange.value = null;
+  queryMonth.value = '';
   queryParams.employeeCode = '';
   queryParams.employeeName = '';
   queryParams.deptId = undefined;
-  queryParams.monthStart = undefined;
-  queryParams.monthEnd = undefined;
   queryParams.pageNum = 1;
   getList();
 };

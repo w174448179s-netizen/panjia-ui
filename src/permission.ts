@@ -6,6 +6,7 @@ import { usePermissionStore } from '@/store/modules/permission';
 import { useSettingsStore } from '@/store/modules/settings';
 import { useUserStore } from '@/store/modules/user';
 import { getToken } from '@/utils/auth';
+import { dingTalkAutoLogin, dingTalkLoginByCode, isDingTalkContainer } from '@/utils/dingtalk';
 import { isHandledRequestError, isRelogin } from '@/utils/request';
 import { isHttp, isPathMatch } from '@/utils/validate';
 import router from './router';
@@ -13,11 +14,14 @@ import router from './router';
 const NProgress = ('default' in NProgressModule ? NProgressModule.default : NProgressModule) as typeof NProgressModule;
 
 NProgress.configure({ showSpinner: false });
-const whiteList = ['/login', '/register', '/social-callback', '/register*', '/register/*'];
+const whiteList = ['/login', '/register', '/social-callback', '/dingtalk-sso', '/register*', '/register/*'];
 
 const isWhiteList = (path: string) => {
   return whiteList.some(pattern => isPathMatch(pattern, path));
 };
+
+/** 员工移动端路由（钉钉 H5 内使用） */
+const isMobilePath = (path: string) => path === '/m' || path.startsWith('/m/');
 
 router.beforeEach(async (to, from) => {
   NProgress.start();
@@ -68,11 +72,34 @@ router.beforeEach(async (to, from) => {
     if (isWhiteList(to.path)) {
       // 在免登录白名单，直接进入
       return true;
-    } else {
-      const redirect = encodeURIComponent(to.fullPath || '/');
-      NProgress.done();
-      return `/login?redirect=${redirect}`; // 否则全部重定向到登录页
     }
+    // 钉钉小程序 web-view 入口：用小程序侧传来的 authCode 免登，成功后去掉参数再进入
+    const authCode = to.query.authCode;
+    if (isMobilePath(to.path) && typeof authCode === 'string' && authCode) {
+      try {
+        await dingTalkLoginByCode(authCode);
+        NProgress.done();
+        const restQuery = { ...to.query };
+        delete restQuery.authCode;
+        return { path: to.path, replace: true, query: restQuery, hash: to.hash };
+      } catch {
+        // 免登失败继续走登录页兜底
+      }
+    }
+    // 钉钉容器内直接打开移动端：在当前页面原地免登，不跳转中转页，避免钉钉提示「后续页面非钉钉提供」
+    if (isMobilePath(to.path) && isDingTalkContainer()) {
+      try {
+        await dingTalkAutoLogin();
+        NProgress.done();
+        // 已拿到 token，重新进入当前路由（由上面的已登录分支拉取用户信息与菜单）
+        return { path: to.path, replace: true, query: to.query, hash: to.hash };
+      } catch {
+        // 免登失败（未绑定/JSAPI 不可用）继续走登录页兜底
+      }
+    }
+    const redirect = encodeURIComponent(to.fullPath || '/');
+    NProgress.done();
+    return `/login?redirect=${redirect}`; // 否则全部重定向到登录页
   }
 });
 

@@ -100,6 +100,13 @@
             <el-tag v-if="refundedPeriod(row as ReceivedApply)" type="danger" size="small" effect="plain" class="adjust-tag">
               已退单 {{ refundedPeriod(row as ReceivedApply) }}
             </el-tag>
+            <el-tooltip
+              v-if="(row as ReceivedApply).supplement"
+              content="补收：该月无正向新签，实收为退单后退回金额，不计新签也不并入结佣单"
+              placement="top"
+            >
+              <el-tag type="info" size="small" effect="plain" class="adjust-tag">补收</el-tag>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column label="合同号/订单号" align="center" min-width="180" fixed="left">
@@ -197,10 +204,14 @@
               <template v-if="!row.periods">
                 <el-button v-if="row.status === 'SUBMITTED' && checkPermi(['perf:received:approve'])" link type="success" :loading="approvalLoading" @click="onBizApprove(row.id)">审批</el-button>
                 <el-button v-if="!isAgent && row.status === 'APPROVED' && !isRefundRow(row as ReceivedApply)" link type="warning" @click="openReceivedAdjust(row)">调整</el-button>
+                <!-- 驳回后先调整再重提：明细直接修正，提交即重新进入审批（调整单粒度，需先筛选到具体期间） -->
+                <el-button v-if="!isAgent && row.status === 'REJECTED' && !isRefundRow(row as ReceivedApply)" link type="warning" @click="openRejectedRevise(row as ReceivedApply)">调整</el-button>
                 <!-- 待匹配新签（该订单当期无新签、无审批单）：唯一操作是补录新签 -->
                 <el-button v-if="row.pendingMatch && checkPermi(['perf:fact:supplement'])" link type="success" @click="openExpectSupplement(row as ReceivedApply)">补录</el-button>
                 <el-button v-if="row.status === 'REJECTED'" link type="warning" @click="resubmit(row)">重提</el-button>
                 <el-button v-if="row.status === 'SUBMITTED' && canCancel(row)" link type="info" @click="cancel(row)">作废</el-button>
+                <!-- 已作废：复用原单号重新绑定实收明细并重新发起审批 -->
+                <el-button v-if="row.status === 'CANCELLED' && checkPermi(['perf:received:restore']) && canCancel(row)" link type="primary" @click="restore(row)">恢复</el-button>
               </template>
               <el-tooltip v-else content="同一合同跨多期合并展示，请在上方「期间」筛选到具体月份后操作" placement="top">
                 <span class="cell-sub">按期间操作</span>
@@ -230,6 +241,25 @@
 
     <!-- 详情弹窗 -->
     <el-dialog v-model="showDetail" title="实收业绩审批单详情" width="960px" top="5vh">
+      <!-- 驳回后调整：展示挂靠在本单上的待生效调整单，避免审批人看不出本单含调整 -->
+      <el-alert
+        v-if="detailPendingAdjust"
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      >
+        <template #title>
+          本单含待生效实收调整（{{ adjustTypeLabel(detailPendingAdjust.adjustType) }} {{ detailPendingAdjust.adjustNo }}）：
+          实收合计 ¥{{ formatAmount(detailPendingAdjust.originalAmount) }} →
+          ¥{{ formatAmount(detailPendingAdjust.targetAmount) }}
+          <span :class="deltaClass(detailPendingAdjust.targetAmount, detailPendingAdjust.originalAmount)" style="font-weight: 600">
+            {{ deltaParen(detailPendingAdjust.targetAmount, detailPendingAdjust.originalAmount) }}
+          </span>
+          · 批准本单后该调整自动审批并生效
+        </template>
+        <div style="font-weight: 400">调整原因：{{ detailPendingAdjust.reason || '—' }}</div>
+      </el-alert>
       <!-- 审批中原因提示：人数不一致/实收不足，让审批人一眼知道为什么需要人工核对 -->
       <el-alert
         v-if="detailApp && detailApp.manualReviewReason"
@@ -449,7 +479,7 @@
     <!-- 业务明细直接审批弹窗（与「我的待办」共用同一 WorkflowHandle 组件） -->
     <WorkflowHandle ref="workflowHandleRef" @handled="getList" />
 
-    <!-- 实收调整弹窗（RECEIVED_AMOUNT，合同级）：入口在实收明细页，审批通过的单据才可调整 -->
+    <!-- 实收调整弹窗（RECEIVED_AMOUNT，合同级）：已通过单走调整单审批；驳回单走「调整后重提」 -->
     <ReceivedAdjustDialog ref="receivedAdjustDialogRef" @submitted="getList" />
     <!-- 新签补录弹窗：入口为「待匹配新签」到账行（该订单当期无新签），提交总监审批后自动补建实收单 -->
     <ExpectSupplementDialog ref="expectSupplementDialogRef" @submitted="getList" />
@@ -463,7 +493,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { Loading } from '@element-plus/icons-vue';
 import { receivedApi, type ReceivedApply, type ReceivedFact, type BatchApproveResult } from '@/api/panjia/received';
 import { perfRefundApi } from '@/api/panjia/refund';
-import { performanceApi } from '@/api/panjia/performance';
+import { performanceApi, type AdjustDetailVO } from '@/api/panjia/performance';
 import { employeeApi } from '@/api/panjia/employee';
 import EmployeeSelect from '@/components/EmployeeSelect/index.vue';
 import PanjiaDeptSelect from '@/components/PanjiaDeptSelect/index.vue';
@@ -492,6 +522,18 @@ const canCancel = (row: ReceivedApply): boolean => {
 const receivedAdjustDialogRef = ref();
 const openReceivedAdjust = (row: ReceivedApply) => {
   receivedAdjustDialogRef.value?.open({
+    contractNo: resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '',
+    orderNo: row.orderNo,
+    bizType: row.bizType,
+    propertyAddress: row.propertyAddress,
+    period: row.period,
+  });
+};
+
+// ==================== 驳回后调整并重提（明细直接修正后重新提交） ====================
+const openRejectedRevise = (row: ReceivedApply) => {
+  receivedAdjustDialogRef.value?.openForRevise({
+    applyId: row.id,
     contractNo: resolveBizNo(row.bizType, row.contractNo, row.orderNo) || row.contractNo || row.orderNo || '',
     orderNo: row.orderNo,
     bizType: row.bizType,
@@ -579,6 +621,12 @@ const deltaParen = (after?: number | string | null, before?: number | string | n
   if (diff === 0) return '';
   return `(${diff > 0 ? '+' : ''}${diff.toFixed(2)})`;
 };
+
+/** 实收调整类型文案（驳回后调整与实收调整单同口径） */
+const ADJUST_TYPE_MAP: Record<string, string> = {
+  AMOUNT: '业绩调整', DEDUCT: '业绩扣减', INCREASE: '业绩增加',
+};
+const adjustTypeLabel = (t?: string) => ADJUST_TYPE_MAP[t || ''] || '业绩调整';
 
 /**
  * 是否按「原值 → 调整后值」展示：需后端 expectedAdjusted 标记与原值同时成立。
@@ -780,6 +828,8 @@ const resetQuery = () => {
 const showDetail = ref(false);
 const detailApp = ref<ReceivedApply | null>(null);
 const detailFacts = ref<ReceivedFact[]>([]);
+/** 挂靠在本单上的待生效实收调整单（驳回后调整场景） */
+const detailPendingAdjust = ref<AdjustDetailVO | null>(null);
 /** 详情弹窗的「应收合计」是否按「原值 → 调整后值」展示（同一处判定复用三遍，提为 computed） */
 const detailAdjusted = computed(() => isAdjusted(detailApp.value));
 /** 详情弹窗的「实收合计」是否按「原值 → 调整后值」展示 */
@@ -789,6 +839,7 @@ const viewDetail = async (row: ReceivedApply) => {
   showDetail.value = true;
   detailApp.value = row;
   detailFacts.value = [];
+  detailPendingAdjust.value = null;
   await loadEmployeeMap();
   try {
     // 待匹配新签（无审批单）：直接取该组未绑定明细
@@ -806,18 +857,43 @@ const viewDetail = async (row: ReceivedApply) => {
       : await receivedApi.getDetail(row.id);
     detailApp.value = res.data?.apply ?? row;
     detailFacts.value = res.data?.facts ?? [];
+    // 驳回后调整：加载挂靠在本单上的待生效调整单（不存在则忽略）
+    // 注意：接口入参是「审批单 ID」（后端按本单查挂靠调整），不是 pendingAdjustId（调整单 ID）
+    const applyId = detailApp.value?.id ?? row.id;
+    if (detailApp.value?.pendingAdjustId && applyId) {
+      try {
+        const adj = await receivedApi.pendingAdjust(applyId);
+        detailPendingAdjust.value = (adj as any).data ?? null;
+      } catch {
+        detailPendingAdjust.value = null;
+      }
+    }
   } catch { /* 拦截器处理 */ }
 };
 
 const cancel = async (row: ReceivedApply) => {
   try {
-    await ElMessageBox.confirm(`确认作废实收审批单「${row.applyNo}」？作废后不可恢复。`, '提示', { type: 'warning' });
+    await ElMessageBox.confirm(`确认作废实收审批单「${row.applyNo}」？作废后可在“已作废”列表恢复。`, '提示', { type: 'warning' });
   } catch {
     return;
   }
   try {
     await receivedApi.cancel(row.id);
     ElMessage.success('已作废');
+    getList();
+  } catch { /* 拦截器处理 */ }
+};
+
+/** 恢复已作废单据：复用原单号重新绑定实收明细并重新进入审批 */
+const restore = async (row: ReceivedApply) => {
+  try {
+    await ElMessageBox.confirm(`确认恢复实收审批单「${row.applyNo}」？恢复后将重新进入审批流程。`, '提示', { type: 'warning' });
+  } catch {
+    return;
+  }
+  try {
+    await receivedApi.restore(row.id);
+    ElMessage.success('已恢复');
     getList();
   } catch { /* 拦截器处理 */ }
 };

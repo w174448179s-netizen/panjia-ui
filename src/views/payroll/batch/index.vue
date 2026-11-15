@@ -124,8 +124,8 @@
               <template #default="{ row }">{{ calcProcessText(row) || '—' }}</template>
             </el-table-column>
             <el-table-column label="伯乐奖励" prop="mentorBonus" width="90" align="right">
-              <!-- AMOUNT_RATIO 模式：独立金额；RATE_ADD 模式为空（比例见个人提点奖励列） -->
-              <template #default="{ row }">{{ row.mentorAdd != null ? '' : num(row.mentorBonus) }}</template>
+              <!-- AMOUNT_RATIO 模式：独立金额；金额为 0（纯 RATE_ADD 月）时留空 -->
+              <template #default="{ row }">{{ Number(row.mentorBonus) ? num(row.mentorBonus) : '' }}</template>
             </el-table-column>
             <el-table-column label="底薪" width="90" align="right">
               <template #default="{ row }">{{ num(baseSalaryOf(row)) }}</template>
@@ -270,9 +270,6 @@
             <el-table-column label="底薪" prop="baseSalary" width="90" align="right">
               <template #default="{ row }">{{ num(row.baseSalary) }}</template>
             </el-table-column>
-            <el-table-column label="全勤" prop="fullAttendance" width="90" align="right">
-              <template #default="{ row }">{{ num(row.fullAttendance) }}</template>
-            </el-table-column>
             <el-table-column label="绩效" prop="bonus" width="90" align="right">
               <template #default="{ row }">{{ num(row.bonus) }}</template>
             </el-table-column>
@@ -286,7 +283,7 @@
               <template #default="{ row }">{{ calcProcessText(row) || '—' }}</template>
             </el-table-column>
             <el-table-column label="伯乐奖励" prop="mentorBonus" width="100" align="right">
-              <template #default="{ row }">{{ row.mentorAdd != null ? '' : num(row.mentorBonus) }}</template>
+              <template #default="{ row }">{{ Number(row.mentorBonus) ? num(row.mentorBonus) : '' }}</template>
             </el-table-column>
             <el-table-column label="社保" prop="socialFee" width="90" align="right">
               <template #default="{ row }">{{ neg(row.socialFee) }}</template>
@@ -424,7 +421,7 @@
               <template #default="{ row }">{{ neg(row.negativeCarryover) }}</template>
             </el-table-column>
             <el-table-column label="伯乐奖励" align="right" width="90">
-              <template #default="{ row }">{{ row.mentorAdd != null ? '' : num(row.mentorBonus) }}</template>
+              <template #default="{ row }">{{ Number(row.mentorBonus) ? num(row.mentorBonus) : '' }}</template>
             </el-table-column>
             <el-table-column label="其他扣款" align="right" width="90">
               <template #default="{ row }">{{ neg(row.otherDeduct) }}</template>
@@ -683,7 +680,6 @@ const directorTreeData = computed<DirectorTreeNode[]>(() => {
       storeRate: Number(it.rate) || 0,
       storeIncome: Number(it.income) || 0,
       baseSalary: undefined,
-      fullAttendance: undefined,
       bonus: undefined,
       commissionPerformance: undefined,
       commissionIncome: undefined,
@@ -1087,7 +1083,7 @@ const managerSummary = ({ columns }: any) => {
   return sums;
 };
 
-const DIRECTOR_MONEY_PROPS = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'deptDiffAmount', 'storeIncome', 'baseSalary', 'fullAttendance', 'bonus', 'commissionPerformance', 'commissionIncome', 'mentorBonus', 'socialFee', 'housingFund', 'commercialInsurance', 'gross', 'tax', 'net'];
+const DIRECTOR_MONEY_PROPS = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'deptDiffAmount', 'storeIncome', 'baseSalary', 'bonus', 'commissionPerformance', 'commissionIncome', 'mentorBonus', 'socialFee', 'housingFund', 'commercialInsurance', 'gross', 'tax', 'net'];
 const DIRECTOR_DEDUCT = new Set(['deptEmployerSocialTotal', 'deptDiffAmount', 'socialFee', 'housingFund', 'commercialInsurance', 'tax']);
 const directorTotals = computed<Record<string, number>>(() => {
   // 只汇总顶层汇总行（directorDetails），避免树形子行 double-count；合计固定全量口径
