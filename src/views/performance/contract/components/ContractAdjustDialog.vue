@@ -13,7 +13,7 @@
       <el-descriptions :column="3" border size="small" class="info-desc">
         <el-descriptions-item label="合同号/订单号">{{ info?.contractNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="业务类型">{{ info?.bizType || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="期间">{{ info?.period || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="期间">{{ formPeriod || '—' }}</el-descriptions-item>
         <el-descriptions-item label="房源地址" :span="2">{{ info?.propertyAddress || '—' }}</el-descriptions-item>
         <el-descriptions-item label="签约/认购时间">{{ formatDateTime(info?.businessDate) }}</el-descriptions-item>
       </el-descriptions>
@@ -281,6 +281,8 @@ interface AdjustInfo {
   period: string;
 }
 const info = ref<AdjustInfo | null>(null);
+/** 提交期间：在 open 时从 payload 快照，避免页面期间切换或多次打开导致「加载期间 ≠ 提交期间」 */
+const formPeriod = ref<string>('');
 
 interface EditRow {
   key: string;
@@ -325,6 +327,7 @@ const targetConvertedTotal = computed(() => round2(
 // ==================== 打开弹窗：拉取明细初始化可编辑表格 ====================
 async function open(payload: AdjustInfo) {
   info.value = payload;
+  formPeriod.value = payload.period || '';
   adjustType.value = 'AMOUNT';
   reason.value = '';
   totalInput.value = null;
@@ -340,7 +343,7 @@ async function open(payload: AdjustInfo) {
     // 并行拉取：新签明细（编辑底表，限当期）+ 实收明细（跨期，period 可空；用于类型提示）
     const [res, realRes] = await Promise.all([
       performanceApi.listManageContractDetails({
-        period: payload.period,
+        period: formPeriod.value,
         factType: 'PERF_EXPECT',
         contractNos: payload.contractNo,
         orderNos: payload.orderNo,
@@ -359,7 +362,9 @@ async function open(payload: AdjustInfo) {
     }
     receivedTotal.value = rTotal;
     const allRows: PerformanceManageRow[] = (res.data ?? [])
-      .filter((r: PerformanceManageRow) => r.factStatus !== 'VOIDED');
+      .filter((r: PerformanceManageRow) => r.factStatus !== 'VOIDED')
+      // 双保险：只展示归属期间与本次提交期间一致的行，避免跨期间明细被误选导致后端校验失败
+      .filter((r: PerformanceManageRow) => !formPeriod.value || r.period === formPeriod.value);
     // 在途单逐人变化（保留 ADD_MEMBER 新人虚拟行 id=null，用于只读展示 0 → X）
     pendingRows.value = allRows
       .filter(r => r.adjustPending)
@@ -581,7 +586,7 @@ async function submit() {
   // 三类型统一提交：detailTargets + targetAmount（=调整后合计），有新人时附 newMembers
   const form: AdjustCreateForm = {
     adjustType: adjustType.value,
-    period: info.value.period,
+    period: formPeriod.value,
     factType: 'PERF_EXPECT',
     contractNo: info.value.contractNo,
     orderNo: info.value.orderNo,
