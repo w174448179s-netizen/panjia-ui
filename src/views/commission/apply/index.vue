@@ -71,6 +71,9 @@
             <span class="summary-sub">（折算后 {{ formatAmount(summary.totalConvertedAmount) }}）</span>
             <span class="summary-sep">｜</span>
             实收合计：<b>{{ formatAmount(summary.totalReceivedAmount) }}</b>
+            <template v-if="num(summary.totalReceivedNetAmount) !== num(summary.totalReceivedAmount)">
+              ｜实收净额：<b :class="{ 'received-net-negative': num(summary.totalReceivedNetAmount) < 0 }">{{ formatAmount(summary.totalReceivedNetAmount) }}</b>
+            </template>
             <span class="summary-sep">｜</span>
             新签合计：<b>{{ formatAmount(summary.totalExpectedAmount) }}</b>
             <span class="summary-sub">（折算后 {{ formatAmount(summary.totalExpectedConvertedAmount) }}）</span>
@@ -100,15 +103,30 @@
             </el-button>
           </template>
         </el-table-column>
-        <!-- 实收金额：实收调整（含结佣联动）生效时展示「原值 → 调整后值」 -->
-        <el-table-column label="实收金额" align="right" width="210">
+        <!-- 实收金额：实收调整（含结佣联动）生效时展示「原值 → 调整后值」；
+             无负向新签行时并列展示正/负/净额，负向实收不再丢失 -->
+        <el-table-column label="实收金额/净额" align="right" width="210">
           <template #default="{ row }">
-            <template v-if="row.receivedAmountAdjusted && row.originalReceivedAmount != null">
-              <span class="amount-strike">¥{{ formatAmount(row.originalReceivedAmount) }}</span>
-              <span class="amount-arrow">→</span>
-              <span class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
-            </template>
-            <span v-else class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
+            <div class="received-row">
+              <template v-if="row.receivedAmountAdjusted && row.originalReceivedAmount != null">
+                <span class="amount-strike">¥{{ formatAmount(row.originalReceivedAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
+              </template>
+              <span v-else class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
+            </div>
+            <el-tooltip
+              v-if="row.receivedNetAmount != null && num(row.receivedNetAmount) !== num(row.receivedAmount)"
+              placement="top"
+            >
+              <template #content>
+                正向实收：¥{{ formatAmount(row.receivedPositiveAmount) }}<br />
+                负向实收：¥{{ formatAmount(row.receivedNegativeAmount) }}
+              </template>
+              <div :class="['received-net-line', num(row.receivedNetAmount) < 0 ? 'received-net-negative' : 'amount-received']">
+                净额 ¥{{ formatAmount(row.receivedNetAmount) }}
+              </div>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column label="结佣业绩" align="right" width="180">
@@ -313,19 +331,40 @@
           <span class="amount amount-red">¥{{ formatAmount(detailDialog.amount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="实收合计">
-          <template v-if="detailDialog.receivedAmountAdjusted">
-            <span class="amount-strike">¥{{ formatAmount(detailDialog.originalReceivedAmount) }}</span>
-            <span class="amount-arrow">→</span>
-            <span class="amount amount-received">¥{{ formatAmount(detailDialog.receivedAmount) }}</span>
-          </template>
-          <span v-else class="amount amount-received">¥{{ formatAmount(detailDialog.receivedAmount) }}</span>
+          <div class="received-summary">
+            <template
+              v-if="num(detailDialog.receivedPositiveAmount) !== 0
+                && num(detailDialog.receivedNegativeAmount) !== 0"
+            >
+              <div>
+                正向：<span class="amount amount-received">¥{{ formatAmount(detailDialog.receivedPositiveAmount) }}</span>
+              </div>
+              <div>
+                负向：<span class="amount detail-net-negative">¥{{ formatAmount(detailDialog.receivedNegativeAmount) }}</span>
+              </div>
+              <div>
+                净额：<span :class="['amount', num(detailDialog.receivedNetAmount) < 0 ? 'detail-net-negative' : 'amount-received']">¥{{ formatAmount(detailDialog.receivedNetAmount) }}</span>
+              </div>
+            </template>
+            <template v-else>
+              <template v-if="detailDialog.receivedAmountAdjusted && detailDialog.originalReceivedAmount != null">
+                <span class="amount-strike">¥{{ formatAmount(detailDialog.originalReceivedAmount) }}</span>
+                <span class="amount-arrow">→</span>
+              </template>
+              <span :class="['amount', num(detailDialog.receivedNetAmount) < 0 ? 'detail-net-negative' : 'amount-received']">
+                ¥{{ formatAmount(detailDialog.receivedNetAmount) }}
+              </span>
+            </template>
+          </div>
         </el-descriptions-item>
       </el-descriptions>
 
       <div class="detail-summary-bar">
-        <span>新签业绩构成：涉及 <b>{{ detailEmployees }}</b> 人 · <b>{{ detailList.length }}</b> 条明细（新签跨全部期间；实收按本行到账归属窗口、同方向）</span>
+        <span>新签业绩构成：涉及 <b>{{ detailEmployees }}</b> 人 · <b>{{ detailList.length }}</b> 条明细（新签跨全部期间；实收按本行到账归属窗口，正负分列）</span>
         <span class="detail-total">
           新签合计：<b :class="{ 'amount-negative': detailTotal < 0 }">{{ formatAmount(detailTotal) }}</b>
+          ｜实收净额：<b :class="{ 'detail-net-negative': detailReceivedNet < 0 }">{{ formatAmount(detailReceivedNet) }}</b>
+          <span v-if="detailReceivedMismatch" class="detail-warning">（实收明细与行值不一致）</span>
           <template v-if="detailConvertedTotal !== null">
             ｜折算后：<b :class="{ 'amount-negative': detailConvertedTotal < 0 }">{{ formatAmount(detailConvertedTotal) }}</b>
           </template>
@@ -342,8 +381,13 @@
         <el-table-column label="工号" align="center" width="100">
           <template #default="{ row }">{{ row.employeeCode || '—' }}</template>
         </el-table-column>
-        <el-table-column label="姓名" align="center" width="90">
-          <template #default="{ row }">{{ row.employeeName || '—' }}</template>
+        <el-table-column label="姓名" align="center" width="120">
+          <template #default="{ row }">
+            <div class="employee-cell">
+              <span>{{ row.employeeName || '—' }}</span>
+              <el-tag v-if="row.unmatchedReal" size="small" type="info">仅实收</el-tag>
+            </div>
+          </template>
         </el-table-column>
         <el-table-column label="角色" align="center" width="100">
           <template #default="{ row }">{{ row.roleType || row.roleName || '—' }}</template>
@@ -351,14 +395,36 @@
         <el-table-column label="占比" align="center" width="80">
           <template #default="{ row }">{{ row.shareRatio != null ? (Number(row.shareRatio) * 100).toFixed(1) + '%' : '—' }}</template>
         </el-table-column>
-        <el-table-column label="实收金额" align="right" width="200">
+        <el-table-column label="实收（正/负/净）" align="right" width="220">
           <template #default="{ row }">
-            <template v-if="row.originalReceivedAmount != null && num(row.originalReceivedAmount) !== num(row.receivedAmount)">
-              <span class="amount-strike">{{ formatAmount(row.originalReceivedAmount) }}</span>
-              <span class="amount-arrow">→</span>
-              <span class="amount amount-received">{{ formatAmount(row.receivedAmount) }}</span>
+            <div
+              v-if="num(row.receivedPositiveAmount) !== 0 && num(row.receivedNegativeAmount) !== 0"
+              class="received-stack"
+            >
+              <div class="received-line">
+                <span class="received-label">正</span>
+                <span class="amount amount-received">{{ formatAmount(row.receivedPositiveAmount) }}</span>
+              </div>
+              <div class="received-line">
+                <span class="received-label">负</span>
+                <span class="amount detail-net-negative">{{ formatAmount(row.receivedNegativeAmount) }}</span>
+              </div>
+              <div class="received-line received-net">
+                <span class="received-label">净</span>
+                <template v-if="row.originalReceivedNetAmount != null && num(row.originalReceivedNetAmount) !== num(row.receivedNetAmount)">
+                  <span class="amount-strike">{{ formatAmount(row.originalReceivedNetAmount) }}</span>
+                  <span class="amount-arrow">→</span>
+                </template>
+                <span :class="['amount', num(row.receivedNetAmount) < 0 ? 'detail-net-negative' : 'amount-received']">{{ formatAmount(row.receivedNetAmount) }}</span>
+              </div>
+            </div>
+            <template v-else>
+              <template v-if="row.originalReceivedNetAmount != null && num(row.originalReceivedNetAmount) !== num(row.receivedNetAmount)">
+                <span class="amount-strike">{{ formatAmount(row.originalReceivedNetAmount) }}</span>
+                <span class="amount-arrow">→</span>
+              </template>
+              <span :class="['amount', num(row.receivedNetAmount) < 0 ? 'detail-net-negative' : 'amount-received']">{{ formatAmount(row.receivedNetAmount) }}</span>
             </template>
-            <span v-else class="amount amount-received">{{ formatAmount(row.receivedAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="新签业绩" align="right" width="180">
@@ -414,7 +480,7 @@ const queryParams = reactive({
 });
 
 // 汇总统计：后端按过滤后全集返回（跨页全局，不随分页变化）
-const emptySummary = () => ({ contractCount: 0, employeeCount: 0, detailCount: 0, totalAmount: 0, totalConvertedAmount: 0, totalExpectedAmount: 0, totalExpectedConvertedAmount: 0, totalReceivedAmount: 0 });
+const emptySummary = () => ({ contractCount: 0, employeeCount: 0, detailCount: 0, totalAmount: 0, totalConvertedAmount: 0, totalExpectedAmount: 0, totalExpectedConvertedAmount: 0, totalReceivedAmount: 0, totalReceivedNetAmount: 0 });
 const summary = ref(emptySummary());
 
 // 数字安全转换
@@ -485,6 +551,7 @@ const getList = async () => {
       totalExpectedAmount: num(data?.summary?.totalExpectedAmount),
       totalExpectedConvertedAmount: num(data?.summary?.totalExpectedConvertedAmount),
       totalReceivedAmount: num(data?.summary?.totalReceivedAmount),
+      totalReceivedNetAmount: num(data?.summary?.totalReceivedNetAmount ?? data?.summary?.totalReceivedAmount),
     };
   } catch {
     contractList.value = [];
@@ -657,8 +724,17 @@ const doSingleApply = async () => {
 };
 
 // 合同详情：跨期新签业绩构成（结佣金额口径 = ACTIVE PERF_EXPECT）
+// 详情行：新签明细 + 实收正/负/净额（仅实收兜底行 unmatchedReal=true）
+type CommissionDetailRow = PerformanceManageRow & {
+  receivedPositiveAmount?: number;
+  receivedNegativeAmount?: number;
+  receivedNetAmount?: number;
+  originalReceivedNetAmount?: number | null;
+  unmatchedReal?: boolean;
+};
+
 const detailLoading = ref(false);
-const detailList = ref<PerformanceManageRow[]>([]);
+const detailList = ref<CommissionDetailRow[]>([]);
 const detailDialog = reactive({
   visible: false,
   contractNo: '',
@@ -669,6 +745,9 @@ const detailDialog = reactive({
   receivedStatus: null as string | null,
   amount: 0 as number | string,
   receivedAmount: 0 as number | string,
+  receivedPositiveAmount: 0 as number | string,
+  receivedNegativeAmount: 0 as number | string,
+  receivedNetAmount: 0 as number | string,
   originalReceivedAmount: null as number | string | null,
   receivedAmountAdjusted: false,
 });
@@ -683,6 +762,10 @@ const detailConvertedTotal = computed(() => {
 const detailEmployees = computed(() => new Set(
   detailActiveRows.value.map((r) => r.employeeId || r.employeeCode || '').filter(Boolean),
 ).size);
+const detailReceivedNet = computed(() =>
+  detailActiveRows.value.reduce((s, r) => s + num(r.receivedNetAmount), 0));
+const detailReceivedMismatch = computed(() =>
+  Math.abs(detailReceivedNet.value - num(detailDialog.receivedNetAmount)) > 0.005);
 
 const openDetail = async (row: CommissionContractVO) => {
   const no = contractOrOrderNo(row);
@@ -698,6 +781,11 @@ const openDetail = async (row: CommissionContractVO) => {
   detailDialog.receivedStatus = row.receivedStatus ?? null;
   detailDialog.amount = row.amount ?? 0;
   detailDialog.receivedAmount = row.receivedAmount ?? 0;
+  detailDialog.receivedPositiveAmount = row.receivedPositiveAmount
+    ?? (num(row.receivedAmount) > 0 ? num(row.receivedAmount) : 0);
+  detailDialog.receivedNegativeAmount = row.receivedNegativeAmount
+    ?? (num(row.receivedAmount) < 0 ? num(row.receivedAmount) : 0);
+  detailDialog.receivedNetAmount = row.receivedNetAmount ?? num(row.receivedAmount);
   detailDialog.originalReceivedAmount = row.originalReceivedAmount ?? null;
   detailDialog.receivedAmountAdjusted = !!row.receivedAmountAdjusted;
   detailList.value = [];
@@ -719,19 +807,24 @@ const openDetail = async (row: CommissionContractVO) => {
         onlyEffective: true,
       }),
     ]);
-    // 与行上实收同口径：只取本行「到账归属窗口」内、同方向的有效实收（正负不抵消，补收月剔除）
+    // 与行上实收同口径：窗口/补收月过滤后，分别聚合正向、负向实收。
+    // 无负向新签行（receivedNetAmount 有值）时正负都取；否则沿用同方向，避免和负向行重复。
     const windowStart = row.receivedWindowStart ?? null;
     const windowEnd = row.receivedWindowEnd ?? null;
     const direction = row.receivedDirection;
+    const includeBoth = row.receivedNetAmount != null;
     const excludePeriods = new Set(row.receivedExcludePeriods ?? []);
     const realRows: PerformanceManageRow[] = realRes.data ?? [];
-    // 实收金额按 员工ID+角色 聚合（窗口内同方向合计）；originalAmount 为实收事实链调整前原值。
+    // 实收金额按 员工ID+角色 聚合；originalAmount 为实收事实链调整前原值。
     // 与新签明细用同一员工键（员工ID优先、工号兜底），避免工号变更/补行导致实收配不上
     const empKey = (r: PerformanceManageRow) =>
       r.employeeId ? `id:${r.employeeId}` : `code:${r.employeeCode ?? ''}`;
     const shareKey = (r: PerformanceManageRow) => `${empKey(r)}|${r.roleType ?? ''}`;
-    const realMap = new Map<string, number>();
-    const realOriginalMap = new Map<string, number>();
+    const positiveMap = new Map<string, number>();
+    const negativeMap = new Map<string, number>();
+    const positiveOriginalMap = new Map<string, number>();
+    const negativeOriginalMap = new Map<string, number>();
+    const realMeta = new Map<string, PerformanceManageRow>();
     for (const r of realRows) {
       if (r.factStatus === 'VOIDED') continue;
       const p = r.period ?? '';
@@ -739,17 +832,59 @@ const openDetail = async (row: CommissionContractVO) => {
       if (windowEnd && p && p >= windowEnd) continue;
       if (p && excludePeriods.has(p)) continue;
       const amt = num(r.amount);
-      if (direction === 'POS' && amt < 0) continue;
-      if (direction === 'NEG' && amt > 0) continue;
+      if (!includeBoth) {
+        if (direction === 'POS' && amt < 0) continue;
+        if (direction === 'NEG' && amt > 0) continue;
+      }
       const key = shareKey(r);
-      realMap.set(key, (realMap.get(key) ?? 0) + amt);
-      realOriginalMap.set(key, (realOriginalMap.get(key) ?? 0) + num(r.originalAmount ?? r.amount));
+      if (!realMeta.has(key)) realMeta.set(key, r);
+      const orig = num(r.originalAmount ?? r.amount);
+      if (amt >= 0) {
+        positiveMap.set(key, (positiveMap.get(key) ?? 0) + amt);
+        positiveOriginalMap.set(key, (positiveOriginalMap.get(key) ?? 0) + orig);
+      } else {
+        negativeMap.set(key, (negativeMap.get(key) ?? 0) + amt);
+        negativeOriginalMap.set(key, (negativeOriginalMap.get(key) ?? 0) + orig);
+      }
     }
-    detailList.value = (expectRes.data ?? []).map((r: PerformanceManageRow) => ({
-      ...r,
-      receivedAmount: realMap.get(shareKey(r)) ?? 0,
-      originalReceivedAmount: realOriginalMap.get(shareKey(r)) ?? 0,
-    }));
+    const expectRows = (expectRes.data ?? []) as CommissionDetailRow[];
+    const expectKeys = new Set(expectRows.map(shareKey));
+    const detailRows: CommissionDetailRow[] = expectRows.map((r) => {
+      const key = shareKey(r);
+      const pos = positiveMap.get(key) ?? 0;
+      const neg = negativeMap.get(key) ?? 0;
+      return {
+        ...r,
+        receivedPositiveAmount: pos,
+        receivedNegativeAmount: neg,
+        receivedNetAmount: pos + neg,
+        originalReceivedNetAmount: (positiveOriginalMap.get(key) ?? 0) + (negativeOriginalMap.get(key) ?? 0),
+      };
+    });
+    // 仅实收、没有对应新签的员工（常见于退款/调减）补兜底行，保证明细合计与行上净额一致
+    for (const [key, meta] of realMeta) {
+      if (expectKeys.has(key)) continue;
+      const pos = positiveMap.get(key) ?? 0;
+      const neg = negativeMap.get(key) ?? 0;
+      if (pos === 0 && neg === 0) continue;
+      detailRows.push({
+        ...meta,
+        factType: 'PERF_REAL',
+        period: '',
+        businessDate: '',
+        amount: 0,
+        originalAmount: null,
+        convertedAmount: 0,
+        settled: false,
+        sourceKey: meta.sourceKey ?? '',
+        unmatchedReal: true,
+        receivedPositiveAmount: pos,
+        receivedNegativeAmount: neg,
+        receivedNetAmount: pos + neg,
+        originalReceivedNetAmount: (positiveOriginalMap.get(key) ?? 0) + (negativeOriginalMap.get(key) ?? 0),
+      });
+    }
+    detailList.value = detailRows;
   } catch { /* 拦截器处理 */ } finally {
     detailLoading.value = false;
   }
@@ -859,6 +994,22 @@ onMounted(() => {
   .amount-ink {
     color: #303133;
   }
+
+  /* 实收正向金额下方并列展示净额（存在负向实收时） */
+  .received-row {
+    line-height: 1.4;
+  }
+  .received-net-line {
+    margin-top: 2px;
+    padding-top: 2px;
+    border-top: 1px dashed #ebeef5;
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .received-net-negative {
+    color: #f56c6c;
+  }
 }
 
 .pager-bar {
@@ -932,6 +1083,45 @@ onMounted(() => {
 
   .amount-negative {
     color: #13ce66;
+  }
+
+  /* 详情弹窗：实收正/负/净额明细 */
+  .received-summary {
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+  .received-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    line-height: 1.4;
+  }
+  .received-line {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+  }
+  .received-label {
+    color: #909399;
+    font-size: 12px;
+  }
+  .received-net {
+    padding-top: 2px;
+    border-top: 1px dashed #ebeef5;
+  }
+  .employee-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+  .detail-net-negative {
+    color: #f56c6c;
+  }
+  .detail-warning {
+    color: #f56c6c;
+    margin-left: 4px;
   }
 }
 

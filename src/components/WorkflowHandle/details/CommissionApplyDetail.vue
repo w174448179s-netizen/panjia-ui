@@ -22,14 +22,37 @@
             <span class="amount amount-ink">¥{{ formatAmount(totalConvertedAmount) }}</span>
           </span>
         </el-descriptions-item>
-        <!-- 实收合计：客户实际到账金额（PERF_REAL 事实合计）；实收调整（含结佣联动）生效时展示「原值 → 调整后值」 -->
+        <!-- 实收合计：客户实际到账金额（PERF_REAL 事实合计）；实收调整（含结佣联动）生效时展示「原值 → 调整后值」；
+             同时存在正向和负向实收时才并列展示正/负/净额，只有单方向时直接展示合计 -->
         <el-descriptions-item label="实收合计">
-          <template v-if="isRealAmountAdjusted">
-            <span class="amount-strike">¥{{ formatAmount(totalOriginalRealAmount) }}</span>
+          <div v-if="hasReceivedNet" class="received-summary">
+            <div>
+              正向：<span class="amount amount-received">¥{{ formatAmount(contractReceivedPositiveAmount) }}</span>
+            </div>
+            <div>
+              负向：<span class="amount amount-red">¥{{ formatAmount(contractReceivedNegativeAmount) }}</span>
+            </div>
+            <div>
+              净额：
+              <template v-if="isReceivedNetAdjusted">
+                <span class="amount-strike">¥{{ formatAmount(contractOriginalReceivedNetAmount) }}</span>
+                <span class="amount-arrow">→</span>
+              </template>
+              <span :class="['amount', contractReceivedNetAmount < 0 ? 'amount-red' : 'amount-received']">
+                ¥{{ formatAmount(contractReceivedNetAmount) }}
+              </span>
+            </div>
+          </div>
+          <template v-else-if="isDisplayReceivedAdjusted">
+            <span class="amount-strike">¥{{ formatAmount(displayOriginalReceivedAmount) }}</span>
             <span class="amount-arrow">→</span>
-            <span class="amount amount-received">¥{{ formatAmount(totalReceivedAmount) }}</span>
+            <span :class="['amount', displayReceivedAmount < 0 ? 'amount-red' : 'amount-received']">
+              ¥{{ formatAmount(displayReceivedAmount) }}
+            </span>
           </template>
-          <span v-else class="amount amount-received">¥{{ formatAmount(totalReceivedAmount) }}</span>
+          <span v-else :class="['amount', displayReceivedAmount < 0 ? 'amount-red' : 'amount-received']">
+            ¥{{ formatAmount(displayReceivedAmount) }}
+          </span>
         </el-descriptions-item>
         <!-- 新签合计（应收业绩）：有调整时展示「原值 → 调整后值」，折算后同形式 -->
         <el-descriptions-item label="新签合计">
@@ -88,10 +111,44 @@
           </el-table-column>
           <!-- 实收金额：同合同+员工+角色维度，正数行=全部实收期间正向实收合并（不含冲正）、
                负数退单/冲正行=全部实收期间负向实收合并（分多笔退单相加）；两向互不抵消；
+               同时存在正向和负向实收时按正/负/净分列展示（与发起页详情一致），单方向直接展示合计；
                实收调整（含结佣联动）生效时展示「原值 → 调整后值」 -->
-          <el-table-column label="实收金额" align="right" width="200">
+          <el-table-column label="实收（正/负/净）" align="right" width="220">
             <template #default="scope">
-              <template v-if="isRealAdjusted(scope.row)">
+              <div
+                v-if="scope.row.receivedNetAmount != null
+                  && num(scope.row.receivedPositiveAmount) !== 0
+                  && num(scope.row.receivedNegativeAmount) !== 0"
+                class="received-stack"
+              >
+                <div class="received-line">
+                  <span class="received-label">正</span>
+                  <span class="amount amount-received">{{ formatAmount(scope.row.receivedPositiveAmount) }}</span>
+                </div>
+                <div class="received-line">
+                  <span class="received-label">负</span>
+                  <span class="amount amount-red">{{ formatAmount(scope.row.receivedNegativeAmount) }}</span>
+                </div>
+                <div class="received-line received-net">
+                  <span class="received-label">净</span>
+                  <span :class="['amount', num(scope.row.receivedNetAmount) < 0 ? 'amount-red' : 'amount-received']">
+                    {{ formatAmount(scope.row.receivedNetAmount) }}
+                  </span>
+                </div>
+              </div>
+              <template v-else-if="scope.row.receivedNetAmount != null">
+                <template
+                  v-if="scope.row.originalReceivedNetAmount != null
+                    && num(scope.row.originalReceivedNetAmount) !== num(scope.row.receivedNetAmount)"
+                >
+                  <span class="amount-strike">¥{{ formatAmount(scope.row.originalReceivedNetAmount) }}</span>
+                  <span class="amount-arrow">→</span>
+                </template>
+                <span :class="['amount', num(scope.row.receivedNetAmount) < 0 ? 'amount-red' : 'amount-received']">
+                  ¥{{ formatAmount(scope.row.receivedNetAmount) }}
+                </span>
+              </template>
+              <template v-else-if="isRealAdjusted(scope.row)">
                 <span class="amount-strike">¥{{ formatAmount(scope.row.originalReceivedAmount) }}</span>
                 <span class="amount-arrow">→</span>
                 <span class="amount amount-received">¥{{ formatAmount(scope.row.receivedAmount) }}</span>
@@ -195,6 +252,43 @@ const isRealAmountAdjusted = computed(() => {
   const row = contractRealRow.value;
   return !!row && row.contractOriginalReceivedAmount != null
     && num(row.contractOriginalReceivedAmount) !== num(row.contractReceivedAmount);
+});
+/** 同键无负向结佣单且同时存在正/负向实收时，头部按三行展示；只有单方向时直接展示合计 */
+const hasReceivedNet = computed(() => {
+  const row = contractRealRow.value;
+  return row?.contractReceivedNetAmount != null
+    && num(row.contractReceivedPositiveAmount) !== 0
+    && num(row.contractReceivedNegativeAmount) !== 0;
+});
+const contractReceivedPositiveAmount = computed(() => num(contractRealRow.value?.contractReceivedPositiveAmount));
+const contractReceivedNegativeAmount = computed(() => num(contractRealRow.value?.contractReceivedNegativeAmount));
+const contractReceivedNetAmount = computed(() => num(contractRealRow.value?.contractReceivedNetAmount));
+const contractOriginalReceivedNetAmount = computed(() => num(contractRealRow.value?.contractOriginalReceivedNetAmount));
+const isReceivedNetAdjusted = computed(() => {
+  const row = contractRealRow.value;
+  return row?.contractOriginalReceivedNetAmount != null
+    && num(row.contractOriginalReceivedNetAmount) !== num(row.contractReceivedNetAmount);
+});
+/** 单方向/零实收时的展示值：有净额字段时取净额（单负也能正确展示），否则回退方向实收 */
+const displayReceivedAmount = computed(() => {
+  const row = contractRealRow.value;
+  return row?.contractReceivedNetAmount != null
+    ? num(row.contractReceivedNetAmount)
+    : totalReceivedAmount.value;
+});
+const displayOriginalReceivedAmount = computed(() => {
+  const row = contractRealRow.value;
+  return row?.contractReceivedNetAmount != null
+    ? num(row.contractOriginalReceivedNetAmount)
+    : totalOriginalRealAmount.value;
+});
+const isDisplayReceivedAdjusted = computed(() => {
+  const row = contractRealRow.value;
+  if (!row) return false;
+  if (row.contractReceivedNetAmount != null) {
+    return num(row.contractOriginalReceivedNetAmount) !== num(row.contractReceivedNetAmount);
+  }
+  return isRealAmountAdjusted.value;
 });
 /** 行级实收金额是否按「原值 → 调整后值」展示：原值与当前值不等即为已调整 */
 const isRealAdjusted = (
@@ -330,6 +424,29 @@ onMounted(loadDetail);
 .amount-positive { color: #67c23a; font-weight: 600; }
 /* 实收金额：客户实际到账，醒目橙色（与列表页「实收金额」列同色系） */
 .amount-received { color: #e6a23c; }
+/* 实收合计正/负/净额三行（头部）与明细行分列展示 */
+.received-summary {
+  line-height: 1.6;
+}
+.received-stack {
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+.received-line {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.received-label {
+  color: #909399;
+  font-size: 12px;
+  line-height: 20px;
+}
+.received-net {
+  margin-top: 2px;
+  padding-top: 2px;
+  border-top: 1px dashed #ebeef5;
+}
 .detail-table-wrap {
   margin-top: 16px;
 }

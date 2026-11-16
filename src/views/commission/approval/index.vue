@@ -86,6 +86,9 @@
             <span class="summary-sub">（折算后 {{ formatAmount(summary.totalConvertedAmount) }}）</span>
             <span class="summary-sep">｜</span>
             实收合计：<b>{{ formatAmount(summary.totalReceivedAmount) }}</b>
+            <template v-if="num(summary.totalReceivedNetAmount) !== num(summary.totalReceivedAmount)">
+              ｜实收净额：<b :class="{ 'received-net-negative': num(summary.totalReceivedNetAmount) < 0 }">{{ formatAmount(summary.totalReceivedNetAmount) }}</b>
+            </template>
             <span class="summary-sep">｜</span>
             新签合计：<b>{{ formatAmount(summary.totalExpectedAmount) }}</b>
             <span class="summary-sub">（折算后 {{ formatAmount(summary.totalExpectedConvertedAmount) }}）</span>
@@ -115,15 +118,30 @@
             </el-button>
           </template>
         </el-table-column>
-        <!-- 实收金额：实收调整（含结佣联动）生效时展示「原值 → 调整后值」 -->
-        <el-table-column label="实收金额" align="right" width="210">
+        <!-- 实收金额：实收调整（含结佣联动）生效时展示「原值 → 调整后值」；
+             无负向结佣单时并列展示正/负/净额，负向实收不再丢失 -->
+        <el-table-column label="实收金额/净额" align="right" width="210">
           <template #default="{ row }">
-            <template v-if="row.receivedAmountAdjusted && row.originalReceivedAmount != null">
-              <span class="amount-strike">¥{{ formatAmount(row.originalReceivedAmount) }}</span>
-              <span class="amount-arrow">→</span>
-              <span class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
-            </template>
-            <span v-else class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
+            <div class="received-row">
+              <template v-if="row.receivedAmountAdjusted && row.originalReceivedAmount != null">
+                <span class="amount-strike">¥{{ formatAmount(row.originalReceivedAmount) }}</span>
+                <span class="amount-arrow">→</span>
+                <span class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
+              </template>
+              <span v-else class="amount amount-received">¥{{ formatAmount(row.receivedAmount) }}</span>
+            </div>
+            <el-tooltip
+              v-if="row.receivedNetAmount != null && num(row.receivedNetAmount) !== num(row.receivedAmount)"
+              placement="top"
+            >
+              <template #content>
+                正向实收：¥{{ formatAmount(row.receivedPositiveAmount) }}<br />
+                负向实收：¥{{ formatAmount(row.receivedNegativeAmount) }}
+              </template>
+              <div :class="['received-net-line', num(row.receivedNetAmount) < 0 ? 'received-net-negative' : 'amount-received']">
+                净额 ¥{{ formatAmount(row.receivedNetAmount) }}
+              </div>
+            </el-tooltip>
           </template>
         </el-table-column>
         <!-- 结佣业绩：紧随「实收金额」之后；不可设 fixed，否则被冻结到「合同号」右侧，
@@ -404,7 +422,7 @@ const queryParams = reactive({
 });
 
 // 汇总统计：后端按过滤后全集返回（跨页全局，不随分页变化）
-const emptySummary = () => ({ contractCount: 0, employeeCount: 0, detailCount: 0, totalAmount: 0, totalConvertedAmount: 0, totalExpectedAmount: 0, totalExpectedConvertedAmount: 0, totalReceivedAmount: 0 });
+const emptySummary = () => ({ contractCount: 0, employeeCount: 0, detailCount: 0, totalAmount: 0, totalConvertedAmount: 0, totalExpectedAmount: 0, totalExpectedConvertedAmount: 0, totalReceivedAmount: 0, totalReceivedNetAmount: 0 });
 const summary = ref(emptySummary());
 
 // 数字安全转换
@@ -505,6 +523,7 @@ const getList = async () => {
       totalExpectedAmount: num(data?.summary?.totalExpectedAmount),
       totalExpectedConvertedAmount: num(data?.summary?.totalExpectedConvertedAmount),
       totalReceivedAmount: num(data?.summary?.totalReceivedAmount),
+      totalReceivedNetAmount: num(data?.summary?.totalReceivedNetAmount),
     };
     // 「已退单」标记：批量查这些合同最近一次已执行退单的落账月（无权限时静默忽略，不影响列表）
     const contractNos = Array.from(new Set(contractList.value
@@ -780,6 +799,10 @@ onMounted(async () => {
       color: #dcdfe6;
       margin: 0 6px;
     }
+
+    .received-net-negative {
+      color: #f56c6c;
+    }
   }
 }
 
@@ -822,6 +845,22 @@ onMounted(async () => {
   }
   .amount-received {
     color: #e6a23c;
+  }
+
+  /* 实收正向金额下方并列展示净额（存在负向实收时） */
+  .received-row {
+    line-height: 1.4;
+  }
+  .received-net-line {
+    margin-top: 2px;
+    padding-top: 2px;
+    border-top: 1px dashed #ebeef5;
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .received-net-negative {
+    color: #f56c6c;
   }
 }
 

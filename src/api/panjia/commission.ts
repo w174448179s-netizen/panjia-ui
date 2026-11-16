@@ -93,10 +93,24 @@ export interface CommissionItemDetail {
   receivedAmount?: number;
   /** 实收金额原值（调整前：配对 rd 行 sourceKey 链最早 REVERSED 金额，实收加人新人行按 0；未调整时 = receivedAmount） */
   originalReceivedAmount?: number;
+  /** 行级正向实收（仅正向单且同键无负向单时下发） */
+  receivedPositiveAmount?: number;
+  /** 行级负向实收（仅正向单且同键无负向单时下发） */
+  receivedNegativeAmount?: number;
+  /** 行级实收净额 = 正向 + 负向（仅正向单且同键无负向单时下发） */
+  receivedNetAmount?: number;
   /** 本单实收合计（合同级到账窗口口径，与结佣列表行同源；不依赖员工/角色配对，明细行逐行求和可能偏少） */
   contractReceivedAmount?: number;
   /** 本单实收合计原值（合同级窗口口径，与 contractReceivedAmount 不等时展示「原值 → 调整后值」） */
   contractOriginalReceivedAmount?: number;
+  /** 本单实收正向合计（合同级窗口口径，仅正向单且同键无负向单时下发） */
+  contractReceivedPositiveAmount?: number;
+  /** 本单实收负向合计（合同级窗口口径，仅正向单且同键无负向单时下发） */
+  contractReceivedNegativeAmount?: number;
+  /** 本单实收净额 = 正向 + 负向（合同级窗口口径，仅正向单且同键无负向单时下发） */
+  contractReceivedNetAmount?: number;
+  /** 本单实收净额调整前原值（用于「原值 → 调整后值」展示） */
+  contractOriginalReceivedNetAmount?: number;
 }
 
 export interface CommissionApplyQuery extends PageQuery {
@@ -156,6 +170,12 @@ export interface CommissionContractVO {
   createTime?: string;
   /** 实收金额合计（PERF_REAL 事实当前 ACTIVE 金额求和，即客户实际到账） */
   receivedAmount?: number;
+  /** 发起页展示用：到账归属窗口内正向实收合计（仅无负向新签行时下发） */
+  receivedPositiveAmount?: number;
+  /** 发起页展示用：到账归属窗口内负向实收合计（仅无负向新签行时下发） */
+  receivedNegativeAmount?: number;
+  /** 发起页展示用：到账归属窗口内实收净额 = 正向 + 负向（仅无负向新签行时下发） */
+  receivedNetAmount?: number;
   /** 实收金额原值合计（调整前：实收事实链最早 REVERSED 金额求和；仅 receivedAmountAdjusted=true 时有值） */
   originalReceivedAmount?: number;
   /** 实收金额已被实收调整（含联动）改过 */
