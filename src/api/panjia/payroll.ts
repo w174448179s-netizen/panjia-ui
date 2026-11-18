@@ -305,10 +305,10 @@ export const payrollApi = {
     return panjiaRequest.post<string>('/payroll/manual-item/importData', form);
   },
   exportManual(period: string, fileName: string) {
-    return download('/payroll/manual-item/export', { period }, fileName);
+    return download('/api/panjia/payroll/manual-item/export', { period }, fileName);
   },
   downloadManualTemplate() {
-    return download('/payroll/manual-item/importTemplate', {}, '其他收支导入模板.xlsx');
+    return download('/api/panjia/payroll/manual-item/importTemplate', {}, '其他收支导入模板.xlsx');
   },
 };
 
