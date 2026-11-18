@@ -360,7 +360,7 @@
       </el-descriptions>
 
       <div class="detail-summary-bar">
-        <span>新签业绩构成：涉及 <b>{{ detailEmployees }}</b> 人 · <b>{{ detailList.length }}</b> 条明细（新签跨全部期间；实收按本行到账归属窗口，正负分列）</span>
+        <span>新签业绩构成：涉及 <b>{{ detailEmployees }}</b> 人 · <b>{{ detailList.length }}</b> 条明细（新签按本行方向跨全部期间；实收按本行到账归属窗口，正负分列）</span>
         <span class="detail-total">
           新签合计：<b :class="{ 'amount-negative': detailTotal < 0 }">{{ formatAmount(detailTotal) }}</b>
           ｜实收净额：<b :class="{ 'detail-net-negative': detailReceivedNet < 0 }">{{ formatAmount(detailReceivedNet) }}</b>
@@ -815,11 +815,15 @@ const openDetail = async (row: CommissionContractVO) => {
     const includeBoth = row.receivedNetAmount != null;
     const excludePeriods = new Set(row.receivedExcludePeriods ?? []);
     const realRows: PerformanceManageRow[] = realRes.data ?? [];
-    // 实收金额按 员工ID+角色 聚合；originalAmount 为实收事实链调整前原值。
+    // 实收金额按 员工ID+角色+期间 聚合；originalAmount 为实收事实链调整前原值。
     // 与新签明细用同一员工键（员工ID优先、工号兜底），避免工号变更/补行导致实收配不上
     const empKey = (r: PerformanceManageRow) =>
       r.employeeId ? `id:${r.employeeId}` : `code:${r.employeeCode ?? ''}`;
     const shareKey = (r: PerformanceManageRow) => `${empKey(r)}|${r.roleType ?? ''}`;
+    // 期间+状态参与聚合键：同一员工+角色在多个期间/状态的实收与新签各归各桶，
+    // 不再跨期重复挂到每一条明细上，也不会把作废行和有效行合并
+    const periodKey = (r: PerformanceManageRow) =>
+      `${shareKey(r)}|${r.period ?? ''}|${r.factStatus ?? ''}`;
     const positiveMap = new Map<string, number>();
     const negativeMap = new Map<string, number>();
     const positiveOriginalMap = new Map<string, number>();
@@ -836,7 +840,7 @@ const openDetail = async (row: CommissionContractVO) => {
         if (direction === 'POS' && amt < 0) continue;
         if (direction === 'NEG' && amt > 0) continue;
       }
-      const key = shareKey(r);
+      const key = periodKey(r);
       if (!realMeta.has(key)) realMeta.set(key, r);
       const orig = num(r.originalAmount ?? r.amount);
       if (amt >= 0) {
@@ -847,30 +851,55 @@ const openDetail = async (row: CommissionContractVO) => {
         negativeOriginalMap.set(key, (negativeOriginalMap.get(key) ?? 0) + orig);
       }
     }
-    const expectRows = (expectRes.data ?? []) as CommissionDetailRow[];
-    const expectKeys = new Set(expectRows.map(shareKey));
-    const detailRows: CommissionDetailRow[] = expectRows.map((r) => {
-      const key = shareKey(r);
+    // 正负向拆分行只展示本方向的新签，避免正向行里混入负向划转、负向行里混入正向业绩
+    const expectRows = ((expectRes.data ?? []) as CommissionDetailRow[]).filter((r) => {
+      if (includeBoth) return true;
+      if (direction === 'POS') return num(r.amount) > 0;
+      if (direction === 'NEG') return num(r.amount) < 0;
+      return true;
+    });
+    // 同一员工+角色+期间可能有多条费用项事实（如贷款、居间），合并成一行，实收只挂一次，
+    // 否则同一个人在 9 月的两行明细会各显示一遍 9 月实收，明细合计翻倍
+    const expectAgg = new Map<string, CommissionDetailRow>();
+    for (const r of expectRows) {
+      const key = periodKey(r);
+      const cur = expectAgg.get(key);
+      if (!cur) {
+        expectAgg.set(key, {
+          ...r,
+          amount: num(r.amount),
+          convertedAmount: r.convertedAmount == null ? null : num(r.convertedAmount),
+        });
+      } else {
+        cur.amount = num(cur.amount) + num(r.amount);
+        cur.convertedAmount = cur.convertedAmount == null || r.convertedAmount == null
+          ? null
+          : num(cur.convertedAmount) + num(r.convertedAmount);
+      }
+    }
+    const detailRows: CommissionDetailRow[] = [];
+    for (const [key, r] of expectAgg) {
       const pos = positiveMap.get(key) ?? 0;
       const neg = negativeMap.get(key) ?? 0;
-      return {
+      detailRows.push({
         ...r,
         receivedPositiveAmount: pos,
         receivedNegativeAmount: neg,
         receivedNetAmount: pos + neg,
         originalReceivedNetAmount: (positiveOriginalMap.get(key) ?? 0) + (negativeOriginalMap.get(key) ?? 0),
-      };
-    });
-    // 仅实收、没有对应新签的员工（常见于退款/调减）补兜底行，保证明细合计与行上净额一致
+      });
+    }
+    // 仅实收、同期间没有对应新签的桶（常见于跨期到账/退款/调减）补兜底行，
+    // 保证明细合计与行上净额一致
     for (const [key, meta] of realMeta) {
-      if (expectKeys.has(key)) continue;
+      if (expectAgg.has(key)) continue;
       const pos = positiveMap.get(key) ?? 0;
       const neg = negativeMap.get(key) ?? 0;
       if (pos === 0 && neg === 0) continue;
       detailRows.push({
         ...meta,
         factType: 'PERF_REAL',
-        period: '',
+        period: meta.period ?? '',
         businessDate: '',
         amount: 0,
         originalAmount: null,
