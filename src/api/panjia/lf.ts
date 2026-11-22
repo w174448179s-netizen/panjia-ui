@@ -23,6 +23,7 @@ export interface LfStatementQuery {
   incomeExpenseType?: string;
   transactionType?: string;
   category?: string;
+  subjectId?: LfId;
   /** true=去化（售前房屋美化）流水；false=普通流水 */
   decorationFlag?: boolean;
   allocStatus?: string;
@@ -123,6 +124,7 @@ export interface LfDiffReceivedLine {
   id: LfId;
   period?: string;
   employeeId?: LfId;
+  deptName?: string;
   roleName?: string;
   roleType?: string;
   performanceAmount?: number;
@@ -151,6 +153,12 @@ export const lfApi = {
     return unwrap<PageResult<LfStatement>>(
       panjiaRequest.get('/ledger/lf/list', params as Record<string, unknown>)
     );
+  },
+  listTransactionTypes() {
+    return unwrap<string[]>(panjiaRequest.get('/ledger/lf/transactionTypes'));
+  },
+  listExpenseSubjects() {
+    return unwrap<Array<{ id: LfId; subjectName: string }>>(panjiaRequest.get('/ledger/lf/expenseSubjects'));
   },
   importStatements(file: File, storeDeptId: LfId) {
     const formData = new FormData();

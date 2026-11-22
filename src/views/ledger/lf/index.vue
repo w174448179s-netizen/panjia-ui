@@ -77,14 +77,33 @@
           </el-select>
         </el-form-item>
         <el-form-item label="交易类型">
-          <el-input
+          <el-select
             v-model="query.transactionType"
-            placeholder="输入交易类型"
+            placeholder="全部"
             clearable
+            filterable
             style="width: 160px"
-            @keyup.enter="handleSearch"
-            @clear="handleSearch"
-          />
+            @change="handleSearch"
+          >
+            <el-option v-for="item in transactionTypeOptions" :key="item" :label="item" :value="item" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="费用科目">
+          <el-select
+            v-model="query.subjectId"
+            placeholder="全部"
+            clearable
+            filterable
+            style="width: 180px"
+            @change="handleSearch"
+          >
+            <el-option
+              v-for="item in expenseSubjectOptions"
+              :key="item.id"
+              :label="item.subjectName"
+              :value="item.id"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="划归状态">
           <el-select
@@ -313,7 +332,7 @@
           <span>覆盖：{{ importResult.updateRows }}</span>
           <span>跳过：{{ importResult.skippedRows }}</span>
           <span>匹配合同：{{ importResult.matchContractCount }}</span>
-          <span>一致：{{ importResult.matchedCount }}</span>
+          <span>匹配通过（含容差）：{{ importResult.matchedCount }}</span>
           <span>差异：{{ importResult.diffCount }}</span>
           <span>未找到实收：{{ importResult.notFoundCount }}</span>
           <span>待补角色人：{{ importResult.pendingSignRoleCount }}</span>
@@ -412,10 +431,7 @@
     <el-dialog v-model="diffVisible" title="理房通流水与实收差异" width="980px">
       <div class="diff-toolbar">
         <el-select v-model="diffQuery.matchStatus" placeholder="全部状态" clearable style="width: 160px" @change="handleDiffSearch">
-          <el-option label="一致" value="MATCHED" />
-          <el-option label="金额差异" value="AMOUNT_DIFF" />
-          <el-option label="未找到实收" value="NOT_FOUND" />
-          <el-option label="待补新签角色人" value="PENDING_SIGN_ROLE" />
+          <el-option v-for="item in matchStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
         <el-input
           v-model="diffQuery.contractNo"
@@ -500,10 +516,11 @@
           </el-table-column>
         </el-table>
 
-        <div class="detail-title">系统实收</div>
+        <div class="detail-title">系统实收（原始导入，不含调整）</div>
         <el-table :data="diffDetail?.receivedLines || []" border size="small" max-height="260">
           <el-table-column prop="period" label="归属月" width="90" align="center" />
           <el-table-column prop="employeeId" label="员工ID" width="180" show-overflow-tooltip />
+          <el-table-column prop="deptName" label="门店组别" min-width="140" show-overflow-tooltip />
           <el-table-column prop="roleName" label="角色" width="110" />
           <el-table-column prop="roleType" label="角色类型" width="110" />
           <el-table-column label="实收金额" width="120" align="right">
@@ -536,6 +553,8 @@ const { deptTreeRaw, loadDeptTree } = useDeptScope();
 const loading = ref(false);
 const rows = ref<LfStatement[]>([]);
 const accounts = ref<LfAccount[]>([]);
+const transactionTypeOptions = ref<string[]>([]);
+const expenseSubjectOptions = ref<Array<{ id: string | number; subjectName: string }>>([]);
 const pageNum = ref(1);
 const pageSize = ref(20);
 const total = ref(0);
@@ -546,6 +565,7 @@ const query = reactive<LfStatementQuery>({
   incomeExpenseType: '',
   transactionType: '',
   category: '',
+  subjectId: undefined,
   decorationFlag: undefined,
   allocStatus: '',
   matchStatus: '',
@@ -555,13 +575,15 @@ const query = reactive<LfStatementQuery>({
 const categoryOptions = [
   { label: '业务收入', value: 'BUSINESS' },
   { label: '费用支出', value: 'FEE' },
+  { label: '部门收入', value: 'DEPT_INCOME' },
   { label: '业务冲减', value: 'REVERSAL' },
   { label: '提现', value: 'WITHDRAW' },
   { label: '非业务', value: 'NON_BUSINESS' }
 ];
 
 const matchStatusOptions = [
-  { label: '一致', value: 'MATCHED' },
+  { label: '完全一致', value: 'MATCHED' },
+  { label: '容差匹配', value: 'TOLERANCE_MATCH' },
   { label: '金额差异', value: 'AMOUNT_DIFF' },
   { label: '未找到实收', value: 'NOT_FOUND' },
   { label: '待补新签角色人', value: 'PENDING_SIGN_ROLE' }
@@ -673,6 +695,14 @@ async function loadAccounts() {
   accounts.value = page.rows || [];
 }
 
+async function loadTransactionTypes() {
+  transactionTypeOptions.value = await lfApi.listTransactionTypes();
+}
+
+async function loadExpenseSubjects() {
+  expenseSubjectOptions.value = await lfApi.listExpenseSubjects();
+}
+
 async function loadRows() {
   loading.value = true;
   try {
@@ -708,6 +738,7 @@ function resetQuery() {
   query.incomeExpenseType = '';
   query.transactionType = '';
   query.category = '';
+  query.subjectId = undefined;
   query.decorationFlag = undefined;
   query.allocStatus = '';
   query.matchStatus = '';
@@ -790,7 +821,7 @@ async function pollImportResult(batchId: string | number) {
       } else {
         ElMessage.error('理房通流水导入失败，请查看失败原因');
       }
-      await loadRows().catch(() => undefined);
+      await Promise.all([loadRows(), loadTransactionTypes()]).catch(() => undefined);
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -946,13 +977,14 @@ function matchStatusLabel(value?: string) {
 
 function matchTagType(value?: string) {
   if (value === 'MATCHED') return 'success';
+  if (value === 'TOLERANCE_MATCH') return 'danger';
   if (value === 'AMOUNT_DIFF') return 'warning';
   if (value === 'NOT_FOUND') return 'danger';
   return 'info';
 }
 
 onMounted(async () => {
-  await Promise.all([loadAccounts(), loadDeptTree(), loadRows()]);
+  await Promise.all([loadAccounts(), loadDeptTree(), loadRows(), loadTransactionTypes(), loadExpenseSubjects()]);
 });
 
 onBeforeUnmount(() => {
