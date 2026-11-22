@@ -537,7 +537,7 @@ const loading = ref(false);
 const rows = ref<LfStatement[]>([]);
 const accounts = ref<LfAccount[]>([]);
 const pageNum = ref(1);
-const pageSize = ref(50);
+const pageSize = ref(20);
 const total = ref(0);
 
 const query = reactive<LfStatementQuery>({
