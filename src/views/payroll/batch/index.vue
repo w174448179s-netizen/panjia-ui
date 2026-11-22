@@ -996,13 +996,14 @@ const openFromWorkflow = async () => {
 /* ───────────── 合计行：computed 一次预算，summaryMethod 仅做 O(列数) 查找 ─────────────
  * el-table 主表 + fixed 列表会多次调用 summary-method，原实现每次对十几个金额列各做一次
  * 全量 reduce（约 14N 次/调用），滚动/重渲染都可能触发；改为 computed 遍历一次并缓存，
- * 数据引用不变就不重算。口径与原来完全一致：工资/店长/总监为全量，新签/结佣随筛选联动。
+ * 数据引用不变就不重算。口径：合计跟随当前门店/员工筛选后的查询结果（与新签/结佣一致），
+ * 不再按批次全量汇总；分页仅影响当前页展示，合计仍取筛选后的全部行。
  */
 const SALARY_MONEY_PROPS = ['commissionIncome', 'mentorBonus', 'bonus', 'pointsFee', 'gross', 'socialFee', 'housingFund', 'commercialInsurance', 'dormitoryFee', 'net', 'tax'];
 const SALARY_DEDUCT = new Set(['pointsFee', 'socialFee', 'housingFund', 'commercialInsurance', 'dormitoryFee', 'tax']);
 const salaryTotals = computed<Record<string, number>>(() => {
   const t: Record<string, number> = {};
-  for (const r of salaryDetails.value) {
+  for (const r of ag.filtered) {
     for (const p of SALARY_MONEY_PROPS) t[p] = (t[p] || 0) + (Number((r as any)[p]) || 0);
     t.baseSalaryTotal = (t.baseSalaryTotal || 0) + baseSalaryOf(r);
     t.grossDeductTotal = (t.grossDeductTotal || 0) + grossMinusDeduct(r);
@@ -1012,7 +1013,7 @@ const salaryTotals = computed<Record<string, number>>(() => {
 
 const summaryMethod = ({ columns }: any) => {
   const sums: string[] = [];
-  // 合计固定全量口径（分页后 data 只是当前页），与批次导出对账一致
+  // 合计取筛选后的全部行（分页后 data 只是当前页，不参与合计），与列表查询结果一致
   const t = salaryTotals.value;
   columns.forEach((col: any, idx: number) => {
     if (idx === 0) {
@@ -1054,7 +1055,7 @@ const MANAGER_MONEY_PROPS = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'dep
 const MANAGER_DEDUCT = new Set(['deptEmployerSocialTotal', 'deptDiffAmount', 'otherDeduct']);
 const managerTotals = computed<Record<string, number>>(() => {
   const t: Record<string, number> = {};
-  for (const r of managerDetails.value) {
+  for (const r of mf.filtered) {
     for (const p of MANAGER_MONEY_PROPS) t[p] = (t[p] || 0) + (Number((r as any)[p]) || 0);
   }
   return t;
@@ -1062,7 +1063,7 @@ const managerTotals = computed<Record<string, number>>(() => {
 
 const managerSummary = ({ columns }: any) => {
   const sums: string[] = [];
-  // 店长工资 = teamIncome + guaranteeFill（保底补足），不含结佣提成和个人新签递延；合计固定全量口径
+  // 店长工资 = teamIncome + guaranteeFill（保底补足），不含结佣提成和个人新签递延；合计随门店/员工筛选联动
   const t = managerTotals.value;
   columns.forEach((col: any, idx: number) => {
     if (idx === 0) {
@@ -1086,9 +1087,10 @@ const managerSummary = ({ columns }: any) => {
 const DIRECTOR_MONEY_PROPS = ['deptNewSignTotal', 'deptEmployerSocialTotal', 'deptDiffAmount', 'storeIncome', 'baseSalary', 'bonus', 'commissionPerformance', 'commissionIncome', 'mentorBonus', 'socialFee', 'housingFund', 'commercialInsurance', 'gross', 'tax', 'net'];
 const DIRECTOR_DEDUCT = new Set(['deptEmployerSocialTotal', 'deptDiffAmount', 'socialFee', 'housingFund', 'commercialInsurance', 'tax']);
 const directorTotals = computed<Record<string, number>>(() => {
-  // 只汇总顶层汇总行（directorDetails），避免树形子行 double-count；合计固定全量口径
+  // 只汇总筛选后的顶层汇总行，避免树形子行 double-count；合计随门店/员工筛选联动
   const t: Record<string, number> = {};
-  for (const r of directorDetails.value) {
+  for (const r of df.filtered) {
+    if ((r as DirectorTreeNode)._isSummary !== true) continue;
     for (const p of DIRECTOR_MONEY_PROPS) t[p] = (t[p] || 0) + (Number((r as any)[p]) || 0);
   }
   return t;
