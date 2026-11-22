@@ -151,6 +151,9 @@
         <div class="lf-toolbar-left">
           <span class="lf-toolbar-title">流水明细</span>
           <span class="lf-toolbar-count">共 {{ total }} 条</span>
+          <span class="lf-toolbar-count">
+            交易金额合计：<b :class="{ negative: totalTransactionAmount < 0 }">{{ formatMoney(totalTransactionAmount) }}</b>
+          </span>
         </div>
         <div class="lf-toolbar-right">
           <span class="lf-selected">已选 {{ selectedRows.length }} 条费用流水</span>
@@ -212,7 +215,7 @@
         <el-table-column label="费用归属组" width="150" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.expenseDeptName">{{ row.expenseDeptName }}</span>
-            <el-tag v-else-if="row.category === 'FEE'" type="danger" size="small">待划归</el-tag>
+            <el-tag v-else-if="['FEE', 'DEPT_INCOME'].includes(row.category)" type="danger" size="small">待划归</el-tag>
             <span v-else>-</span>
           </template>
         </el-table-column>
@@ -249,7 +252,7 @@
         <el-table-column label="操作" width="90" fixed="right" align="center">
           <template #default="{ row }">
             <el-button
-              v-if="row.category === 'FEE'"
+              v-if="['FEE', 'DEPT_INCOME'].includes(row.category)"
               link
               type="primary"
               v-hasPermi="['ledger:lf:alloc']"
@@ -567,6 +570,7 @@ const expenseSubjectOptions = ref<Array<{ id: string | number; subjectName: stri
 const pageNum = ref(1);
 const pageSize = ref(20);
 const total = ref(0);
+const totalTransactionAmount = ref(0);
 
 const query = reactive<LfStatementQuery>({
   period: '',
@@ -722,6 +726,7 @@ async function loadRows() {
     });
     rows.value = page.rows || [];
     total.value = Number(page.total || 0);
+    totalTransactionAmount.value = Number(page.summary?.totalTransactionAmount || 0);
     if (rows.value.length === 0 && total.value > 0 && pageNum.value > 1) {
       pageNum.value = 1;
       await loadRows();
@@ -760,7 +765,7 @@ function handleSelectionChange(selection: LfStatement[]) {
 }
 
 function canAllocate(row: any) {
-  return row.category === 'FEE';
+  return ['FEE', 'DEPT_INCOME'].includes(row.category);
 }
 
 function openImport() {
@@ -843,9 +848,9 @@ function openAllocForRow(row: any) {
 }
 
 function openAlloc() {
-  allocRows.value = selectedRows.value.filter((r) => r.category === 'FEE');
+  allocRows.value = selectedRows.value.filter((r) => ['FEE', 'DEPT_INCOME'].includes(r.category));
   if (!allocRows.value.length) {
-    ElMessage.warning('请选择费用类流水');
+    ElMessage.warning('请选择费用支出或部门收入流水');
     return;
   }
   allocDeptId.value = null;
@@ -867,7 +872,7 @@ async function submitAlloc() {
       allocRows.value.map((r) => r.id),
       allocDeptId.value
     );
-    ElMessage.success(`已划归 ${count} 条费用`);
+    ElMessage.success(`已划归 ${count} 条流水`);
     allocVisible.value = false;
     await loadRows();
   } finally {
