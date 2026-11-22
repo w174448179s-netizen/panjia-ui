@@ -26,10 +26,9 @@
           <table class="report-table">
             <thead>
               <tr>
-                <th class="subject-col">一级科目</th>
-                <th class="subject-col">二级科目</th>
-                <th class="subject-col">三级科目</th>
-                <th class="subject-col">四级科目</th>
+                <th v-for="level in maxSubjectLevel" :key="level" class="subject-col">
+                  {{ levelLabel(level) }}
+                </th>
                 <th v-for="col in report.columns" :key="col.deptId" class="dept-col">
                   {{ col.deptName }}
                 </th>
@@ -46,10 +45,10 @@
                 }"
               >
                 <template v-if="row.totalRow">
-                  <td :colspan="4" class="label-cell">{{ row.totalLabel }}</td>
+                  <td :colspan="maxSubjectLevel" class="label-cell">{{ row.totalLabel }}</td>
                 </template>
                 <template v-else>
-                  <template v-for="level in 4" :key="level">
+                  <template v-for="level in maxSubjectLevel" :key="level">
                     <td
                       v-if="row.spans[level - 1]"
                       :rowspan="row.spans[level - 1]"
@@ -58,6 +57,11 @@
                       {{ row.level === level ? row.subjectName : '' }}
                     </td>
                   </template>
+                  <td
+                    v-for="pad in emptySubjectCellCount(row)"
+                    :key="`pad-${pad}`"
+                    class="subject-cell empty-cell"
+                  ></td>
                 </template>
                 <td
                   v-for="ci in report.columns.length"
@@ -85,7 +89,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import * as XLSX from 'xlsx';
 import { ledgerApi, type LedgerReport } from '@/api/panjia/ledger';
@@ -93,6 +97,20 @@ import { ledgerApi, type LedgerReport } from '@/api/panjia/ledger';
 const loading = ref(false);
 const period = ref(currentMonth());
 const report = ref<LedgerReport | null>(null);
+
+const levelLabels = ['一级科目', '二级科目', '三级科目', '四级科目'];
+
+/** 报表固定最多展示四级，按实际配置的科目层级决定列数 */
+const maxSubjectLevel = computed(() => {
+  const levels = (report.value?.rows || [])
+    .filter((row) => !row.totalRow)
+    .map((row) => Number(row.level) || 0);
+  return Math.min(4, Math.max(1, ...levels));
+});
+
+function levelLabel(level: number) {
+  return levelLabels[level - 1] || `${level}级科目`;
+}
 
 function currentMonth() {
   const now = new Date();
@@ -122,10 +140,16 @@ function isNegative(value?: number | null) {
   return typeof value === 'number' && value < 0;
 }
 
+/** 当前行只渲染到自己的层级，后面补空单元格，避免金额列错位 */
+function emptySubjectCellCount(row: { level?: number }) {
+  return Math.max(0, maxSubjectLevel.value - (row.level || 0));
+}
+
 function exportExcel() {
   if (!report.value) return;
   const data = report.value;
-  const header = ['一级科目', '二级科目', '三级科目', '四级科目', ...data.columns.map((c) => c.deptName), '合计'];
+  const levelCount = maxSubjectLevel.value;
+  const header = [...levelLabels.slice(0, levelCount), ...data.columns.map((c) => c.deptName), '合计'];
   const title = `${data.rootDeptName} 部门收支分析表（${data.period}）`;
   const aoa: any[][] = [[title], header];
   const merges: any[] = [
@@ -135,15 +159,16 @@ function exportExcel() {
   data.rows.forEach((row, rowIndex) => {
     const excelRow = rowIndex + 2;
     if (row.totalRow) {
-      const line: any[] = [row.totalLabel || '', '', '', ''];
+      const line: any[] = Array(levelCount).fill('');
+      line[0] = row.totalLabel || '';
       for (let ci = 0; ci < data.columns.length; ci++) line.push(exportValue(row.values?.[ci]));
       line.push(exportValue(row.total));
       aoa.push(line);
-      merges.push({ s: { r: excelRow, c: 0 }, e: { r: excelRow, c: 3 } });
+      merges.push({ s: { r: excelRow, c: 0 }, e: { r: excelRow, c: levelCount - 1 } });
       return;
     }
-    const levels = ['', '', '', ''];
-    if (row.level >= 1 && row.level <= 4) {
+    const levels: string[] = Array(levelCount).fill('');
+    if (row.level >= 1 && row.level <= levelCount) {
       levels[row.level - 1] = row.subjectName || '';
     }
     const line: any[] = [...levels];
@@ -151,7 +176,7 @@ function exportExcel() {
     line.push(exportValue(row.total));
     aoa.push(line);
 
-    for (let lv = 0; lv < 4; lv++) {
+    for (let lv = 0; lv < levelCount; lv++) {
       const span = row.spans?.[lv] || 0;
       if (span > 1 && levels[lv]) {
         merges.push({ s: { r: excelRow, c: lv }, e: { r: excelRow + span - 1, c: lv } });
@@ -162,10 +187,7 @@ function exportExcel() {
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!merges'] = merges;
   ws['!cols'] = [
-    { wch: 14 },
-    { wch: 14 },
-    { wch: 14 },
-    { wch: 14 },
+    ...Array.from({ length: levelCount }, () => ({ wch: 14 })),
     ...data.columns.map(() => ({ wch: 14 })),
     { wch: 14 }
   ];
@@ -258,6 +280,9 @@ onMounted(loadReport);
 .subject-cell.level-1 {
   background: #f2f6fb;
   font-weight: 600;
+}
+.empty-cell {
+  background: #fff;
 }
 .money-cell {
   text-align: right;
