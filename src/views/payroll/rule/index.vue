@@ -85,6 +85,7 @@
             <el-col :span="8">
               <el-form-item label="社保基数">
                 <el-input-number v-model="policyForm.baseSocial" :precision="2" :controls="false" style="width:100%" />
+                <span class="form-tip" style="margin-left:8px">默认值，门店可在「门店社保标准」单独设置</span>
               </el-form-item>
             </el-col>
             <el-col :span="8">
@@ -292,12 +293,20 @@
       <el-tab-pane label="门店社保标准" name="deptSocial">
         <div class="policy-toolbar">
           <span class="policy-title">
-            门店社保扣减标准（每人每月固定额，算薪时 = 标准 × 计缴参保人数；计缴人数 = 非兼职、已参保且个人社保比例&gt;30%）
+            门店社保标准（社保基数按门店设置，算薪时个人社保 = 基数 × 职级比例；扣减标准 = 标准 × 计缴参保人数；计缴人数 = 非兼职、已参保且个人社保比例&gt;30%）
           </span>
           <el-button type="primary" :loading="socialSaving" @click="saveSocialStandards">保存</el-button>
         </div>
         <el-table :data="storeList" stripe border>
           <el-table-column label="部门（业务组）" prop="deptName" min-width="180" />
+          <el-table-column label="社保基数（元/月）" width="200" align="center">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="socialRows[String(row.deptId)].baseSocial"
+                :min="0" :precision="2" :controls="false" :placeholder="`默认 ${globalBaseSocial()}`" style="width:160px"
+              />
+            </template>
+          </el-table-column>
           <el-table-column label="社保扣减标准（元/人/月）" width="240" align="center">
             <template #default="{ row }">
               <el-input-number
@@ -828,22 +837,28 @@ const saveConversion = async () => {
 // ==================== 门店社保标准（DEPT 政策 socialStandard） ====================
 const storeList = ref<StoreDept[]>([]);
 const socialSaving = ref(false);
-/** deptId(字符串) → 编辑行（标准/已存在政策 id/生效日）；雪花 ID 一律字符串键，禁止 Number 转换 */
+/** deptId(字符串) → 编辑行（社保基数/扣减标准/已存在政策 id/生效日）；雪花 ID 一律字符串键，禁止 Number 转换 */
 interface SocialRow {
   standard: number | null;
+  baseSocial: number | null;
   id?: number | string;
   effectiveFrom?: string;
 }
 const socialRows = reactive<Record<string, SocialRow>>({});
+
+/** 全局政策（GLOBAL）的社保基数：门店未单独配置时的默认值 */
+const globalBaseSocial = () =>
+  policyList.value.find((p) => p.scopeType === 'GLOBAL')?.baseSocial ?? 1637.15;
 
 const buildSocialRows = () => {
   const deptPolicies = policyList.value.filter((p) => p.scopeType === 'DEPT');
   storeList.value.forEach((s) => {
     const key = String(s.deptId);
     const p = deptPolicies.find((x) => x.scopeKey === key);
+    // baseSocial 为 null 表示未按门店配置（算薪回退全局默认值，输入框显示占位提示）
     socialRows[key] = p
-      ? { standard: safeParse(p.ruleContent).socialStandard ?? null, id: p.id, effectiveFrom: p.effectiveFrom }
-      : { standard: null };
+      ? { standard: safeParse(p.ruleContent).socialStandard ?? null, baseSocial: p.baseSocial ?? null, id: p.id, effectiveFrom: p.effectiveFrom }
+      : { standard: null, baseSocial: null };
   });
 };
 
@@ -855,18 +870,23 @@ const todayStr = () => {
 const saveSocialStandards = async () => {
   socialSaving.value = true;
   try {
+    const defaultBase = globalBaseSocial();
     for (const s of storeList.value) {
       const key = String(s.deptId);
       const row = socialRows[key];
-      if (!row || row.standard == null) {
-        continue; // 未填 = 不生成配置（算薪按 0）
+      if (!row || (row.standard == null && row.baseSocial == null)) {
+        continue; // 基数与标准均未填 = 不生成配置（算薪回退全局基数 / 扣减按 0）
+      }
+      const content: Record<string, number> = {};
+      if (row.standard != null) {
+        content.socialStandard = row.standard;
       }
       await payrollApi.savePolicy({
         id: row.id as number,
         scopeType: 'DEPT',
         scopeKey: key,
-        baseSocial: 1637.15,
-        ruleContent: JSON.stringify({ socialStandard: row.standard }),
+        baseSocial: row.baseSocial ?? defaultBase,
+        ruleContent: JSON.stringify(content),
         effectiveFrom: row.effectiveFrom || todayStr(),
       } as PolicyRule);
     }
