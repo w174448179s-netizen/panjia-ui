@@ -430,6 +430,16 @@
 
     <el-dialog v-model="diffVisible" title="理房通流水与实收差异" width="980px">
       <div class="diff-toolbar">
+        <el-select
+          v-model="diffQuery.storeDeptId"
+          placeholder="全部部门"
+          clearable
+          filterable
+          style="width: 180px"
+          @change="handleDiffSearch"
+        >
+          <el-option v-for="s in storeOptions" :key="s.value" :label="s.label" :value="s.value" />
+        </el-select>
         <el-select v-model="diffQuery.matchStatus" placeholder="全部状态" clearable style="width: 160px" @change="handleDiffSearch">
           <el-option v-for="item in matchStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
@@ -519,7 +529,6 @@
         <div class="detail-title">系统实收（原始导入，不含调整）</div>
         <el-table :data="diffDetail?.receivedLines || []" border size="small" max-height="260">
           <el-table-column prop="period" label="归属月" width="90" align="center" />
-          <el-table-column prop="employeeId" label="员工ID" width="180" show-overflow-tooltip />
           <el-table-column prop="deptName" label="门店组别" min-width="140" show-overflow-tooltip />
           <el-table-column prop="roleName" label="角色" width="110" />
           <el-table-column prop="roleType" label="角色类型" width="110" />
@@ -657,7 +666,7 @@ const diffList = ref<LfMatchResult[]>([]);
 const diffPageNum = ref(1);
 const diffPageSize = ref(20);
 const diffTotal = ref(0);
-const diffQuery = reactive({ matchStatus: '', contractNo: '' });
+const diffQuery = reactive({ matchStatus: '', contractNo: '', storeDeptId: undefined as string | number | undefined });
 
 const detailVisible = ref(false);
 const detailLoading = ref(false);

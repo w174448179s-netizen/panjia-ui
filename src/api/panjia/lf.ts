@@ -181,7 +181,7 @@ export const lfApi = {
   rematchSubject(storeDeptId?: LfId) {
     return unwrap<number>(panjiaRequest.post('/ledger/lf/rematchSubject', null, { params: { storeDeptId } }));
   },
-  diffList(params?: { matchStatus?: string; contractNo?: string } & PageQuery) {
+  diffList(params?: { matchStatus?: string; contractNo?: string; storeDeptId?: LfId } & PageQuery) {
     return unwrap<PageResult<LfMatchResult>>(panjiaRequest.get('/ledger/lf/diff/list', params));
   },
   diffDetail(contractNo: string) {
