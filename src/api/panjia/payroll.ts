@@ -257,6 +257,9 @@ export const payrollApi = {
   savePolicy(data: PolicyRule) {
     return panjiaRequest.post('/payroll/rule/policy', data);
   },
+  updateDeptPolicy(data: PolicyRule) {
+    return panjiaRequest.put(`/payroll/rule/policy/${data.id}`, data);
+  },
   conversionList() {
     return panjiaRequest.get<ConversionRule[]>('/payroll/rule/conversion');
   },

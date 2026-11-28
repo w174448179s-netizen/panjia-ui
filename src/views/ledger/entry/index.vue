@@ -60,6 +60,7 @@
       />
 
       <el-table v-loading="loading" :data="entries" border size="small">
+        <el-table-column prop="sourceSerialNo" label="记账流水号" width="190" show-overflow-tooltip />
         <el-table-column label="收支科目" min-width="220">
           <template #default="{ row }">
             <span class="subject-path">{{ row.subjectPath || row.subjectName }}</span>
@@ -101,6 +102,14 @@
       destroy-on-close
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
+        <el-form-item label="记账流水号">
+          <el-input
+            v-model="form.sourceSerialNo"
+            placeholder="不填将自动生成（年月日时分秒+5位随机数）"
+            maxlength="100"
+            clearable
+          />
+        </el-form-item>
         <el-form-item label="收支科目" prop="subjectId">
           <el-tree-select
             v-model="form.subjectId"
@@ -182,7 +191,7 @@
         :closable="false"
         show-icon
         class="import-tip"
-        title="表格列：方向 / 科目路径 / 部门 / 金额 / 生效日期 / 失效日期 / 备注。方向可留空（按科目自动判定），科目路径按「一级/二级/三级」填写，部门必须是末级部门。"
+        title="表格列：记账流水号 / 方向 / 科目路径 / 部门 / 金额 / 生效日期 / 失效日期 / 备注。记账流水号可不填（自动生成），方向可留空（按科目自动判定），科目路径按「一级/二级/三级」填写，部门必须是末级部门。"
       />
       <el-upload
         drag
@@ -237,6 +246,7 @@ const query = reactive({
 
 interface EntryForm {
   id?: string | number;
+  sourceSerialNo?: string;
   subjectId: string | number | null;
   deptId: string | number | null;
   amount: number | null;
@@ -247,6 +257,7 @@ interface EntryForm {
 }
 
 const form = reactive<EntryForm>({
+  sourceSerialNo: '',
   subjectId: null,
   deptId: null,
   amount: null,
@@ -369,6 +380,7 @@ function resetQuery() {
 
 function resetForm() {
   form.id = undefined;
+  form.sourceSerialNo = '';
   form.subjectId = null;
   form.deptId = null;
   form.amount = null;
@@ -391,6 +403,7 @@ function handleEdit(row: LedgerEntry) {
   const fullMonth = month && row.startDate === `${month}-01`;
   Object.assign(form, {
     id: row.id,
+    sourceSerialNo: row.sourceSerialNo || '',
     subjectId: row.subjectId,
     deptId: row.deptId,
     amount: row.amount,
@@ -424,6 +437,7 @@ async function handleSubmit() {
   try {
     const payload: Partial<LedgerEntry> = {
       id: form.id,
+      sourceSerialNo: form.sourceSerialNo || undefined,
       subjectId: form.subjectId!,
       deptId: form.deptId!,
       amount: form.amount!,

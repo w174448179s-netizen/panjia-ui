@@ -4,8 +4,8 @@ import { download } from '@/utils/request';
 /** 收入 / 支出方向 */
 export type LedgerDirection = 'INCOME' | 'EXPENSE';
 
-/** 数据来源：手工录入 / 实收明细自动 / 工资应发自动 */
-export type LedgerDataSource = 'MANUAL' | 'RECEIVED_DETAIL' | 'PAYROLL_GROSS';
+/** 数据来源：手工录入 / 实收明细自动 / 工资应发自动 / 社保费用自动 */
+export type LedgerDataSource = 'MANUAL' | 'RECEIVED_DETAIL' | 'PAYROLL_GROSS' | 'PAYROLL_SOCIAL' | 'PAYROLL_COMMERCIAL_INSURANCE' | 'PAYROLL_DORMITORY';
 
 /** 雪花 ID 由后端以字符串下发，避免 JS 精度丢失 */
 type LedgerId = string | number;
@@ -38,6 +38,8 @@ export interface LedgerEntry {
   startDate: string;
   endDate: string;
   remark?: string;
+  /** 记账流水号（手工/导入未填时后端自动生成） */
+  sourceSerialNo?: string;
   createBy?: number;
   createTime?: string;
   updateTime?: string;

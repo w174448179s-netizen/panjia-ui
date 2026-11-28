@@ -107,6 +107,9 @@
             <el-option label="手工录入" value="MANUAL" />
             <el-option label="实收明细自动（佣金收入）" value="RECEIVED_DETAIL" />
             <el-option label="工资应发自动（人工成本）" value="PAYROLL_GROSS" />
+            <el-option label="社保费用自动（人工成本）" value="PAYROLL_SOCIAL" />
+            <el-option label="商业保险自动（人工成本）" value="PAYROLL_COMMERCIAL_INSURANCE" />
+            <el-option label="宿舍费自动（人工成本）" value="PAYROLL_DORMITORY" />
           </el-select>
           <div class="form-tip">
             自动取数科目必须是末级科目，且不能再新增子级或手工录入。
@@ -179,6 +182,9 @@ const rules = {
 const dataSourceLabel = (value?: string) => {
   if (value === 'RECEIVED_DETAIL') return '实收明细自动';
   if (value === 'PAYROLL_GROSS') return '工资应发自动';
+  if (value === 'PAYROLL_SOCIAL') return '社保费用自动';
+  if (value === 'PAYROLL_COMMERCIAL_INSURANCE') return '商业保险自动';
+  if (value === 'PAYROLL_DORMITORY') return '宿舍费自动';
   return '手工录入';
 };
 

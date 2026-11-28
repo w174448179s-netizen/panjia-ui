@@ -289,11 +289,11 @@
         </el-table>
       </el-tab-pane>
 
-      <!-- ==================== 门店社保标准 ==================== -->
-      <el-tab-pane label="门店社保标准" name="deptSocial">
+      <!-- ==================== 门店配置（社保与商业保险） ==================== -->
+      <el-tab-pane label="门店配置" name="deptSocial">
         <div class="policy-toolbar">
           <span class="policy-title">
-            门店社保标准（社保基数按门店设置，算薪时个人社保 = 基数 × 职级比例；扣减标准 = 标准 × 计缴参保人数；计缴人数 = 非兼职、已参保且个人社保比例&gt;30%）
+            门店配置（每版从生效日起用，到下一版本生效日前一日止；最后一版长期有效。商业保险 = 当月交纳人数 × 门店商业保险标准；宿舍费 = 住宿舍员工个人宿舍费，未配置个人金额时取本门店宿舍费标准）
           </span>
           <el-button type="primary" :loading="socialSaving" @click="saveSocialStandards">保存</el-button>
         </div>
@@ -315,12 +315,28 @@
               />
             </template>
           </el-table-column>
-          <el-table-column label="生效日" width="160" align="center">
+          <el-table-column label="商业保险标准（元/人/月）" width="240" align="center">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="socialRows[String(row.deptId)].commercialStandard"
+                :min="0" :precision="2" :controls="false" placeholder="未配置按0" style="width:180px"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="宿舍费标准（元/人/月）" width="240" align="center">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="socialRows[String(row.deptId)].dormStandard"
+                :min="0" :precision="2" :controls="false" placeholder="未配置回退全局宿舍管理费" style="width:180px"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="新标准生效日" width="180" align="center">
             <template #default="{ row }">
               <el-date-picker
                 v-model="socialRows[String(row.deptId)].effectiveFrom"
-                type="date" value-format="YYYY-MM-DD" placeholder="默认当月"
-                :clearable="true" style="width:140px"
+                type="date" value-format="YYYY-MM-DD" placeholder="默认当月1日"
+                :clearable="true" style="width:160px"
               />
             </template>
           </el-table-column>
@@ -330,7 +346,51 @@
               <el-tag v-else type="info" size="small">未配置</el-tag>
             </template>
           </el-table-column>
+          <el-table-column label="历史版本" width="110" align="center">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openSocialHistory(row as StoreDept)">查看 / 调整</el-button>
+            </template>
+          </el-table-column>
         </el-table>
+
+        <el-dialog v-model="socialHistoryVisible" :title="`${socialHistoryDeptName} - 门店配置历史版本`" width="1200px">
+          <el-table :data="socialHistoryRows" stripe border>
+            <el-table-column label="本版生效日" width="190" align="center">
+              <template #default="{ row }">
+                <el-date-picker v-model="row.effectiveFrom" type="date" value-format="YYYY-MM-DD" :clearable="false" style="width:160px" @change="sortSocialHistory" />
+              </template>
+            </el-table-column>
+            <el-table-column label="有效期至" width="150" align="center">
+              <template #default="{ $index }">{{ socialHistoryEndText($index) }}</template>
+            </el-table-column>
+            <el-table-column label="社保基数（元/月）" width="220" align="center">
+              <template #default="{ row }">
+                <el-input-number v-model="row.baseSocial" :min="0" :precision="2" :controls="false" style="width:180px" />
+              </template>
+            </el-table-column>
+            <el-table-column label="社保扣减标准（元/人/月）" width="240" align="center">
+              <template #default="{ row }">
+                <el-input-number v-model="row.standard" :min="0" :precision="2" :controls="false" style="width:180px" />
+              </template>
+            </el-table-column>
+            <el-table-column label="商业保险标准（元/人/月）" width="240" align="center">
+              <template #default="{ row }">
+                <el-input-number v-model="row.commercialStandard" :min="0" :precision="2" :controls="false" style="width:180px" />
+              </template>
+            </el-table-column>
+            <el-table-column label="宿舍费标准（元/人/月）" width="240" align="center">
+              <template #default="{ row }">
+                <el-input-number v-model="row.dormStandard" :min="0" :precision="2" :controls="false" style="width:180px" />
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="90" align="center">
+              <template #default="{ row }">
+                <el-button link type="primary" :loading="socialHistorySaving" @click="saveSocialHistory(row as SocialHistoryRow)">保存</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div class="form-tip">有效期至由下一版本自动计算，无需填写结束日；修正历史版本会影响该版本覆盖的月份，新增调标请在门店列表中操作。</div>
+        </el-dialog>
       </el-tab-pane>
 
       <!-- ==================== 门店月度配置 ==================== -->
@@ -837,14 +897,29 @@ const saveConversion = async () => {
 // ==================== 门店社保标准（DEPT 政策 socialStandard） ====================
 const storeList = ref<StoreDept[]>([]);
 const socialSaving = ref(false);
-/** deptId(字符串) → 编辑行（社保基数/扣减标准/已存在政策 id/生效日）；雪花 ID 一律字符串键，禁止 Number 转换 */
+/** deptId(字符串) → 当前版本编辑行；调整生效日默认当月，保存时生成新版本，保留历史口径 */
 interface SocialRow {
   standard: number | null;
+  commercialStandard: number | null;
+  dormStandard: number | null;
   baseSocial: number | null;
   id?: number | string;
   effectiveFrom?: string;
 }
+interface SocialHistoryRow {
+  id: number | string;
+  standard: number | null;
+  commercialStandard: number | null;
+  dormStandard: number | null;
+  baseSocial: number | null;
+  effectiveFrom: string;
+}
 const socialRows = reactive<Record<string, SocialRow>>({});
+const socialHistoryVisible = ref(false);
+const socialHistorySaving = ref(false);
+const socialHistoryDeptId = ref('');
+const socialHistoryDeptName = ref('');
+const socialHistoryRows = ref<SocialHistoryRow[]>([]);
 
 /** 全局政策（GLOBAL）的社保基数：门店未单独配置时的默认值 */
 const globalBaseSocial = () =>
@@ -854,11 +929,22 @@ const buildSocialRows = () => {
   const deptPolicies = policyList.value.filter((p) => p.scopeType === 'DEPT');
   storeList.value.forEach((s) => {
     const key = String(s.deptId);
-    const p = deptPolicies.find((x) => x.scopeKey === key);
+    const versions = deptPolicies
+      .filter((x) => x.scopeKey === key)
+      .toSorted((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom) || String(a.id).localeCompare(String(b.id)));
+    const p = versions[versions.length - 1];
+    const content = p ? safeParse(p.ruleContent) : {};
     // baseSocial 为 null 表示未按门店配置（算薪回退全局默认值，输入框显示占位提示）
+    // 生效日不回填旧版本日期；调标未另选日期时默认从当月开始，避免回溯影响历史月份。
     socialRows[key] = p
-      ? { standard: safeParse(p.ruleContent).socialStandard ?? null, baseSocial: p.baseSocial ?? null, id: p.id, effectiveFrom: p.effectiveFrom }
-      : { standard: null, baseSocial: null };
+      ? {
+          standard: content.socialStandard ?? null,
+          commercialStandard: content.commercialStandard ?? null,
+          dormStandard: content.dormStandard ?? null,
+          baseSocial: p.baseSocial ?? null,
+          id: p.id,
+        }
+      : { standard: null, commercialStandard: null, dormStandard: null, baseSocial: null };
   });
 };
 
@@ -874,12 +960,18 @@ const saveSocialStandards = async () => {
     for (const s of storeList.value) {
       const key = String(s.deptId);
       const row = socialRows[key];
-      if (!row || (row.standard == null && row.baseSocial == null)) {
-        continue; // 基数与标准均未填 = 不生成配置（算薪回退全局基数 / 扣减按 0）
+      if (!row || (row.standard == null && row.commercialStandard == null && row.dormStandard == null && row.baseSocial == null)) {
+        continue; // 各项均未填 = 不生成配置（社保回退全局基数，扣减标准按 0）
       }
       const content: Record<string, number> = {};
       if (row.standard != null) {
         content.socialStandard = row.standard;
+      }
+      if (row.commercialStandard != null) {
+        content.commercialStandard = row.commercialStandard;
+      }
+      if (row.dormStandard != null) {
+        content.dormStandard = row.dormStandard;
       }
       await payrollApi.savePolicy({
         id: row.id as number,
@@ -890,10 +982,78 @@ const saveSocialStandards = async () => {
         effectiveFrom: row.effectiveFrom || todayStr(),
       } as PolicyRule);
     }
-    ElMessage.success('已保存');
+    ElMessage.success('门店配置已保存，可在历史版本中查看生效区间');
     await load();
   } finally {
     socialSaving.value = false;
+  }
+};
+
+const sortSocialHistory = () => {
+  socialHistoryRows.value = socialHistoryRows.value.toSorted(
+    (a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom) || String(b.id).localeCompare(String(a.id)),
+  );
+};
+
+/** 版本结束日由下一版本生效日推导；同日旧版本立即被新版本替代。 */
+const socialHistoryEndText = (index: number) => {
+  const row = socialHistoryRows.value[index];
+  const newer = socialHistoryRows.value[index - 1];
+  if (!row) return '-';
+  if (!newer) return '长期有效';
+  if (newer.effectiveFrom === row.effectiveFrom) return '同日被新版本替代';
+  const end = new Date(`${newer.effectiveFrom}T00:00:00`);
+  end.setDate(end.getDate() - 1);
+  return `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+};
+
+const openSocialHistory = (store: StoreDept) => {
+  const key = String(store.deptId);
+  socialHistoryDeptId.value = key;
+  socialHistoryDeptName.value = store.deptName;
+  socialHistoryRows.value = policyList.value
+    .filter((p) => p.scopeType === 'DEPT' && p.scopeKey === key)
+    .map((p) => {
+      const content = safeParse(p.ruleContent);
+      return {
+        id: p.id,
+        standard: content.socialStandard ?? null,
+        commercialStandard: content.commercialStandard ?? null,
+        dormStandard: content.dormStandard ?? null,
+        baseSocial: p.baseSocial ?? null,
+        effectiveFrom: p.effectiveFrom,
+      };
+    });
+  sortSocialHistory();
+  socialHistoryVisible.value = true;
+};
+
+const saveSocialHistory = async (row: SocialHistoryRow) => {
+  socialHistorySaving.value = true;
+  try {
+    const content: Record<string, number> = {};
+    if (row.standard != null) {
+      content.socialStandard = row.standard;
+    }
+    if (row.commercialStandard != null) {
+      content.commercialStandard = row.commercialStandard;
+    }
+    if (row.dormStandard != null) {
+      content.dormStandard = row.dormStandard;
+    }
+    await payrollApi.updateDeptPolicy({
+      id: row.id as number,
+      scopeType: 'DEPT',
+      scopeKey: socialHistoryDeptId.value,
+      baseSocial: row.baseSocial ?? globalBaseSocial(),
+      ruleContent: JSON.stringify(content),
+      effectiveFrom: row.effectiveFrom,
+    } as PolicyRule);
+    socialHistoryVisible.value = false;
+    ElMessage.success('历史版本已保存');
+    await load();
+  } finally {
+    socialHistorySaving.value = false;
   }
 };
 
